@@ -21,7 +21,6 @@ func GetEntryInfo(path string, fileInfo os.FileInfo) EntryInfo {
 
 	var symlinkTarget *string
 	if fileMode&os.ModeSymlink != 0 {
-		// If we can't resolve the symlink target, we won't set the target
 		target := followSymlink(path)
 		symlinkTarget = &target
 	}
@@ -33,7 +32,6 @@ func GetEntryInfo(path string, fileInfo os.FileInfo) EntryInfo {
 		entryType = getEntryType(fileMode)
 		mode = fileMode.Perm()
 	} else {
-		// If it's a symlink, we need to determine the type of the target
 		targetInfo, err := os.Stat(*symlinkTarget)
 		if err != nil {
 			entryType = UnknownFileType
@@ -55,10 +53,10 @@ func GetEntryInfo(path string, fileInfo os.FileInfo) EntryInfo {
 	}
 
 	if base := getBase(fileInfo.Sys()); base != nil {
-		// Cross-platform compatibility for atime, ctime, mtime
-		entry.AccessedTime = toTimestamp(getAtim(base))
-		entry.CreatedTime = toTimestamp(getCtim(base))
-		entry.ModifiedTime = toTimestamp(getMtim(base))
+		// Use cross-platform compatible time fields (works on both Linux and macOS)
+		entry.AccessedTime = toTimestamp(base.Atim)
+		entry.CreatedTime = toTimestamp(base.Ctim)
+		entry.ModifiedTime = toTimestamp(base.Mtim)
 		entry.UID = base.Uid
 		entry.GID = base.Gid
 	} else if !fileInfo.ModTime().IsZero() {
@@ -68,8 +66,6 @@ func GetEntryInfo(path string, fileInfo os.FileInfo) EntryInfo {
 	return entry
 }
 
-// getEntryType determines the type of file entry based on its mode and path.
-// If the file is a symlink, it follows the symlink to determine the actual type.
 func getEntryType(mode os.FileMode) FileType {
 	switch {
 	case mode.IsRegular():
@@ -83,14 +79,11 @@ func getEntryType(mode os.FileMode) FileType {
 	}
 }
 
-// followSymlink resolves a symbolic link to its target path.
 func followSymlink(path string) string {
-	// Resolve symlinks
 	resolvedPath, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		return path
 	}
-
 	return resolvedPath
 }
 
@@ -98,36 +91,10 @@ func toTimestamp(spec syscall.Timespec) time.Time {
 	if spec.Sec == 0 && spec.Nsec == 0 {
 		return time.Time{}
 	}
-
 	return time.Unix(spec.Sec, spec.Nsec)
 }
 
 func getBase(sys any) *syscall.Stat_t {
 	st, _ := sys.(*syscall.Stat_t)
-
 	return st
-}
-
-// getAtim returns access time cross-platform
-func getAtim(base *syscall.Stat_t) syscall.Timespec {
-	return syscall.Timespec{
-		Sec:  base.Atimespec.Sec,
-		Nsec: base.Atimespec.Nsec,
-	}
-}
-
-// getCtim returns creation time cross-platform
-func getCtim(base *syscall.Stat_t) syscall.Timespec {
-	return syscall.Timespec{
-		Sec:  base.Ctimespec.Sec,
-		Nsec: base.Ctimespec.Nsec,
-	}
-}
-
-// getMtim returns modification time cross-platform
-func getMtim(base *syscall.Stat_t) syscall.Timespec {
-	return syscall.Timespec{
-		Sec:  base.Mtimespec.Sec,
-		Nsec: base.Mtimespec.Nsec,
-	}
 }
