@@ -21,6 +21,7 @@ func GetEntryInfo(path string, fileInfo os.FileInfo) EntryInfo {
 
 	var symlinkTarget *string
 	if fileMode&os.ModeSymlink != 0 {
+		// If we can't resolve the symlink target, we won't set the target
 		target := followSymlink(path)
 		symlinkTarget = &target
 	}
@@ -32,6 +33,7 @@ func GetEntryInfo(path string, fileInfo os.FileInfo) EntryInfo {
 		entryType = getEntryType(fileMode)
 		mode = fileMode.Perm()
 	} else {
+		// If it's a symlink, we need to determine the type of the target
 		targetInfo, err := os.Stat(*symlinkTarget)
 		if err != nil {
 			entryType = UnknownFileType
@@ -53,7 +55,6 @@ func GetEntryInfo(path string, fileInfo os.FileInfo) EntryInfo {
 	}
 
 	if base := getBase(fileInfo.Sys()); base != nil {
-		// Use cross-platform compatible time fields (works on both Linux and macOS)
 		entry.AccessedTime = toTimestamp(base.Atim)
 		entry.CreatedTime = toTimestamp(base.Ctim)
 		entry.ModifiedTime = toTimestamp(base.Mtim)
@@ -66,6 +67,8 @@ func GetEntryInfo(path string, fileInfo os.FileInfo) EntryInfo {
 	return entry
 }
 
+// getEntryType determines the type of file entry based on its mode and path.
+// If the file is a symlink, it follows the symlink to determine the actual type.
 func getEntryType(mode os.FileMode) FileType {
 	switch {
 	case mode.IsRegular():
@@ -79,11 +82,14 @@ func getEntryType(mode os.FileMode) FileType {
 	}
 }
 
+// followSymlink resolves a symbolic link to its target path.
 func followSymlink(path string) string {
+	// Resolve symlinks
 	resolvedPath, err := filepath.EvalSymlinks(path)
 	if err != nil {
 		return path
 	}
+
 	return resolvedPath
 }
 
@@ -91,10 +97,12 @@ func toTimestamp(spec syscall.Timespec) time.Time {
 	if spec.Sec == 0 && spec.Nsec == 0 {
 		return time.Time{}
 	}
+
 	return time.Unix(spec.Sec, spec.Nsec)
 }
 
 func getBase(sys any) *syscall.Stat_t {
 	st, _ := sys.(*syscall.Stat_t)
+
 	return st
 }
