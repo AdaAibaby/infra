@@ -736,6 +736,76 @@ components:
           type: integer
           description: Number of builds that failed to cancel
 
+        DrainInitiateResponse:
+      required:
+        - node_id
+        - status
+        - message
+      properties:
+        node_id:
+          type: string
+          description: Node ID
+        status:
+          type: string
+          enum: [draining]
+          description: Current drain status
+        message:
+          type: string
+          description: Status message
+
+    DrainStatusResponse:
+      required:
+        - node_id
+        - status
+        - sandbox_count
+        - is_drained
+        - last_updated
+      properties:
+        node_id:
+          type: string
+          description: Node ID
+        status:
+          $ref: "#/components/schemas/NodeStatus"
+        sandbox_count:
+          type: integer
+          description: Current number of sandboxes on the node
+        is_drained:
+          type: boolean
+          description: Whether the node is fully drained (no sandboxes)
+        last_updated:
+          type: string
+          format: date-time
+          description: Timestamp of last status update
+
+    DrainCompleteResponse:
+      required:
+        - node_id
+        - status
+        - drain_duration
+        - message
+      properties:
+        node_id:
+          type: string
+          description: Node ID
+        status:
+          type: string
+          enum: [drained]
+          description: Final drain status
+        drain_duration:
+          type: string
+          description: Duration of the drain operation (e.g., "5m30s")
+        message:
+          type: string
+          description: Status message
+
+    ErrorResponse:
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+
     VolumeToken:
       type: object
       properties:
@@ -1343,6 +1413,164 @@ components:
         - NodeStatusConnecting
         - NodeStatusUnhealthy
         - NodeStatusStandby
+
+        DrainInitiateResponse:
+      required:
+        - node_id
+        - status
+        - message
+      properties:
+        node_id:
+          type: string
+          description: Node ID
+        status:
+          type: string
+          enum: [draining]
+          description: Current drain status
+        message:
+          type: string
+          description: Status message
+
+    DrainStatusResponse:
+      required:
+        - node_id
+        - status
+        - sandbox_count
+        - is_drained
+        - last_updated
+      properties:
+        node_id:
+          type: string
+          description: Node ID
+        status:
+          $ref: "#/components/schemas/NodeStatus"
+        sandbox_count:
+          type: integer
+          description: Current number of sandboxes on the node
+        is_drained:
+          type: boolean
+          description: Whether the node is fully drained (no sandboxes)
+        last_updated:
+          type: string
+          format: date-time
+          description: Timestamp of last status update
+
+    DrainCompleteResponse:
+      required:
+        - node_id
+        - status
+        - drain_duration
+        - message
+      properties:
+        node_id:
+          type: string
+          description: Node ID
+        status:
+          type: string
+          enum: [drained]
+          description: Final drain status
+        drain_duration:
+          type: string
+          description: Duration of the drain operation (e.g., "5m30s")
+        message:
+          type: string
+          description: Status message
+
+    ErrorResponse:
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Error message
+
+
+
+
+
+
+
+  /admin/nodes/{nodeID}/drain:
+    post:
+      description: Initiate drain on a node
+      summary: Start draining a node
+      tags: [admin]
+      security:
+        - AdminTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/nodeID"
+      responses:
+        "200":
+          description: Drain initiated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DrainInitiateResponse"
+        "401":
+          $ref: "#/components/responses/401"
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
+  /admin/nodes/{nodeID}/drain-status:
+    get:
+      description: Get the current drain status of a node
+      summary: Check node drain status
+      tags: [admin]
+      security:
+        - AdminTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/nodeID"
+      responses:
+        "200":
+          description: Drain status retrieved successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DrainStatusResponse"
+        "401":
+          $ref: "#/components/responses/401"
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
+  /admin/nodes/{nodeID}/drain-wait:
+    post:
+      description: Wait for a node to complete draining
+      summary: Wait for drain completion
+      tags: [admin]
+      security:
+        - AdminTokenAuth: []
+      parameters:
+        - $ref: "#/components/parameters/nodeID"
+        - name: timeout
+          in: query
+          description: Timeout in seconds (default 300)
+          required: false
+          schema:
+            type: integer
+            default: 300
+      responses:
+        "200":
+          description: Node drain completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DrainCompleteResponse"
+        "401":
+          $ref: "#/components/responses/401"
+        "404":
+          $ref: "#/components/responses/404"
+        "408":
+          description: Drain wait timeout
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          $ref: "#/components/responses/500"
 
     NodeStatusChange:
       required:
