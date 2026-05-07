@@ -4,6 +4,11 @@ ARG ALPINE_VERSION=3.22
 # Builder stage
 FROM golang:${GOLANG_VERSION}-alpine${ALPINE_VERSION} AS builder
 
+
+ENV GOPROXY=https://goproxy.cn,direct
+ENV GOSUMDB=sum.golang.google.cn
+
+
 # Cached golang dependencies
 WORKDIR /build/shared
 COPY ./shared/go.mod ./shared/go.sum ./
