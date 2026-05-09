@@ -2,11 +2,11 @@ ENV := $(shell cat ../../.last_used_env || echo "not-set")
 -include ../../.env.${ENV}
 PREFIX := $(strip $(subst ",,$(PREFIX)))
 
-ifeq ($(PROVIDER),aws)
-	IMAGE_REGISTRY := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PREFIX)core/docker-reverse-proxy
-else
-	IMAGE_REGISTRY := $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/$(PREFIX)core/docker-reverse-proxy
-endif
+# Volcengine configuration
+VOLC_REGISTRY ?= mp-bp-cn-shanghai.cr.volces.com
+VOLC_NAMESPACE ?= e2b
+VOLC_IMAGE_PREFIX := $(VOLC_REGISTRY)/$(VOLC_NAMESPACE)
+IMAGE_TAG ?= 202617
 
 .PHONY: build
 build:
@@ -21,7 +21,13 @@ build-debug:
 .PHONY: build-and-upload
 build-and-upload:
 	$(eval COMMIT_SHA := $(shell git rev-parse --short HEAD))
-	@docker buildx build --platform linux/amd64 --tag $(IMAGE_REGISTRY) --push --build-arg COMMIT_SHA="$(COMMIT_SHA)" -f ./Dockerfile ..
+	@echo "Building and pushing to Volcengine: $(VOLC_IMAGE_PREFIX)/docker-reverse-proxy:$(IMAGE_TAG)"
+	@docker build \
+		--tag "$(VOLC_IMAGE_PREFIX)/docker-reverse-proxy:$(IMAGE_TAG)" \
+		--build-arg COMMIT_SHA="$(COMMIT_SHA)" \
+		-f ./Dockerfile ..
+	@echo "Pushing image to Volcengine..."
+	@docker push "$(VOLC_IMAGE_PREFIX)/docker-reverse-proxy:$(IMAGE_TAG)"
 
 .PHONY: test
 test:
