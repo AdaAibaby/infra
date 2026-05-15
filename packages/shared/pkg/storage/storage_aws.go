@@ -51,7 +51,10 @@ func newAWSStorage(ctx context.Context, bucketName string) (*awsStorage, error) 
 		return nil, err
 	}
 
-	client := s3.NewFromConfig(cfg)
+	client := s3.NewFromConfig(cfg, func(o *s3.Options) {
+        o.UsePathStyle = true
+    })
+	
 	presignClient := s3.NewPresignClient(client)
 
 	return &awsStorage{
