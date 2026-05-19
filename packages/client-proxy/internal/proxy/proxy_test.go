@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"net"
 	"testing"
 	"time"
 
@@ -189,6 +190,31 @@ func TestCatalogResolution_CatalogMiss_ResumeEmptyIPReturnsRouteUnavailable(t *t
 	nodeIP, err := catalogResolution(t.Context(), "sbx", 8000, "", "", c, stubResumer{nodeIP: ""}, ff)
 	require.ErrorIs(t, err, ErrNodeRouteUnavailable)
 	require.Empty(t, nodeIP)
+}
+
+func TestValidateOrchestratorBackend_Success(t *testing.T) {
+	t.Parallel()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer ln.Close()
+
+	addr := ln.Addr().(*net.TCPAddr)
+	require.NoError(t, validateOrchestratorBackend("127.0.0.1", addr.Port))
+}
+
+func TestValidateOrchestratorBackend_Failure(t *testing.T) {
+	t.Parallel()
+
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	addr := ln.Addr().(*net.TCPAddr)
+	require.NoError(t, ln.Close())
+
+	require.Eventually(t, func() bool {
+		err := validateOrchestratorBackend("127.0.0.1", addr.Port)
+		return err != nil
+	}, time.Second, 50*time.Millisecond)
 }
 
 func TestHandlePausedSandbox_NoResumer_MissingTrafficAccessToken(t *testing.T) {

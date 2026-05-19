@@ -62,6 +62,19 @@ func normalizeNodeIP(nodeIP string) (string, error) {
 	return nodeIP, nil
 }
 
+func validateOrchestratorBackend(nodeIP string, port int) error {
+	addr := net.JoinHostPort(nodeIP, strconv.Itoa(port))
+	d := net.Dialer{Timeout: 200 * time.Millisecond}
+	conn, err := d.DialContext(context.Background(), "tcp", addr)
+	if err != nil {
+		return fmt.Errorf("orchestrator backend not ready: %w", err)
+	}
+
+	_ = conn.Close()
+
+	return nil
+}
+
 func clientProxyMaskRequestHost(ctx context.Context, featureFlags *featureflags.Client, host string, sandboxID string, port uint64) *string {
 	domain, sharedHost := reverseproxy.SandboxSharedHostDomain(host)
 	if !sharedHost || featureFlags.BoolFlag(ctx, featureflags.OrchAcceptsCombinedHostFlag) {
@@ -192,6 +205,11 @@ func NewClientProxy(meterProvider metric.MeterProvider, serviceName string, port
 				return nil, reverseproxy.NewErrSandboxNotFound(sandboxId)
 			}
 
+			if err := validateOrchestratorBackend(nodeIP, orchestratorProxyPort); err != nil {
+				l.Warn(ctx, "orchestrator backend not ready", zap.Error(err))
+				return nil, err
+			}
+
 			url := &url.URL{
 				Scheme: "http",
 				Host:   net.JoinHostPort(nodeIP, strconv.Itoa(orchestratorProxyPort)),
@@ -222,6 +240,7 @@ func NewClientProxy(meterProvider metric.MeterProvider, serviceName string, port
 	)
 
 	meter := meterProvider.Meter(serviceName)
+
 	_, err := telemetry.GetObservableUpDownCounter(
 		meter, telemetry.ClientProxyPoolConnectionsMeterCounterName, func(_ context.Context, observer metric.Int64Observer) error {
 			observer.Observe(proxy.CurrentServerConnections())
