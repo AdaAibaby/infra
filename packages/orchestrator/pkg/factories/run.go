@@ -2,6 +2,29 @@
 
 package factories
 
+// 文件设计哲学：
+//
+// 这个文件是整个 orchestrator 的组合根（Composition Root）——所有依赖在这里被创建、连接、并最终销毁。
+// 核心设计思想是："把所有副作用集中在一个地方，让其他所有包保持纯净"
+//
+// 关键设计模式：
+// 1. 组合根（Composition Root）：所有依赖在 run() 函数中创建，其他包无全局状态
+// 2. 策略模式（Strategy）：EgressFactory 函数类型允许不同版本注入不同的出口代理实现
+// 3. LIFO 关闭（Reverse Order）：closers 切片 + slices.Reverse 确保依赖关系正确的关闭顺序
+// 4. 哨兵错误（Sentinel Error）：ErrRedisDisabled 区分"禁用"和"失败"，支持优雅降级
+// 5. Nop 实现（Null Object）：可选依赖不影响核心路径
+// 6. 排水窗口（Drain Window）：SetStatus(Draining) + Sleep(15s) 实现零停机滚动更新
+// 7. 单端口复用（Port Multiplexing）：cmux 在同一端口上复用 gRPC 和 HTTP
+//
+// 初始化顺序（重要）：
+// 1. 文件锁检查（防止双启动）
+// 2. Context + Signal 处理
+// 3. Telemetry（其他组件依赖它）
+// 4. Logger（依赖 telemetry）
+// 5. 业务组件（Redis、Template Cache、ClickHouse 等）
+// 6. 服务启动（errgroup 并发管理）
+// 7. 关闭序列（排水 → 逆序关闭）
+
 import (
 	"context"
 	"crypto/rand"
@@ -72,6 +95,11 @@ import (
 
 // Deps holds shared infrastructure created during orchestrator init.
 // Passed to factory callbacks so editions can build components using shared deps.
+//
+// 设计原理：
+// - 这是依赖注入的核心数据结构，包含所有子系统共享的基础设施
+// - 通过 EgressFactory 传递给版本特定的出口代理实现
+// - 允许不同 edition（tcpfirewall、noop、未来的 wireguard）使用相同的基础设施
 type Deps struct {
 	Config        cfg.Config
 	Tel           *telemetry.Client
@@ -97,6 +125,12 @@ type EgressSetup struct {
 
 // EgressFactory builds an edition-specific egress proxy.
 // It receives fully initialized shared deps and a context.
+//
+// 策略模式 + 依赖倒置原则：
+// - run.go 不知道也不关心出口代理的具体实现（tcpfirewall、noop 等）
+// - 只依赖 network.EgressProxy 接口
+// - 通过函数类型注入，允许在测试中替换为 noop 实现，避免真实 iptables 操作
+// - 未来支持不同网络后端（AWS vs GCP）只需换一个函数，无需修改 run.go
 type EgressFactory func(ctx context.Context, deps *Deps) (*EgressSetup, error)
 
 // Options configures the orchestrator with edition-specific behavior.
@@ -106,6 +140,13 @@ type Options struct {
 	EgressFactory EgressFactory
 }
 
+// closer 抽象了有序关闭的逻辑
+// LIFO 关闭顺序（后初始化先关闭）确保依赖关系正确
+//
+// 为什么不用 defer？
+// 1. defer 在函数返回时执行，无法控制关闭超时（closeCtx 可以设置超时）
+// 2. defer 无法在关闭前执行排水（drain）逻辑（等待 sandbox 全部停止）
+// 3. 这个模式允许在关闭前插入排水逻辑，实现零停机部署
 type closer struct {
 	name  string
 	close func(ctx context.Context) error
@@ -177,9 +218,17 @@ func run(config cfg.Config, opts Options) (success bool) {
 
 	services := cfg.GetServices(config)
 
-	// Check if the orchestrator crashed and restarted
-	// Skip this check in development mode
-	// We don't want to lock if the service is running with force stop; the subsequent start would fail.
+	// 文件锁机制 —— 防止双启动的最简单方案
+	// 
+	// 为什么需要这个？
+	// - Orchestrator 管理 Firecracker 进程，两个实例同时运行会争抢同一批网络 Slot 和 NBD 设备
+	// - 导致数据损坏、网络冲突、存储不一致
+	//
+	// 关键细节：
+	// - 崩溃时锁文件不删除（success == false 时跳过 os.Remove）
+	// - 下次启动会检测到并拒绝启动，强迫运维人员介入
+	// - 开发模式跳过，方便本地热重载
+	// - ForceStop 跳过，允许强制重启（Nomad 滚动更新场景）
 	if !env.IsDevelopment() && !config.ForceStop && slices.Contains(services, cfg.Orchestrator) {
 		fileLockName := config.OrchestratorLockPath
 		info, err := os.Stat(fileLockName)
@@ -229,9 +278,14 @@ func run(config cfg.Config, opts Options) (success bool) {
 	serviceError := make(chan error)
 	defer close(serviceError)
 
+	// errgroup + defer g.Wait() —— panic 安全的并发关闭
+	//
+	// 为什么用 defer 而不是在函数末尾调用 g.Wait()？
+	// - run() 函数中有大量 logger.L().Fatal() 调用
+	// - logger.Fatal() 内部调用 zap.Fatal()，会先 Sync() 日志再 os.Exit(1)，跳过所有 defer
+	// - 但这个 defer g.Wait() 的真正价值是：如果 run() 因为 panic 退出，goroutine 仍然能被等待
+	// - 防止进程在后台 goroutine 还在运行时就退出
 	var g errgroup.Group
-	// defer waiting on the group so that this runs even when
-	// there's a panic.
 	defer func(g *errgroup.Group) {
 		err := g.Wait()
 		if err != nil {
@@ -240,7 +294,13 @@ func run(config cfg.Config, opts Options) (success bool) {
 		}
 	}(&g)
 
-	// Setup telemetry
+	// 遥测优先初始化 —— 可观测性是基础设施
+	//
+	// 为什么 telemetry 必须第一个初始化？
+	// - logger 的 OTEL core 需要 tel.LogsProvider
+	// - 后续所有组件的错误都需要通过 logger 上报
+	// - 如果 telemetry 初始化失败，整个进程直接 Fatal
+	// - 没有可观测性的服务不应该运行
 	tel, err := telemetry.New(
 		ctx,
 		nodeID,
@@ -266,6 +326,7 @@ func run(config cfg.Config, opts Options) (success bool) {
 		log.Printf("failed to start runtime instrumentation: %v", err)
 	}
 
+	// 初始化全局 logger（依赖 tel.LogsProvider）
 	globalLogger := utils.Must(logger.NewLogger(logger.LoggerConfig{
 		ServiceName:   serviceName,
 		IsInternal:    true,
@@ -282,6 +343,13 @@ func run(config cfg.Config, opts Options) (success bool) {
 	}(globalLogger)
 	logger.ReplaceGlobals(ctx, globalLogger)
 
+	// 两套 Sandbox Logger —— 内外分离
+	//
+	// 为什么要分两套？
+	// - External：发给用户的日志（通过 logs-collector 转发到用户的 Loki）
+	//   不能包含内部 IP、内部错误细节
+	// - Internal：发给 E2B 工程师的日志，包含完整的调试信息
+	// - 这是多租户系统的安全边界：用户只能看到自己沙箱的日志，且不包含基础设施细节
 	sbxLoggerExternal := sbxlogger.NewLogger(
 		ctx,
 		tel.LogsProvider,
@@ -325,6 +393,13 @@ func run(config cfg.Config, opts Options) (success bool) {
 		logger.WithServiceInstanceID(serviceInstanceID),
 	)
 
+	// startService 闭包 —— 统一的服务生命周期管理
+	//
+	// 为什么用闭包而不是直接 g.Go？
+	// 1. 统一日志：每个服务启动/退出都有一致的日志格式
+	// 2. 错误传播：任何服务退出（无论正常还是异常）都通过 serviceError channel 通知主循环
+	// 3. default 分支：防止第二个服务退出时阻塞（channel 容量为 1，第一个错误已经触发关闭流程）
+	// 4. serviceDoneError：让 g.Wait() 能区分"服务正常退出"和"真正的错误"
 	startService := func(name string, f func() error) {
 		g.Go(func() error {
 			l := globalLogger.With(zap.String("service", name))
@@ -378,7 +453,17 @@ func run(config cfg.Config, opts Options) (success bool) {
 		logger.L().Fatal(ctx, "failed to create metrics provider", zap.Error(err))
 	}
 
-	// redis (initialized before template cache so the peer registry can be passed to NewCache)
+	// Redis 的可选性 —— 优雅降级
+	//
+	// Redis 用于：
+	// - P2P 模板文件传输（节点间互传，避免都从 GCS 下载）
+	// - 沙箱事件流（ClickHouse 的补充）
+	//
+	// 这两个功能不是核心路径。Redis 不可用时：
+	// - 模板从 GCS 下载（慢但可用）
+	// - 事件只写 ClickHouse（不丢失）
+	//
+	// 这是可选依赖的标准 Go 模式：用 ErrRedisDisabled 哨兵错误区分"配置禁用"和"连接失败"
 	redisClient, err := sharedFactories.NewRedisClient(ctx, sharedFactories.RedisConfig{
 		RedisURL:         config.RedisURL,
 		RedisClusterURL:  config.RedisClusterURL,
@@ -394,6 +479,7 @@ func run(config cfg.Config, opts Options) (success bool) {
 		}})
 	}
 
+	// 当 Redis 不可用时，使用 Nop 实现（空操作），不影响核心路径
 	peerRegistry := peerclient.NopRegistry()
 	peerResolver := peerclient.NopResolver()
 	if nodeAddress := config.NodeAddress(); redisClient != nil && nodeAddress != nil {
@@ -492,7 +578,12 @@ func run(config cfg.Config, opts Options) (success bool) {
 	})
 	closers = append(closers, closer{"sandbox proxy", sandboxProxy.Close})
 
-	// egress proxy — built by the edition-specific factory
+	// 出口代理 —— 通过 EgressFactory 注入版本特定的实现
+	//
+	// 这是策略模式的核心应用点：
+	// - main.go 传入 defaultEgressFactory（tcpfirewall 实现）
+	// - 测试可以注入 noop 实现，避免真实 iptables 操作
+	// - 未来支持不同网络后端只需换一个函数
 	deps := &Deps{
 		Config:        config,
 		Tel:           tel,
@@ -669,7 +760,18 @@ func run(config cfg.Config, opts Options) (success bool) {
 	grpcHealth := health.NewServer()
 	grpc_health_v1.RegisterHealthServer(grpcServer, grpcHealth)
 
-	// cmux server, allows us to reuse the same TCP port between grpc and HTTP requests
+	// cmux —— 单端口复用 gRPC 和 HTTP
+	//
+	// 为什么用 cmux？
+	// - Nomad 的服务发现只注册一个端口（5008 GRPC_PORT）
+	// - 用 cmux 在同一个 TCP 端口上同时提供：
+	//   * GET /health → HTTP healthcheck（给 Nomad 用）
+	//   * POST /upload → 本地文件上传（开发模式）
+	//   * 其他 → gRPC（给 API 服务用）
+	// - 减少 Nomad 端口配置复杂度
+	//
+	// 关键注意：必须在 Serve() 之前创建所有 matcher（避免数据竞争）
+	// cmux 的 Match() 修改内部状态，Serve() 读取这个状态，并发调用会有数据竞争
 	cmuxServer, err := NewCMUXServer(ctx, config.GRPCPort, tel.MeterProvider)
 	if err != nil {
 		logger.L().Fatal(ctx, "failed to create cmux server", zap.Error(err))
@@ -747,7 +849,7 @@ func run(config cfg.Config, opts Options) (success bool) {
 		return nil
 	}})
 
-	// Wait for the shutdown signal or if some service fails
+	// 等待关闭信号或服务失败
 	select {
 	case <-sig.Done():
 		logger.L().Info(ctx, "Shutdown signal received")
@@ -761,8 +863,16 @@ func run(config cfg.Config, opts Options) (success bool) {
 		cancelCloseCtx()
 	}
 
-	// Mark service draining if not already.
-	// If service stats was previously changed via API, we don't want to override it.
+	// 关闭序列 —— 15 秒排水窗口
+	//
+	// 为什么需要 15 秒？这是零停机部署的关键：
+	// 1. 收到 SIGTERM（Nomad 滚动更新）
+	// 2. 立即标记为 Draining
+	// 3. 等 15 秒让 client-proxy 从路由表中移除这个节点
+	// 4. 此后不会有新请求进来
+	// 5. 再关闭 gRPC server（已有连接会被 GracefulStop 等待完成）
+	//
+	// 如果跳过这 15 秒直接关闭，client-proxy 还在向这个节点发请求，会导致请求失败
 	logger.L().Info(ctx, "Starting drain phase", zap.Int("sandbox_count", sandboxes.Count()))
 	if status := serviceInfo.GetStatus(); status == orchestratorinfo.ServiceInfoStatus_Healthy || status == orchestratorinfo.ServiceInfoStatus_Standby {
 		serviceInfo.SetStatus(ctx, orchestratorinfo.ServiceInfoStatus_Draining)
@@ -782,6 +892,7 @@ func run(config cfg.Config, opts Options) (success bool) {
 		}
 	}
 
+	// LIFO 关闭顺序：后初始化先关闭，确保依赖关系正确
 	slices.Reverse(closers)
 	for _, closer := range closers {
 		clog := globalLogger.With(zap.String("service", closer.name), zap.Bool("forced", config.ForceStop))
