@@ -19,7 +19,7 @@ linters:
     - cyclop
     - dupl
     - dupword
-    - errcheck
+    
     - exhaustive
     - exhaustruct
     - funcorder
@@ -182,7 +182,7 @@ linters:
         - { disabled: true, name: package-directory-mismatch }
         - { disabled: true, name: unchecked-type-assertion }
         - { disabled: true, name: unexported-naming }
-        - { disabled: true, name: unhandled-error } #  todo: enable this
+        
         - { disabled: true, name: unnecessary-format } # todo: enable this
         - { disabled: true, name: unnecessary-stmt } # todo: enable this
         - { disabled: true, name: unsecure-url-scheme }
