@@ -39,7 +39,10 @@ type NFSHandler struct {
 	builder   *chrooted.Builder
 	sandboxes *sandbox.Map
 
-	chrootsByLifecycleID  map[string][]*chrooted.Chrooted
+	// chrootsByLifecycleID maps lifecycleID -> volumeName -> Chrooted.
+	// The inner map ensures a single mount namespace per volume per sandbox
+	// lifetime, even if the NFS client mounts the same export multiple times.
+	chrootsByLifecycleID  map[string]map[string]*chrooted.Chrooted
 	chrootMountsCounter   metric.Int64Counter
 	chrootUnmountsCounter metric.Int64Counter
 }
@@ -63,7 +66,7 @@ func NewNFSHandler(
 	h := &NFSHandler{
 		builder:               builder,
 		sandboxes:             sandboxes,
-		chrootsByLifecycleID:  make(map[string][]*chrooted.Chrooted),
+		chrootsByLifecycleID:  make(map[string]map[string]*chrooted.Chrooted),
 		chrootMountsCounter:   chrootMountsCounter,
 		chrootUnmountsCounter: chrootUnmountsCounter,
 	}
@@ -76,7 +79,7 @@ func NewNFSHandler(
 
 		h.mu.Lock()
 		for _, chroots := range h.chrootsByLifecycleID {
-			count += len(chroots)
+			count += len(chroots) // len of inner map
 		}
 		h.mu.Unlock()
 
@@ -109,7 +112,10 @@ func (h *NFSHandler) OnNetworkRelease(ctx context.Context, sbx *sandbox.Sandbox)
 				zap.String("path", chroot.Root()),
 				zap.Error(err),
 			)
+
+			continue
 		}
+
 		h.chrootUnmountsCounter.Add(ctx, 1)
 	}
 }
@@ -180,7 +186,24 @@ func (h *NFSHandler) getChroot(ctx context.Context, remoteAddr net.Addr, request
 
 	lifecycleID := sbx.LifecycleID
 	h.mu.Lock()
-	h.chrootsByLifecycleID[lifecycleID] = append(h.chrootsByLifecycleID[lifecycleID], fs)
+	if existing, ok := h.chrootsByLifecycleID[lifecycleID][volumeName]; ok {
+		// Reuse the existing mount namespace for this volume; a second MOUNT
+		// request for the same export (e.g. after client reconnect) must not
+		// create a new pivot_root.
+		h.mu.Unlock()
+		if err = fs.Close(); err != nil {
+			logger.L().Warn(ctx, "failed to close redundant chroot",
+				zap.String("volume", volumeName),
+				zap.Error(err),
+			)
+		}
+
+		return existing, nil
+	}
+	if h.chrootsByLifecycleID[lifecycleID] == nil {
+		h.chrootsByLifecycleID[lifecycleID] = make(map[string]*chrooted.Chrooted)
+	}
+	h.chrootsByLifecycleID[lifecycleID][volumeName] = fs
 	h.mu.Unlock()
 
 	h.chrootMountsCounter.Add(ctx, 1)
