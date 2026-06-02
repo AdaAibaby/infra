@@ -2,5 +2,5 @@ package placement
 
 const (
 	maxRetries                  = 3
-	maxStartingInstancesPerNode = 25
+	maxStartingInstancesPerNode = 3
 )
