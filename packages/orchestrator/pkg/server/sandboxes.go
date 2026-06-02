@@ -40,7 +40,10 @@ import (
 var tracer = otel.Tracer("github.com/e2b-dev/infra/packages/orchestrator/pkg/server")
 
 const (
-	requestTimeout = 60 * time.Second
+	// requestTimeout is the max time for the entire Create() request.
+	// This must be >= Firecracker startup (~15s) + network config (~5s) + envd init (~50s) + buffer (~5s) = ~75s.
+	// Set to 90s to provide sufficient buffer for slow nodes and high load scenarios.
+	requestTimeout = 90 * time.Second
 	// acquireTimeout is the max time to wait for a semaphore for resuming sandboxes snapshot.
 	acquireTimeout              = 15 * time.Second
 	maxStartingInstancesPerNode = 25
