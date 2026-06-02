@@ -43,7 +43,7 @@ const (
 	requestTimeout = 60 * time.Second
 	// acquireTimeout is the max time to wait for a semaphore for resuming sandboxes snapshot.
 	acquireTimeout              = 15 * time.Second
-	maxStartingInstancesPerNode = 3
+	maxStartingInstancesPerNode = 25
 
 	// uploadTimeout is the max time allowed for uploading snapshot files to GCS.
 	uploadTimeout = 20 * time.Minute
