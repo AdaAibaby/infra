@@ -51,6 +51,4 @@ type TeamLimit struct {
 	MaxRamMb                 int32
 	DiskMb                   int32
 	EventsTtlDays            int32
-	DefaultFreeDiskSizeMb    int64
-	MaxDiskSizeMb            int64
 }
