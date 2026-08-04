@@ -1,5 +1,38 @@
 # Changelog
 
+## [0.7.0](https://github.com/AdaAibaby/infra/compare/envd-v0.6.13...envd-v0.7.0) (2026-08-04)
+
+
+### Features
+
+* **envd:** add --no-cgroups flag to disable cgroup management ([#2811](https://github.com/AdaAibaby/infra/issues/2811)) ([e10814c](https://github.com/AdaAibaby/infra/commit/e10814cecc073614a26d6fc346f4aa889c3b4208))
+* **envd:** add optional EntryInfo to watch FilesystemEvent ([#2930](https://github.com/AdaAibaby/infra/issues/2930)) ([bbbc7c8](https://github.com/AdaAibaby/infra/commit/bbbc7c88a60e5feb147fb4c9769a3e9f4cee828f))
+* **envd:** allow opting into watching network mounts ([#2982](https://github.com/AdaAibaby/infra/issues/2982)) ([9799dd0](https://github.com/AdaAibaby/infra/commit/9799dd02631fb863d225adf75459416af220cf84))
+* **envd:** split collapse stats into real migrations vs already-huge ([#3021](https://github.com/AdaAibaby/infra/issues/3021)) ([0d77614](https://github.com/AdaAibaby/infra/commit/0d7761465acf9bd78ec1049c67769c7db008e35b))
+* **envd:** support user-defined file metadata via xattrs ([#2732](https://github.com/AdaAibaby/infra/issues/2732)) ([da8fbe4](https://github.com/AdaAibaby/infra/commit/da8fbe49c344028441c98afcd79753d8774b5bb8))
+* freeze user cgroup across pause/resume to keep envd /init responsive ([#2688](https://github.com/AdaAibaby/infra/issues/2688)) ([eceb741](https://github.com/AdaAibaby/infra/commit/eceb7419f9d06de2923bae4c4ff7ca694dd9e81d))
+* **orch:** collapse envd's heap into 2 MiB hugepages before pause to cut cold-resume faults ([#2997](https://github.com/AdaAibaby/infra/issues/2997)) ([6677f73](https://github.com/AdaAibaby/infra/commit/6677f7375c96096d1e9047e13ab923d60d12306c))
+* **orch:** distro-aware template base-image provisioning ([#3411](https://github.com/AdaAibaby/infra/issues/3411)) ([1abece1](https://github.com/AdaAibaby/infra/commit/1abece1991dbd94c6d84efed08e119156271f064))
+
+
+### Bug Fixes
+
+* added envd to artifact repository ([#3432](https://github.com/AdaAibaby/infra/issues/3432)) ([b7024ba](https://github.com/AdaAibaby/infra/commit/b7024ba2ab34fb7973c5686bf1cc8b4aaa916a67))
+* correct 3 CVES ([#3218](https://github.com/AdaAibaby/infra/issues/3218)) ([076823b](https://github.com/AdaAibaby/infra/commit/076823bc5cbffb9f8c04670c886562445e50ead7))
+* **envd:** avoid Start deadlock after request cancellation ([#3256](https://github.com/AdaAibaby/infra/issues/3256)) ([04317f8](https://github.com/AdaAibaby/infra/commit/04317f8a2270ba7c5d4991937c34c5b388a4bd07))
+* **envd:** ignore closed pty read errors ([#2769](https://github.com/AdaAibaby/infra/issues/2769)) ([6118672](https://github.com/AdaAibaby/infra/commit/6118672453ff404592b5d23916f8abc2f1936884))
+* **envd:** replace time.Sleep with ticker in ScanAndBroadcast for prompt shutdown ([#3374](https://github.com/AdaAibaby/infra/issues/3374)) ([002fd9f](https://github.com/AdaAibaby/infra/commit/002fd9f1abf35f311f8434eba21733c87738c838))
+* **envd:** stop freezing socat cgroup across pause/resume ([#2923](https://github.com/AdaAibaby/infra/issues/2923)) ([8b6f2b9](https://github.com/AdaAibaby/infra/commit/8b6f2b97e673cc9ea8d62f255540bcb4fcee6ec4))
+* **envd:** stop misleading CA install cancel errors on rapid /init ([#3206](https://github.com/AdaAibaby/infra/issues/3206)) ([91d09e4](https://github.com/AdaAibaby/infra/commit/91d09e4b17ddde628d6b37e1b923aba2e9430531))
+* **envd:** tolerate busy tmpfs cleanup in tests ([#2938](https://github.com/AdaAibaby/infra/issues/2938)) ([a485834](https://github.com/AdaAibaby/infra/commit/a48583444ac8dcf86b5769ab57331400fd5798c4))
+* **envd:** use constant-time comparison for signature validation ([#3145](https://github.com/AdaAibaby/infra/issues/3145)) ([fcf92fa](https://github.com/AdaAibaby/infra/commit/fcf92faacc7e4b7b27847aefd48673b8b04950bd))
+* **envd:** use WithoutCancel for CA cleanup goroutine ctx ([#3207](https://github.com/AdaAibaby/infra/issues/3207)) ([ee7bf84](https://github.com/AdaAibaby/infra/commit/ee7bf84b195364e893c855ea6e8d4034bb56c01d))
+
+
+### Performance Improvements
+
+* **envd:** stop logging streamed payload content ([#2755](https://github.com/AdaAibaby/infra/issues/2755)) ([db3868c](https://github.com/AdaAibaby/infra/commit/db3868c60a345f6fe78ed2bfd4473e6de433004e))
+
 ## 0.0.1 (2026-07-29)
 
 
