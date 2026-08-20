@@ -149,71 +149,18 @@ func (s *APIStore) PostTeamsTeamIDMembers(c *gin.Context, teamID api.TeamID) {
 	profiles, err := s.identityService.FindProfilesByEmail(ctx, string(body.Email))
 	if err != nil {
 		// Ory admin API unavailable — fall back to DB email lookup.
-		// Fail closed for SSO-managed teams: org membership cannot be verified
-		// without Ory, so refuse the invite rather than bypass the check.
 		logger.L().Warn(ctx, "ory email lookup failed, using DB fallback", zap.Error(err))
-
-		if teamInfo, ok := auth.GetTeamInfo(c); ok && teamInfo != nil && teamInfo.Team != nil && teamInfo.Team.SsoOrganizationID != nil {
-			s.sendAPIStoreError(c, http.StatusServiceUnavailable, "Identity provider is unreachable; SSO-managed teams cannot add members at this time.")
-
-			return
-		}
-
-		dbMatches, dbErr := s.authDB.FindUserIDsByEmail(ctx, string(body.Email))
-		if dbErr != nil {
-			logger.L().Error(ctx, "DB email fallback also failed", zap.Error(dbErr))
-			s.sendAPIStoreError(c, http.StatusInternalServerError, "Failed to look up user")
-
-			return
-		}
-
-		if len(dbMatches) == 0 {
-			s.sendAPIStoreError(c, http.StatusNotFound, "User with this email does not exist. Please ask them to sign up first.")
-
-			return
-		}
-
-		if len(dbMatches) > 1 {
-			logger.L().Error(ctx, "ambiguous user email lookup (DB fallback)", zap.Int("matches", len(dbMatches)))
-			s.sendAPIStoreError(c, http.StatusConflict, "Multiple users with this email exist. Please contact support.")
-
-			return
-		}
-
-		targetUID := dbMatches[0]
-
-		if err := s.authDB.UpsertPublicUser(ctx, targetUID); err != nil {
-			logger.L().Error(ctx, "failed to create public user anchor (DB fallback)", zap.Error(err), logger.WithUserID(targetUID.String()))
-			s.sendAPIStoreError(c, http.StatusInternalServerError, "Failed to add team member")
-
-			return
-		}
-
-		if addErr := s.db.AddTeamMember(ctx, queries.AddTeamMemberParams{
-			UserID:  targetUID,
-			TeamID:  authTeamID,
-			AddedBy: userID,
-		}); addErr != nil {
-			if dberrors.IsUniqueConstraintViolation(addErr) {
-				s.sendAPIStoreError(c, http.StatusBadRequest, "User is already a member of this team")
-
-				return
-			}
-
-			logger.L().Error(ctx, "failed to add team member (DB fallback)", zap.Error(addErr), logger.WithTeamID(authTeamID.String()))
-			s.sendAPIStoreError(c, http.StatusInternalServerError, "Failed to add team member")
-
-			return
-		}
-
-		s.authService.InvalidateTeamMemberCache(ctx, targetUID, authTeamID.String())
-		c.Status(http.StatusCreated)
+		s.addTeamMemberViaDBFallback(c, authTeamID, userID, string(body.Email))
 
 		return
 	}
 
 	if len(profiles) == 0 {
-		s.sendAPIStoreError(c, http.StatusNotFound, "User with this email does not exist. Please ask them to sign up first.")
+		// Pre-Ory user: the identity provider is reachable but has no identity
+		// for this email. Fall back to the DB email lookup, same as when Ory
+		// is unavailable.
+		logger.L().Warn(ctx, "email not found in identity provider, using DB fallback for pre-Ory user")
+		s.addTeamMemberViaDBFallback(c, authTeamID, userID, string(body.Email))
 
 		return
 	}
@@ -270,6 +217,71 @@ func (s *APIStore) PostTeamsTeamIDMembers(c *gin.Context, teamID api.TeamID) {
 
 	s.authService.InvalidateTeamMemberCache(ctx, user.UserID, authTeamID.String())
 
+	c.Status(http.StatusCreated)
+}
+
+// addTeamMemberViaDBFallback resolves the invitee by email from the database
+// and completes the membership insert. Used when the identity provider is
+// unavailable or has no identity for the email (pre-Ory users).
+// Fail closed for SSO-managed teams: org membership cannot be verified
+// without Ory, so refuse the invite rather than bypass the check.
+func (s *APIStore) addTeamMemberViaDBFallback(c *gin.Context, authTeamID uuid.UUID, addedBy uuid.UUID, email string) {
+	ctx := c.Request.Context()
+
+	if teamInfo, ok := auth.GetTeamInfo(c); ok && teamInfo != nil && teamInfo.Team != nil && teamInfo.Team.SsoOrganizationID != nil {
+		s.sendAPIStoreError(c, http.StatusServiceUnavailable, "Identity provider is unreachable; SSO-managed teams cannot add members at this time.")
+
+		return
+	}
+
+	dbMatches, dbErr := s.authDB.FindUserIDsByEmail(ctx, email)
+	if dbErr != nil {
+		logger.L().Error(ctx, "DB email fallback also failed", zap.Error(dbErr))
+		s.sendAPIStoreError(c, http.StatusInternalServerError, "Failed to look up user")
+
+		return
+	}
+
+	if len(dbMatches) == 0 {
+		s.sendAPIStoreError(c, http.StatusNotFound, "User with this email does not exist. Please ask them to sign up first.")
+
+		return
+	}
+
+	if len(dbMatches) > 1 {
+		logger.L().Error(ctx, "ambiguous user email lookup (DB fallback)", zap.Int("matches", len(dbMatches)))
+		s.sendAPIStoreError(c, http.StatusConflict, "Multiple users with this email exist. Please contact support.")
+
+		return
+	}
+
+	targetUID := dbMatches[0]
+
+	if err := s.authDB.UpsertPublicUser(ctx, targetUID); err != nil {
+		logger.L().Error(ctx, "failed to create public user anchor (DB fallback)", zap.Error(err), logger.WithUserID(targetUID.String()))
+		s.sendAPIStoreError(c, http.StatusInternalServerError, "Failed to add team member")
+
+		return
+	}
+
+	if addErr := s.db.AddTeamMember(ctx, queries.AddTeamMemberParams{
+		UserID:  targetUID,
+		TeamID:  authTeamID,
+		AddedBy: addedBy,
+	}); addErr != nil {
+		if dberrors.IsUniqueConstraintViolation(addErr) {
+			s.sendAPIStoreError(c, http.StatusBadRequest, "User is already a member of this team")
+
+			return
+		}
+
+		logger.L().Error(ctx, "failed to add team member (DB fallback)", zap.Error(addErr), logger.WithTeamID(authTeamID.String()))
+		s.sendAPIStoreError(c, http.StatusInternalServerError, "Failed to add team member")
+
+		return
+	}
+
+	s.authService.InvalidateTeamMemberCache(ctx, targetUID, authTeamID.String())
 	c.Status(http.StatusCreated)
 }
 
