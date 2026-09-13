@@ -70,10 +70,3 @@ func IsGTEVersion(curVersion, minVersion string) (bool, error) {
 
 	return semver.Compare(curVersion, minVersion) >= 0, nil
 }
-
-func IsVersion(curVersion, eqVersion string) bool {
-	curVersion = sanitizeVersion(curVersion)
-	eqVersion = sanitizeVersion(eqVersion)
-
-	return semver.Compare(curVersion, eqVersion) == 0
-}
