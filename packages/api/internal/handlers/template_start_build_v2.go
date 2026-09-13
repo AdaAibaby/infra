@@ -109,9 +109,16 @@ func (a *APIStore) PostV2TemplatesTemplateIDBuildsBuildID(c *gin.Context, templa
 		return
 	}
 
-	if (body.FromImage == nil || *body.FromImage == "") && (body.FromTemplate == nil || *body.FromTemplate == "") {
-		a.sendAPIStoreError(c, http.StatusBadRequest, "must specify either fromImage or fromTemplate")
-		telemetry.ReportErrorByCode(ctx, http.StatusBadRequest, "template build without a source", errors.New("neither fromImage nor fromTemplate given"), telemetry.WithTemplateID(templateID))
+	hasImage := body.FromImage != nil && *body.FromImage != ""
+	hasTemplate := body.FromTemplate != nil && *body.FromTemplate != ""
+	if hasImage == hasTemplate {
+		message := "must specify either fromImage or fromTemplate"
+		if hasImage {
+			message = "cannot specify both fromImage and fromTemplate"
+		}
+
+		a.sendAPIStoreError(c, http.StatusBadRequest, message)
+		telemetry.ReportErrorByCode(ctx, http.StatusBadRequest, "template build source rejected", errors.New(message), telemetry.WithTemplateID(templateID))
 
 		return
 	}

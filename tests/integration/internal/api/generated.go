@@ -1345,7 +1345,8 @@ type TemplateBuildInfo struct {
 	// LogEntries Build logs structured
 	LogEntries []BuildLogEntry `json:"logEntries"`
 
-	// Logs Build logs
+	// Logs Build logs (always empty since the V1 build path was removed, use logEntries)
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	Logs   []string           `json:"logs"`
 	Reason *BuildStatusReason `json:"reason,omitempty"`
 
@@ -1388,7 +1389,7 @@ type TemplateBuildRequestV3 struct {
 	TeamID *string `json:"teamID,omitempty"`
 }
 
-// TemplateBuildStartV2 defines model for TemplateBuildStartV2.
+// TemplateBuildStartV2 Exactly one of fromImage or fromTemplate must be given and non-empty.
 type TemplateBuildStartV2 struct {
 	// Force Whether the whole build should be forced to run regardless of the cache
 	Force *bool `json:"force,omitempty"`
@@ -12244,10 +12245,17 @@ func (r PatchV2TemplatesTemplateIDResponse) ContentType() string {
 type PostV2TemplatesTemplateIDBuildsBuildIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostV2TemplatesTemplateIDBuildsBuildIDResponse) GetJSON400() *N400 {
+	return r.JSON400
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -17012,6 +17020,13 @@ func ParsePostV2TemplatesTemplateIDBuildsBuildIDResponse(rsp *http.Response) (*P
 	switch {
 	case rsp.StatusCode == 202:
 		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest N401

@@ -213,7 +213,7 @@ INSERT INTO env_builds (
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, CURRENT_TIMESTAMP)
 `, build.id, "FROM e2bdev/base:latest", dbtypes.BuildStatusUploaded,
 				2, data.RAMMB, 512, 1982, "vmlinux-6.1.158-c1a568c", "v1.14-0.2.0", pkg.Version,
-				"integration-test-node", templates.TemplateV1Version, build.createdAt)
+				"integration-test-node", templates.TemplateV2LatestVersion, build.createdAt)
 		} else {
 			err = db.TestsRawSQL(ctx, `
 INSERT INTO env_builds (
@@ -223,7 +223,7 @@ INSERT INTO env_builds (
 ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP)
 `, build.id, "FROM e2bdev/base:latest", dbtypes.BuildStatusUploaded,
 				2, data.RAMMB, 512, 1982, "vmlinux-6.1.158-c1a568c", "v1.14-0.2.0", pkg.Version,
-				"integration-test-node", templates.TemplateV1Version)
+				"integration-test-node", templates.TemplateV2LatestVersion)
 		}
 		if err != nil {
 			return fmt.Errorf("failed to create env build: %w", err)
