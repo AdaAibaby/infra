@@ -83,10 +83,13 @@ build-local:
 # value: race-instrumented but optimized binaries compile faster and speed up
 # every integration test at runtime.
 DEBUG_GCFLAGS ?= -gcflags=all="-N -l"
+# Race instrumentation of the debug build, overridable (RACE_FLAG="") so CI
+# can run some suite configurations against uninstrumented binaries.
+RACE_FLAG ?= -race
 
 .PHONY: build-debug
 build-debug:
-	CGO_ENABLED=1 GOOS=linux GOARCH=$(BUILD_ARCH) go build -race $(DEBUG_GCFLAGS) -o bin/orchestrator .
+	CGO_ENABLED=1 GOOS=linux GOARCH=$(BUILD_ARCH) go build $(RACE_FLAG) $(DEBUG_GCFLAGS) -o bin/orchestrator .
 
 # Builds the dummy orchestrator. It only implements the orchestrator.proto
 # SandboxService surface against an in-memory store, and is meant for local

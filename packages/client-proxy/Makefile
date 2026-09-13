@@ -55,10 +55,14 @@ build:
 # every integration test at runtime.
 DEBUG_GCFLAGS ?= -gcflags=all="-N -l"
 
+# Race instrumentation of the debug build, overridable (RACE_FLAG="") so CI
+# can run some suite configurations against uninstrumented binaries.
+RACE_FLAG ?= -race
+
 .PHONY: build-debug
 build-debug:
 	$(eval COMMIT_SHA ?= $(shell git rev-parse --short HEAD))
-	CGO_ENABLED=1 go build -race $(DEBUG_GCFLAGS) -o bin/client-proxy -ldflags "-X=main.commitSHA=$(COMMIT_SHA) $(VERSION_LDFLAGS)" .
+	CGO_ENABLED=1 go build $(RACE_FLAG) $(DEBUG_GCFLAGS) -o bin/client-proxy -ldflags "-X=main.commitSHA=$(COMMIT_SHA) $(VERSION_LDFLAGS)" .
 
 .PHONY: build-and-upload
 build-and-upload:

@@ -102,8 +102,12 @@ build:
 # must not need a dynamic loader; -race requires cgo, hence the static external
 # link. osusergo/netgo keep user and DNS lookups pure Go, as in the CGO_ENABLED=0
 # build above, so only the race instrumentation differs from what ships.
+# RACE_FLAG="" drops the instrumentation (CI uses it for some suite
+# configurations); the cgo static link stays either way, harmlessly.
+RACE_FLAG ?= -race
+
 build-debug:
-	CGO_ENABLED=1 go build -race -tags osusergo,netgo $(DEBUG_GCFLAGS) -o bin/debug/envd ${DEBUG_LDFLAGS}
+	CGO_ENABLED=1 go build $(RACE_FLAG) -tags osusergo,netgo $(DEBUG_GCFLAGS) -o bin/debug/envd ${DEBUG_LDFLAGS}
 
 start-docker:
 	make build

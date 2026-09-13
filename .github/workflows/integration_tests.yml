@@ -78,6 +78,9 @@ jobs:
       # rebuilds inside the run/run-debug targets use identical flags (the
       # second build is then a Go build cache no-op).
       DEBUG_GCFLAGS: ""
+      # The Makefiles already default an unset RACE_FLAG to -race; set it
+      # explicitly so the build-packages cache key sees the variant it labels.
+      RACE_FLAG: "-race"
 
     steps:
       - name: Checkout Code
