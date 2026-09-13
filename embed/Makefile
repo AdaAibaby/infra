@@ -109,5 +109,5 @@ stores-check:
 	test "$$($(COMPOSE) exec -T clickhouse clickhouse-client --user clickhouse --password clickhouse --query 'SELECT count() > 0 FROM _migrations')" = 1 \
 	  || fail "the clickhouse _migrations ledger is empty" "re-run $(COMPOSE) run --rm clickhouse-migrator and read its output"; \
 	test "$$($(COMPOSE) exec -T clickhouse clickhouse-client --user clickhouse --password clickhouse --query "SELECT count() FROM system.tables WHERE database = currentDatabase() AND name = 'sandbox_logs'")" = 1 \
-	  || fail "the sandbox_logs table is missing" "E2B_CLICKHOUSE_MIGRATOR_IMAGE must be a release that carries the add_sandbox_logs migration (v0.4.0 does); re-run $(COMPOSE) run --rm clickhouse-migrator"; \
+	  || fail "the sandbox_logs table is missing" "E2B_CLICKHOUSE_MIGRATOR_IMAGE must be a release that carries the add_sandbox_logs migration (the v0.4 line does); re-run $(COMPOSE) run --rm clickhouse-migrator"; \
 	echo "stores-check: ok"

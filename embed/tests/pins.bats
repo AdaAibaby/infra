@@ -22,9 +22,12 @@ setup() {
   fi
 }
 
+# The whole tag, not the SemVer prefix: an auto-deploy tag carries the commit
+# after a hyphen, and two images from different commits must not compare equal.
 @test "api and db-migrator pins move together" {
-  api_tag="$(sed -n 's/^E2B_API_IMAGE=.*:\(v[0-9.]*\).*/\1/p' compose/.env)"
-  mig_tag="$(sed -n 's/^E2B_DB_MIGRATOR_IMAGE=.*:\(v[0-9.]*\).*/\1/p' compose/.env)"
+  api_tag="$(sed -n 's/^E2B_API_IMAGE=.*:\(v[^ #]*\).*/\1/p' compose/.env)"
+  mig_tag="$(sed -n 's/^E2B_DB_MIGRATOR_IMAGE=.*:\(v[^ #]*\).*/\1/p' compose/.env)"
+  [ -n "$api_tag" ]
   [ "$api_tag" = "$mig_tag" ]
 }
 

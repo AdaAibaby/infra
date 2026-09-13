@@ -265,12 +265,11 @@ machine.
 - macOS and Windows as the host. The stack needs a Linux machine with KVM
   and a 4 KiB-page kernel, x86-64 or arm64; on Apple silicon that is a Linux
   VM with nested virtualization (M3 or newer, macOS 15 or newer). arm64 is
-  gated, not yet verified: no arm64 host has run this stack end to end. Until
-  the seven pinned images are published as multi-arch tags, an arm64 host
-  fails at the image pull (`no matching manifest for linux/arm64`); once they
-  are, `fetch-artifacts` verifies the arm64 orchestrator and envd against the
-  `.sha256` their first arm64 release writes beside the object. A pin with
-  no such object still stops with a `FIX:` line naming it.
+  not yet verified end to end: no arm64 host has run this stack. The seven
+  pinned images are published for both architectures, and `fetch-artifacts`
+  verifies the arm64 orchestrator and envd against the `.sha256` their
+  release writes beside the object. A pin with no such object still stops
+  with a `FIX:` line naming it.
 - Container-Optimized OS: the machine needs apt, a writable `/etc` and
   glibc 2.34 or newer.
 - No dashboard. Only the SDK and API paths are covered.
