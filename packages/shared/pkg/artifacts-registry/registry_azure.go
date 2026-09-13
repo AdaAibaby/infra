@@ -122,8 +122,7 @@ func (g *AzureArtifactsRegistry) Delete(ctx context.Context, _ string, buildId s
 }
 
 func isAzureNotFound(err error) bool {
-	var respErr *azcore.ResponseError
-	if errors.As(err, &respErr) {
+	if respErr, ok := errors.AsType[*azcore.ResponseError](err); ok {
 		return respErr.StatusCode == http.StatusNotFound
 	}
 
