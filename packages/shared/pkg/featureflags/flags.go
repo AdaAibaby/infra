@@ -862,6 +862,14 @@ var (
 	// ClickHouse endpoints (CLICKHOUSE_CONNECTION_STRINGS). Default DSN
 	// is unaffected.
 	ClickhouseWriteFanoutFlag = NewBoolFlag("clickhouse-write-fanout", false)
+
+	// ClickhouseHostStatsAsyncInsertFlag sets async_insert=1 on every
+	// sandbox_host_stats flush. Each orchestrator flushes its own small batch,
+	// so without it the server writes one tiny part per node per flush; with
+	// it the server buffers those inserts and writes one part per buffer flush.
+	// wait_for_async_insert stays at the server default, so a rejected flush
+	// still fails the batch and reaches the error handler.
+	ClickhouseHostStatsAsyncInsertFlag = NewBoolFlag("clickhouse-host-stats-async-insert", false)
 )
 
 // LogsWriteConfigFlag controls where sandbox/external logs are written, so
