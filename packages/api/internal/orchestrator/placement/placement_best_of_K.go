@@ -19,6 +19,8 @@ type BestOfKConfig struct {
 	Alpha float64
 	// K is the number of candidate nodes sampled per placement ("power of K choices")
 	K int
+	// ScoreHugepages includes hugepage-pool load in the score (max of CPU and memory).
+	ScoreHugepages bool
 }
 
 // DefaultBestOfKConfig returns the default placement configuration
@@ -30,8 +32,9 @@ func DefaultBestOfKConfig() BestOfKConfig {
 	}
 }
 
-// Score calculates the placement score for this node: the higher of its CPU
-// and hugepage-memory loads, so the tighter resource decides.
+// Score calculates the placement score for this node. CPU load always
+// contributes. When config.ScoreHugepages is set, the score is the higher
+// of CPU and hugepage-memory load, so the tighter resource decides.
 func (b *BestOfK) Score(node *nodemanager.Node, resources nodemanager.SandboxResources, config BestOfKConfig) float64 {
 	metrics := node.Metrics()
 
@@ -61,6 +64,10 @@ func (b *BestOfK) Score(node *nodemanager.Node, resources nodemanager.SandboxRes
 
 	cpuScore := (cpuRequested + float64(reserved) + config.Alpha*usageAvg) / totalCapacity
 
+	if !config.ScoreHugepages {
+		return cpuScore
+	}
+
 	return max(cpuScore, memoryScore(metrics, resources, pendingMiB, config))
 }
 
@@ -69,12 +76,12 @@ func (b *BestOfK) Score(node *nodemanager.Node, resources nodemanager.SandboxRes
 // Alpha-weighted pages actually faulted in, over the pool. Commitment is the
 // kernel counters, not MemoryAllocatedBytes, so a sandbox on ordinary pages
 // does not fill the pool. No over-commit ratio; the pool is physical. A node
-// reporting no pool scores 0 here, so CPU alone decides for it.
+// reporting no pool scores 0.5, so it does not look free next to a reporter.
 func memoryScore(metrics nodemanager.Metrics, resources nodemanager.SandboxResources, pendingMiB int64, config BestOfKConfig) float64 {
 	pageBytes := float64(metrics.HugePageSizeBytes)
 	poolBytes := float64(metrics.HugePagesTotal) * pageBytes
 	if poolBytes == 0 {
-		return 0
+		return 0.5
 	}
 
 	requested := float64(units.MBToBytes(resources.MiBMemory))

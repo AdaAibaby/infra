@@ -98,24 +98,26 @@ func TestBestOfK_Score_WithPendingResources(t *testing.T) {
 	assert.Greater(t, scorePending, scoreNormal, "Node with pending resources should receive a higher (worse) score")
 }
 
-// A node with no hugepage pool scores on CPU alone.
-func TestBestOfK_Score_NoHugePagesIsCPUOnly(t *testing.T) {
+// A node with no hugepage pool scores 0.5, not as free.
+func TestBestOfK_Score_NoHugePagesIsHalf(t *testing.T) {
 	t.Parallel()
 	config := DefaultBestOfKConfig()
+	config.ScoreHugepages = true
 	algo := NewBestOfK(config).(*BestOfK)
 
 	node := nodemanager.NewTestNode("no-pool", api.NodeStatusReady, 2, 4, nodemanager.WithAllocatedMemoryBytes(uint64(units.MBToBytes(64*1024))))
 
 	score := algo.Score(node, nodemanager.SandboxResources{CPUs: 1, MiBMemory: 512}, config)
 
-	// (1 requested + 2 allocated) / (R=4 * 4 cores)
-	assert.InDelta(t, 3.0/16.0, score, 1e-9)
+	// CPU load is 3/16; unknown pool is 0.5.
+	assert.InDelta(t, 0.5, score, 1e-9)
 }
 
 // Ordinary-page sandbox RAM must not fill the hugepage pool.
 func TestBestOfK_Score_OrdinaryRAMDoesNotFillPool(t *testing.T) {
 	t.Parallel()
 	config := DefaultBestOfKConfig()
+	config.ScoreHugepages = true
 	algo := NewBestOfK(config).(*BestOfK)
 
 	pageBytes := uint64(units.MBToBytes(2))
@@ -136,6 +138,7 @@ func TestBestOfK_Score_OrdinaryRAMDoesNotFillPool(t *testing.T) {
 func TestBestOfK_Score_HugePageMemoryDominates(t *testing.T) {
 	t.Parallel()
 	config := DefaultBestOfKConfig()
+	config.ScoreHugepages = true
 	algo := NewBestOfK(config).(*BestOfK)
 
 	pageBytes := uint64(units.MBToBytes(2))
@@ -166,6 +169,7 @@ func TestBestOfK_Score_HugePageMemoryDominates(t *testing.T) {
 func TestBestOfK_Score_PendingMemoryCounts(t *testing.T) {
 	t.Parallel()
 	config := DefaultBestOfKConfig()
+	config.ScoreHugepages = true
 	algo := NewBestOfK(config).(*BestOfK)
 
 	pageBytes := uint64(units.MBToBytes(2))
@@ -187,6 +191,7 @@ func TestBestOfK_Score_PendingMemoryCounts(t *testing.T) {
 func TestBestOfK_Score_RemoveAfterSyncDropsCommitment(t *testing.T) {
 	t.Parallel()
 	config := DefaultBestOfKConfig()
+	config.ScoreHugepages = true
 	algo := NewBestOfK(config).(*BestOfK)
 
 	pageBytes := uint64(units.MBToBytes(2))
@@ -220,7 +225,7 @@ func TestBestOfK_Score_RemoveAfterSyncDropsCommitment(t *testing.T) {
 // loses to a CPU-heavy node with room in its pool.
 func TestBestOfK_ChooseNode_AvoidsFullHugePages(t *testing.T) {
 	t.Parallel()
-	config := BestOfKConfig{R: 4, Alpha: 0.5, K: 2}
+	config := BestOfKConfig{R: 4, Alpha: 0.5, K: 2, ScoreHugepages: true}
 	algo := NewBestOfK(config).(*BestOfK)
 
 	pageBytes := uint64(units.MBToBytes(2))
@@ -238,6 +243,70 @@ func TestBestOfK_ChooseNode_AvoidsFullHugePages(t *testing.T) {
 		selected, err := algo.chooseNode(t.Context(), []*nodemanager.Node{memFull, memFree}, nil, resources, CPURequirement{}, FeatureRequirement{}, false, nil)
 		require.NoError(t, err)
 		assert.Equal(t, "cpu-heavy-mem-free", selected.ID)
+	}
+}
+
+// Unknown pool scores 0.5, so a silent node loses to a same-CPU reporter with room.
+func TestBestOfK_ChooseNode_UnknownPoolLosesToReporter(t *testing.T) {
+	t.Parallel()
+	config := BestOfKConfig{R: 4, Alpha: 0.5, K: 2, ScoreHugepages: true}
+	algo := NewBestOfK(config).(*BestOfK)
+
+	pageBytes := uint64(units.MBToBytes(2))
+	silent := nodemanager.NewTestNode("silent", api.NodeStatusReady, 4, 8)
+	reporting := nodemanager.NewTestNode("reporting", api.NodeStatusReady, 4, 8,
+		nodemanager.WithHugePages(1000, 0, 50, pageBytes),
+	)
+
+	resources := nodemanager.SandboxResources{CPUs: 1, MiBMemory: 512}
+
+	for range 20 {
+		selected, err := algo.chooseNode(t.Context(), []*nodemanager.Node{silent, reporting}, nil, resources, CPURequirement{}, FeatureRequirement{}, false, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "reporting", selected.ID)
+	}
+}
+
+// Off, a full hugepage pool does not change the score: CPU alone decides.
+func TestBestOfK_Score_HugepageFlagOffIgnoresPool(t *testing.T) {
+	t.Parallel()
+	config := DefaultBestOfKConfig()
+	algo := NewBestOfK(config).(*BestOfK)
+
+	pageBytes := uint64(units.MBToBytes(2))
+	tight := nodemanager.NewTestNode("tight", api.NodeStatusReady, 4, 8,
+		nodemanager.WithHugePages(1000, 500, 250, pageBytes),
+	)
+	roomy := nodemanager.NewTestNode("roomy", api.NodeStatusReady, 4, 8,
+		nodemanager.WithHugePages(1000, 0, 50, pageBytes),
+	)
+
+	resources := nodemanager.SandboxResources{CPUs: 1, MiBMemory: 512}
+
+	// (1 requested + 4 allocated) / (R=4 * 8 cores)
+	assert.InDelta(t, 5.0/32.0, algo.Score(tight, resources, config), 1e-9)
+	assert.InDelta(t, 5.0/32.0, algo.Score(roomy, resources, config), 1e-9)
+}
+
+func TestBestOfK_ChooseNode_HugepageFlagOffPrefersCPU(t *testing.T) {
+	t.Parallel()
+	config := BestOfKConfig{R: 4, Alpha: 0.5, K: 2}
+	algo := NewBestOfK(config).(*BestOfK)
+
+	pageBytes := uint64(units.MBToBytes(2))
+	memFull := nodemanager.NewTestNode("cpu-light-mem-full", api.NodeStatusReady, 2, 8,
+		nodemanager.WithHugePages(1000, 900, 50, pageBytes),
+	)
+	memFree := nodemanager.NewTestNode("cpu-heavy-mem-free", api.NodeStatusReady, 20, 8,
+		nodemanager.WithHugePages(1000, 100, 0, pageBytes),
+	)
+
+	resources := nodemanager.SandboxResources{CPUs: 1, MiBMemory: 512}
+
+	for range 20 {
+		selected, err := algo.chooseNode(t.Context(), []*nodemanager.Node{memFull, memFree}, nil, resources, CPURequirement{}, FeatureRequirement{}, false, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "cpu-light-mem-full", selected.ID)
 	}
 }
 
