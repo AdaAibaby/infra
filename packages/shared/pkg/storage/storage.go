@@ -65,9 +65,15 @@ func (t SeekableObjectType) String() string {
 	}
 }
 
+// UploadURL is a signed upload target for an external client; Headers go verbatim on the PUT (a SAS can pin response headers but never require a request one).
+type UploadURL struct {
+	URL     string
+	Headers map[string]string
+}
+
 type StorageProvider interface {
 	DeleteObjectsWithPrefix(ctx context.Context, prefix string) error
-	UploadSignedURL(ctx context.Context, path string, ttl time.Duration) (string, error)
+	UploadSignedURL(ctx context.Context, path string, ttl time.Duration) (UploadURL, error)
 	OpenBlob(ctx context.Context, path string) (Blob, error)
 	OpenSeekable(ctx context.Context, path string) (Seekable, error)
 	GetDetails() string
