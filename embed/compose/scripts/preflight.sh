@@ -43,9 +43,12 @@ check_page_size() {
   [ "$PF_PAGE_SIZE" = 4096 ] ||
     fail "the kernel page size is $PF_PAGE_SIZE bytes, need 4096. FIX: boot a 4 KiB-page kernel (Ubuntu's default on x86_64 and aarch64); the orchestrator's snapshots and 2 MiB hugepages assume 4 KiB pages"
 }
+# arm64 restores sandboxes through userfaultfd write-protect, which arrived in 6.10.
 check_kernel() {
-  version_ge "${PF_UNAME_R%%-*}" 6.8 ||
-    fail "kernel $PF_UNAME_R is older than 6.8. FIX: apt-get install linux-generic-hwe-24.04 on the host and reboot"
+  local floor=6.8
+  case "$PF_ARCH" in aarch64) floor=6.10 ;; esac
+  version_ge "${PF_UNAME_R%%-*}" "$floor" ||
+    fail "kernel $PF_UNAME_R is older than $floor. FIX: apt-get install linux-generic-hwe-24.04 on the host and reboot"
 }
 check_kvm() {
   [ -n "$PF_SKIP_DEVICES" ] || [ -c "$PF_DEV/kvm" ] ||

@@ -13,14 +13,22 @@ the hub is [`../README.md`](../README.md).
   nested virtualization enabled (on GCE, `--enable-nested-virtualization`; on
   Apple silicon, a Lima or other Virtualization.framework VM with nested
   virtualization on, which needs an M3 or newer and macOS 15 or newer). x86-64
-  is what the guides were written and tested on. arm64 is not yet verified
-  end to end: no arm64 host has run this stack. The seven pinned images are
+  is what the guides were written and tested on. arm64 is verified end to
+  end on bare metal: on 2026-09-14 a bare-metal arm64 host (a GCE `c4a` metal
+  instance, Ubuntu 26.04, kernel 7.0) reached `ready` in under two minutes
+  and passed the smoke test, sandbox create, pause and resume, template
+  builds from arm64 images and 64 concurrent sandboxes. arm64 needs kernel
+  6.10 or newer: restoring a sandbox needs userfaultfd write-protect, which
+  arm64 gained in Linux 6.10, so on Ubuntu 24.04's stock 6.8 kernel the stack
+  is healthy but every sandbox start fails with `Failed to UFFD object` until
+  `linux-generic-hwe-24.04` is installed. The seven pinned images are
   published for both architectures, and `fetch-artifacts` verifies the arm64
   orchestrator and envd against the `.sha256` their release writes beside
   the object. A pin with no such object still stops with a `FIX:` line
   naming it.
-- Ubuntu 24.04 is the recommended host: kernel 6.8 or newer, glibc 2.34 or
-  newer (the released orchestrator's floor), cgroup v2 (systemd's default),
+- Ubuntu 24.04 is the recommended host: kernel 6.8 or newer (6.10 or newer on
+  arm64, above), glibc 2.34 or newer (the released orchestrator's floor),
+  cgroup v2 (systemd's default),
   and `iptables`, `rsync`, `e2fsprogs` and `iproute2` installed. Ubuntu
   server has all four but not `python3-venv`, which [Try it](#try-it)
   needs. Refresh the index first, or a package that is genuinely missing
@@ -43,7 +51,18 @@ the hub is [`../README.md`](../README.md).
   4 GiB of that RAM for sandboxes, and `preflight` does not check RAM, so on
   a smaller host the first signal is `host-setup` failing with `FIX: give the
   host more memory (12 GiB recommended) or lower HUGEPAGES`. Lower
-  `HUGEPAGES` rather than assuming 8 GiB is always enough.
+  `HUGEPAGES` rather than assuming 8 GiB is always enough. Size it by the
+  sandboxes you will run at once: every sandbox takes its guest memory from
+  this reservation as it touches pages, up to its full size (256 of the 2 MiB
+  pages for a 512 MiB `base` sandbox, about 90 while idle), so the default
+  carries eight sandboxes at full memory or about twenty idle ones. Past
+  that the stack stays healthy and each create fails with `500: Failed to
+  place sandbox` (the same 500 an exhausted NBD pool gives; the orchestrator
+  log tells them apart) while `docker compose logs orchestrator` shows `uffd
+  process exited: failed to wrap memfd: mmap memfd: cannot allocate memory`.
+  Set a
+  larger `HUGEPAGES` in `.env` and run `up` again: `host-setup` re-applies
+  the sysctl on every start and the orchestrator needs no restart.
 - Outbound HTTPS to Docker Hub, `us-docker.pkg.dev`, `storage.googleapis.com`,
   `github.com` and `raw.githubusercontent.com`. No account and no token:
   every image and binary the stack pulls is public.
@@ -126,9 +145,27 @@ whose files the purge removed.
 | `docker compose logs ready` | the three SDK `export` lines, this install's team API key included |
 | `docker compose --profile test run --rm smoke` | run the SDK smoke test in a container |
 
-One stack per host; there are no VM-name, port or sizing knobs. `HUGEPAGES`
+One stack per host; there are no VM-name or port knobs. `HUGEPAGES`
 (default 2048) and `PF_MIN_FREE_GIB` (default 20) can be lowered in `.env` or
-the environment for small hosts and CI. `FORCE_REBUILD=1`, settable in the
+the environment for small hosts and CI. `NBDS_MAX` (default 64) is the number
+of NBD devices `host-setup` asks the kernel for. Every running sandbox holds
+one and a template build in flight holds one or two more, so the loaded
+module's `nbds_max` is the ceiling on concurrent sandboxes: with every device
+taken, a create waits for one until the api gives up (`500: Failed to place
+sandbox: sandbox creation failed` or `504: placement timed out`), and the
+creates queued behind it in a burst get `503: not enough capacity`, the node's
+refusal to have more than three sandboxes starting at once. A module already
+loaded with more devices than `NBDS_MAX` is accepted and raises the ceiling.
+The module takes the number only when it loads, so set `NBDS_MAX` in `.env`
+before the first `up`, or with the stack down: once `ls /sys/block/nbd*/pid`
+prints nothing, `modprobe -r nbd` on the host and `up` again; `host-setup`
+stops with a `FIX:` line when the loaded module has fewer devices than asked.
+The orchestrator also refuses the 201st running sandbox (`max number of
+running sandboxes on node reached (200)`), a limit this stack cannot raise.
+`NBD_POOL_SIZE` (32) is the orchestrator's warm buffer of claimed devices,
+not a ceiling, and stays below `NBDS_MAX` on purpose: at parity the pool's
+refill loop spins and logs `no free slots` every few seconds on an idle host.
+`FORCE_REBUILD=1`, settable in the
 same two places, forces `base-template` to rebuild even when a `base` row
 already shows `ready`, for a stale or broken template. `TEAM_API_KEY`,
 `ADMIN_TOKEN` and `SANDBOX_ACCESS_TOKEN_HASH_SEED` are under Secrets below.
@@ -145,7 +182,7 @@ The hub's [What runs where](../README.md#what-runs-where) has the services.
 This is what they do to the host, which is why it should be a dedicated host
 or VM: on every `up`, `host-setup`
 
-- loads the `nbd`, `tun` and `kvm` kernel modules;
+- loads the `nbd` (with `nbds_max=NBDS_MAX`), `tun` and `kvm` kernel modules;
 - writes `/etc/modules-load.d/e2b.conf`, `/etc/modprobe.d/e2b-nbd.conf`,
   `/etc/udev/rules.d/97-nbd-device.rules` and `/etc/sysctl.d/90-e2b.conf`,
   which also raises `net.ipv4.tcp_max_syn_backlog` and `vm.max_map_count`;
@@ -180,8 +217,8 @@ skipped.
 A failed `preflight` has changed nothing on the host. A failed `host-setup`
 leaves behind whatever it had already done, all of it idempotent: the config
 files, the loaded modules and, depending on where it stopped, the reserved
-hugepages (up to 4 GiB of RAM) and the TCP MSS rule, which `host-teardown` or
-a reboot releases. A failed download leaves only fully verified files behind.
+hugepages (`HUGEPAGES` times 2 MiB, 4 GiB by default) and the TCP MSS rule,
+which `host-teardown` or a reboot releases. A failed download leaves only fully verified files behind.
 A failed template build leaves a template row marked `error` that the next
 build replaces; the `base-template` step already runs one Firecracker build VM
 through the orchestrator, which the same SIGTERM and `host-teardown` sweep

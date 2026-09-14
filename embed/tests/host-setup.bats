@@ -27,6 +27,9 @@ case " $* " in
 esac
 EOF
   chmod +x "$HS_IPTABLES"
+  # The knob tests below read the defaults the script sets, so an inherited
+  # value must not mask them.
+  unset NBDS_MAX HUGEPAGES
   # shellcheck disable=SC1091
   source "$BATS_TEST_DIRNAME/../compose/scripts/host-setup.sh"
 }
@@ -82,4 +85,30 @@ EOF
   [[ "$output" == *"iptables -t mangle -S FORWARD"* ]]
   run grep -q -- " -I " "$FAKE_LOG"
   [ "$status" -ne 0 ]
+}
+
+# NBDS_MAX is the sandbox ceiling the README documents, so compose's default
+# must be the script's. The orchestrator's NBD_POOL_SIZE is only a warm buffer
+# and has to stay below that ceiling: the pool clamps it to nbds_max, and at
+# parity its refill loop finds no free slot and spins with a warning forever.
+@test "compose's NBDS_MAX default is host-setup's, and NBD_POOL_SIZE stays below it" {
+  compose="$BATS_TEST_DIRNAME/../compose/compose.yaml"
+  # shellcheck disable=SC2016  # compose's own ${NBDS_MAX:-N} is matched literally
+  hs="$(sed -n 's/^ *NBDS_MAX: \${NBDS_MAX:-\([0-9]*\)}$/\1/p' "$compose")"
+  pool="$(sed -n 's/^ *NBD_POOL_SIZE: "\([0-9]*\)"$/\1/p' "$compose")"
+  [ -n "$hs" ] || { echo "no \${NBDS_MAX:-N} default in compose.yaml" >&2; return 1; }
+  [ -n "$pool" ] || { echo "no literal NBD_POOL_SIZE in compose.yaml" >&2; return 1; }
+  [ "$hs" = "$NBDS_MAX" ]
+  [ "$pool" -lt "$hs" ]
+}
+
+@test "positive_int accepts a count and dies with a FIX on zero, empty or text" {
+  run positive_int NBDS_MAX 64
+  [ "$status" -eq 0 ]
+  for bad in 0 "" abc 6x; do
+    run positive_int NBDS_MAX "$bad"
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"NBDS_MAX=$bad is not a positive integer"* ]]
+    [[ "$output" == *"FIX: set NBDS_MAX to a whole number"* ]]
+  done
 }

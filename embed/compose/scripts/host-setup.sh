@@ -12,6 +12,11 @@ HUGEPAGES="${HUGEPAGES:-2048}"
 
 log() { echo "host-setup: $*"; }
 die() { echo "host-setup: $1" >&2; echo "FIX: $2" >&2; exit 1; }
+positive_int() {
+  case "$2" in
+    ''|*[!0-9]*|0) die "$1=$2 is not a positive integer" "set $1 to a whole number in .env or the environment, or leave it unset for the default" ;;
+  esac
+}
 
 HS_IPTABLES="${HS_IPTABLES:-iptables}"
 
@@ -67,6 +72,9 @@ if [ -n "${HS_NO_MAIN:-}" ]; then return 0 2>/dev/null || exit 0; fi
 # script with a bare `bash: ...: Read-only file system` and no remedy.
 ETC_FIX="check that /etc is writable on the host: an immutable or read-only root filesystem cannot run this stack, so use a host you can mutate, then start the stack again"
 
+positive_int NBDS_MAX "$NBDS_MAX"
+positive_int HUGEPAGES "$HUGEPAGES"
+
 # 1. Modules, persisted for reboots and loaded now.
 printf 'nbd\ntun\nkvm\n' > /etc/modules-load.d/e2b.conf ||
   die "cannot write /etc/modules-load.d/e2b.conf" "$ETC_FIX"
@@ -79,7 +87,7 @@ modprobe kvm || true
 have_nbds="$(cat /sys/module/nbd/parameters/nbds_max)" ||
   die "cannot read /sys/module/nbd/parameters/nbds_max although modprobe nbd succeeded" "check that the nbd module is loaded on the host (lsmod | grep nbd) and check dmesg, then start the stack again"
 [ "$have_nbds" -ge "$NBDS_MAX" ] ||
-  die "nbd is loaded with nbds_max=$have_nbds, need $NBDS_MAX" "reboot the host so /etc/modprobe.d/e2b-nbd.conf takes effect"
+  die "nbd is loaded with nbds_max=$have_nbds, need $NBDS_MAX" "with the stack stopped, wait until ls /sys/block/nbd*/pid prints nothing (up to two minutes), run modprobe -r nbd on the host and start the stack again; or reboot so /etc/modprobe.d/e2b-nbd.conf takes effect"
 [ -b /dev/nbd0 ] || die "/dev/nbd0 is missing after modprobe" "check dmesg for nbd errors on the host"
 
 # 2. udev rule for the nbd devices (the same rule E2B's own Kubernetes node setup uses).

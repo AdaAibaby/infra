@@ -46,6 +46,7 @@ spec:
           env:
             # Same file and value as the node prep in the README, so this is a no-op there.
             - { name: HUGEPAGES, value: "2048" }
+            - { name: NBDS_MAX, value: "64" }
           command: ["/bin/sh", "-c", "exec nsenter -t 1 -m -u -i -n -p -- /bin/bash -s < /opt/e2b/scripts/host-setup.sh"]
         - name: fetch-artifacts
           image: E2B_TOOLS_IMAGE
@@ -175,7 +176,7 @@ spec:
             - { name: HOST_ENVD_PATH, value: /fc-envd/envd }
             - { name: ORCHESTRATOR_BASE_PATH, value: /orchestrator }
             - { name: SANDBOX_DIR, value: /fc-vm }
-            - { name: NBD_POOL_SIZE, value: "64" }
+            - { name: NBD_POOL_SIZE, value: "32" }
             - { name: NETWORK_VERSION, value: "1" }
             - { name: DEFAULT_KERNEL_VERSION, valueFrom: { configMapKeyRef: { name: e2b-versions, key: E2B_KERNEL_VERSION } } }
             - { name: DEFAULT_FIRECRACKER_VERSION, valueFrom: { configMapKeyRef: { name: e2b-versions, key: E2B_FIRECRACKER_VERSION } } }

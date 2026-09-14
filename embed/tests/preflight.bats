@@ -51,15 +51,29 @@ setup() {
   [[ "${FAILURES[0]}" != *"kvm_intel"* ]]
 }
 
-@test "check_kernel accepts 6.8.0-45-generic" {
-  PF_UNAME_R=6.8.0-45-generic check_kernel
+@test "check_kernel accepts 6.8.0-45-generic on x86_64" {
+  PF_ARCH=x86_64 PF_UNAME_R=6.8.0-45-generic check_kernel
   [ "${#FAILURES[@]}" -eq 0 ]
 }
 
-@test "check_kernel rejects 6.6.12" {
-  PF_UNAME_R=6.6.12 check_kernel
+@test "check_kernel rejects 6.6.12 on x86_64" {
+  PF_ARCH=x86_64 PF_UNAME_R=6.6.12 check_kernel
   [ "${#FAILURES[@]}" -eq 1 ]
-  [[ "${FAILURES[0]}" == *"6.8"* ]]
+  [[ "${FAILURES[0]}" == *"older than 6.8"* ]]
+}
+
+# The stock Ubuntu 24.04 kernel passes the x86 floor, yet on arm64 it fails
+# every sandbox start after the stack is healthy: no userfaultfd write-protect
+# before 6.10. The FIX names the HWE kernel, and 6.10 must sort above 6.8.
+@test "check_kernel needs 6.10 on aarch64 and names the HWE kernel" {
+  PF_ARCH=aarch64 PF_UNAME_R=6.8.0-45-generic check_kernel
+  [ "${#FAILURES[@]}" -eq 1 ]
+  [[ "${FAILURES[0]}" == *"older than 6.10"* ]]
+  [[ "${FAILURES[0]}" == *"FIX: apt-get install linux-generic-hwe-24.04"* ]]
+  FAILURES=()
+  PF_ARCH=aarch64 PF_UNAME_R=6.10.0-1-generic check_kernel
+  PF_ARCH=aarch64 PF_UNAME_R=7.0.0-1011-gcp check_kernel
+  [ "${#FAILURES[@]}" -eq 0 ]
 }
 
 @test "check_kvm fails when /dev/kvm is missing" {
@@ -160,7 +174,7 @@ FAKE_LDD
 @test "main passes on an aarch64 host with a 4 KiB-page kernel" {
   d="$BATS_TEST_TMPDIR/root"; mkdir -p "$d/dev/net" "$d/sys/fs/cgroup"
   : > "$d/sys/fs/cgroup/cgroup.controllers"
-  run env -u PF_NO_MAIN PF_ARCH=aarch64 PF_PAGE_SIZE=4096 PF_UNAME_R=6.8.0-45-generic PF_GLIBC=2.39 PF_FREE_GIB=50 \
+  run env -u PF_NO_MAIN PF_ARCH=aarch64 PF_PAGE_SIZE=4096 PF_UNAME_R=6.14.0-29-generic PF_GLIBC=2.39 PF_FREE_GIB=50 \
       PF_SYS="$d/sys" PF_MODPROBE=true PF_SKIP_DEVICES=1 PF_TOOLS=bash bash "$BATS_TEST_DIRNAME/../compose/scripts/preflight.sh"
   [ "$status" -eq 0 ]
   [[ "$output" == *"preflight: ok (arch=aarch64 page=4096"* ]]
@@ -169,7 +183,7 @@ FAKE_LDD
 @test "main fails on an aarch64 host with a 64 KiB-page kernel" {
   d="$BATS_TEST_TMPDIR/root"; mkdir -p "$d/dev/net" "$d/sys/fs/cgroup"
   : > "$d/sys/fs/cgroup/cgroup.controllers"
-  run env -u PF_NO_MAIN PF_ARCH=aarch64 PF_PAGE_SIZE=65536 PF_UNAME_R=6.8.0-45-generic PF_GLIBC=2.39 PF_FREE_GIB=50 \
+  run env -u PF_NO_MAIN PF_ARCH=aarch64 PF_PAGE_SIZE=65536 PF_UNAME_R=6.14.0-29-generic PF_GLIBC=2.39 PF_FREE_GIB=50 \
       PF_SYS="$d/sys" PF_MODPROBE=true PF_SKIP_DEVICES=1 PF_TOOLS=bash bash "$BATS_TEST_DIRNAME/../compose/scripts/preflight.sh"
   [ "$status" -eq 1 ]
   [[ "$output" == *"page size is 65536"* ]]

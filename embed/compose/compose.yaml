@@ -5,10 +5,10 @@
 # variable. Without it Compose renders a blank image name or a blank kernel
 # version and only warns, and the operator meets either a confusing "neither
 # an image nor a build context" error or a fetch-artifacts failure after the
-# host has already been mutated. The six knobs that are genuinely optional
+# host has already been mutated. The seven knobs that are genuinely optional
 # and are absent from .env (TEAM_API_KEY only as a commented line) keep the
-# ${VAR:-...} form: HUGEPAGES, PF_MIN_FREE_GIB and FORCE_REBUILD carry a
-# working default, while TEAM_API_KEY, ADMIN_TOKEN and
+# ${VAR:-...} form: HUGEPAGES, NBDS_MAX, PF_MIN_FREE_GIB and FORCE_REBUILD
+# carry a working default, while TEAM_API_KEY, ADMIN_TOKEN and
 # SANDBOX_ACCESS_TOKEN_HASH_SEED carry none — the stack generates all three
 # per install (seed for the key, api-secrets for the api's two), and a value
 # set in .env or the shell overrides the generated one.
@@ -165,6 +165,7 @@ services:
         condition: service_completed_successfully
     environment:
       HUGEPAGES: ${HUGEPAGES:-2048}
+      NBDS_MAX: ${NBDS_MAX:-64}
     command: ["/bin/sh", "-c", "exec nsenter -t 1 -m -u -i -n -p -- /bin/bash -s < /opt/e2b/scripts/host-setup.sh"]
 
   fetch-artifacts:
@@ -250,7 +251,8 @@ services:
       HOST_ENVD_PATH: /fc-envd/envd
       ORCHESTRATOR_BASE_PATH: /orchestrator
       SANDBOX_DIR: /fc-vm
-      NBD_POOL_SIZE: "64"
+      # Warm-device buffer, kept below NBDS_MAX: at parity the refill loop spins and warns.
+      NBD_POOL_SIZE: "32"
       NETWORK_VERSION: "1"
       DEFAULT_KERNEL_VERSION: ${E2B_KERNEL_VERSION:?fetch the .env that ships beside compose.yaml (README, Install)}
       DEFAULT_FIRECRACKER_VERSION: ${E2B_FIRECRACKER_VERSION:?fetch the .env that ships beside compose.yaml (README, Install)}

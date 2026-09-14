@@ -14,8 +14,11 @@ the hub is [`../README.md`](../README.md).
   means nested virtualization is on) and a 4 KiB-page kernel: Ubuntu 24.04, or
   another host with kernel 6.8 or newer, glibc 2.34 or newer, cgroup v2 and
   the `iptables`, `rsync`, `e2fsprogs` and `iproute2` tools; 12 GiB RAM and
-  20 GiB free on `/`. No Container-Optimized OS. arm64 is not yet verified
-  end to end: no arm64 node has run this stack. The seven pinned images are
+  20 GiB free on `/`. No Container-Optimized OS. arm64 is verified end to
+  end on a bare-metal arm64 host with the Compose shape (2026-09-14, kernel
+  7.0); no arm64 node has run this StatefulSet yet. arm64 needs kernel 6.10
+  or newer (userfaultfd write-protect, see the Compose guide). The seven
+  pinned images are
   published for both architectures, and the `fetch-artifacts` init container
   verifies the arm64 orchestrator and envd against the `.sha256` their
   release writes beside the object. A pin with no such object still stops
