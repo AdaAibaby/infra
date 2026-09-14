@@ -50,6 +50,7 @@ type Addon struct {
 	ExtraEventsTtlDays            int64
 	ExtraMaxDiskSizeMb            pgtype.Int8
 	ExtraMaxFreeDiskSizeMb        pgtype.Int8
+	ExtraApiTeamRpsList           int64
 }
 
 type AuthUser struct {
@@ -244,6 +245,7 @@ type TeamLimit struct {
 	DefaultFreeDiskSizeMb    int64
 	MaxDiskSizeMb            int64
 	MaxFreeDiskSizeMb        int64
+	ApiTeamRpsList           int64
 }
 
 type Tier struct {
@@ -261,6 +263,7 @@ type Tier struct {
 	DefaultFreeDiskSizeMb    int64
 	MaxDiskSizeMb            int64
 	MaxFreeDiskSizeMb        pgtype.Int8
+	ApiTeamRpsList           int64
 }
 
 type User struct {
