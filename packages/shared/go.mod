@@ -5,6 +5,7 @@ go 1.26.8
 tool github.com/go-swagger/go-swagger/cmd/swagger
 
 require (
+	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260825204119-511051f7f437.2
 	cloud.google.com/go/artifactregistry v1.26.0
 	cloud.google.com/go/storage v1.64.0
 	connectrpc.com/connect v1.18.1
