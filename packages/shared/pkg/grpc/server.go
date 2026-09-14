@@ -21,11 +21,17 @@ import (
 type ServerOption func(*serverOptions)
 
 type serverOptions struct {
+	maxMessageSize           *int
 	withSandboxResumeMetrics bool
 	withoutPayloadLogging    bool
 	recoveryHandler          recovery.RecoveryHandlerFunc
 	unaryDeadline            grpc.UnaryServerInterceptor
 	unaryInterceptors        []grpc.UnaryServerInterceptor
+}
+
+// WithMaxMessageSize sets both send and receive message limits in bytes.
+func WithMaxMessageSize(size int) ServerOption {
+	return func(o *serverOptions) { o.maxMessageSize = &size }
 }
 
 // WithSandboxResumeMetrics adds sandbox.resume attribute to otelgrpc metrics,
@@ -110,7 +116,7 @@ func NewGRPCServer(tel *telemetry.Client, opts ...ServerOption) *grpc.Server {
 	}
 	unaryInterceptors = append(unaryInterceptors, cfg.unaryInterceptors...)
 
-	return grpc.NewServer(
+	serverOpts := []grpc.ServerOption{
 		grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
 			MinTime:             5 * time.Second,
 			PermitWithoutStream: true,
@@ -129,7 +135,12 @@ func NewGRPCServer(tel *telemetry.Client, opts ...ServerOption) *grpc.Server {
 				ignoredLoggingRoutes,
 			),
 		),
-	)
+	}
+	if cfg.maxMessageSize != nil {
+		serverOpts = append(serverOpts, grpc.MaxRecvMsgSize(*cfg.maxMessageSize), grpc.MaxSendMsgSize(*cfg.maxMessageSize))
+	}
+
+	return grpc.NewServer(serverOpts...)
 }
 
 // extractSandboxResumeAttrs reads sandbox.resume from gRPC metadata set by the
