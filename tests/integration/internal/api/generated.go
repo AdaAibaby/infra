@@ -8371,6 +8371,11 @@ type ClientWithResponsesInterface interface {
 	GetVolumesVolumeIDWithResponse(ctx context.Context, volumeID VolumeID, reqEditors ...RequestEditorFn) (*GetVolumesVolumeIDResponse, error)
 }
 
+// GetAdminSandboxesRunningCountsResponse429Headers the declared response headers of an HTTP 429 response for GetAdminSandboxesRunningCounts
+type GetAdminSandboxesRunningCountsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetAdminSandboxesRunningCountsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8378,8 +8383,12 @@ type GetAdminSandboxesRunningCountsResponse struct {
 	JSON200 *AdminTeamRunningSandboxCounts
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetAdminSandboxesRunningCountsResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -8390,6 +8399,11 @@ func (r GetAdminSandboxesRunningCountsResponse) GetJSON200() *AdminTeamRunningSa
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r GetAdminSandboxesRunningCountsResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetAdminSandboxesRunningCountsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -8426,6 +8440,11 @@ func (r GetAdminSandboxesRunningCountsResponse) ContentType() string {
 	return ""
 }
 
+// PostAdminTeamsTeamIDApiKeysResponse429Headers the declared response headers of an HTTP 429 response for PostAdminTeamsTeamIDApiKeys
+type PostAdminTeamsTeamIDApiKeysResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostAdminTeamsTeamIDApiKeysResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8439,8 +8458,12 @@ type PostAdminTeamsTeamIDApiKeysResponse struct {
 	JSON403 *N403
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostAdminTeamsTeamIDApiKeysResponse429Headers
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -8466,6 +8489,11 @@ func (r PostAdminTeamsTeamIDApiKeysResponse) GetJSON403() *N403 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r PostAdminTeamsTeamIDApiKeysResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostAdminTeamsTeamIDApiKeysResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -8502,6 +8530,11 @@ func (r PostAdminTeamsTeamIDApiKeysResponse) ContentType() string {
 	return ""
 }
 
+// DeleteAdminTeamsTeamIDApiKeysApiKeyIDResponse429Headers the declared response headers of an HTTP 429 response for DeleteAdminTeamsTeamIDApiKeysApiKeyID
+type DeleteAdminTeamsTeamIDApiKeysApiKeyIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type DeleteAdminTeamsTeamIDApiKeysApiKeyIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8511,8 +8544,12 @@ type DeleteAdminTeamsTeamIDApiKeysApiKeyIDResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *DeleteAdminTeamsTeamIDApiKeysApiKeyIDResponse429Headers
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
@@ -8528,6 +8565,11 @@ func (r DeleteAdminTeamsTeamIDApiKeysApiKeyIDResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r DeleteAdminTeamsTeamIDApiKeysApiKeyIDResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r DeleteAdminTeamsTeamIDApiKeysApiKeyIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -8564,6 +8606,11 @@ func (r DeleteAdminTeamsTeamIDApiKeysApiKeyIDResponse) ContentType() string {
 	return ""
 }
 
+// PostAdminTeamsTeamIDBuildsCancelResponse429Headers the declared response headers of an HTTP 429 response for PostAdminTeamsTeamIDBuildsCancel
+type PostAdminTeamsTeamIDBuildsCancelResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostAdminTeamsTeamIDBuildsCancelResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8573,8 +8620,12 @@ type PostAdminTeamsTeamIDBuildsCancelResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostAdminTeamsTeamIDBuildsCancelResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -8590,6 +8641,11 @@ func (r PostAdminTeamsTeamIDBuildsCancelResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r PostAdminTeamsTeamIDBuildsCancelResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostAdminTeamsTeamIDBuildsCancelResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -8626,6 +8682,11 @@ func (r PostAdminTeamsTeamIDBuildsCancelResponse) ContentType() string {
 	return ""
 }
 
+// PostAdminTeamsTeamIDSandboxesKillResponse429Headers the declared response headers of an HTTP 429 response for PostAdminTeamsTeamIDSandboxesKill
+type PostAdminTeamsTeamIDSandboxesKillResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostAdminTeamsTeamIDSandboxesKillResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8635,8 +8696,12 @@ type PostAdminTeamsTeamIDSandboxesKillResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostAdminTeamsTeamIDSandboxesKillResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -8652,6 +8717,11 @@ func (r PostAdminTeamsTeamIDSandboxesKillResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r PostAdminTeamsTeamIDSandboxesKillResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostAdminTeamsTeamIDSandboxesKillResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -8688,6 +8758,11 @@ func (r PostAdminTeamsTeamIDSandboxesKillResponse) ContentType() string {
 	return ""
 }
 
+// GetApiKeysResponse429Headers the declared response headers of an HTTP 429 response for GetApiKeys
+type GetApiKeysResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetApiKeysResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8695,8 +8770,12 @@ type GetApiKeysResponse struct {
 	JSON200 *[]TeamAPIKey
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetApiKeysResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -8707,6 +8786,11 @@ func (r GetApiKeysResponse) GetJSON200() *[]TeamAPIKey {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r GetApiKeysResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetApiKeysResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -8743,6 +8827,11 @@ func (r GetApiKeysResponse) ContentType() string {
 	return ""
 }
 
+// PostApiKeysResponse429Headers the declared response headers of an HTTP 429 response for PostApiKeys
+type PostApiKeysResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostApiKeysResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8750,8 +8839,12 @@ type PostApiKeysResponse struct {
 	JSON201 *CreatedTeamAPIKey
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostApiKeysResponse429Headers
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -8762,6 +8855,11 @@ func (r PostApiKeysResponse) GetJSON201() *CreatedTeamAPIKey {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r PostApiKeysResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostApiKeysResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -8798,6 +8896,11 @@ func (r PostApiKeysResponse) ContentType() string {
 	return ""
 }
 
+// DeleteApiKeysApiKeyIDResponse429Headers the declared response headers of an HTTP 429 response for DeleteApiKeysApiKeyID
+type DeleteApiKeysApiKeyIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type DeleteApiKeysApiKeyIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8805,8 +8908,12 @@ type DeleteApiKeysApiKeyIDResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *DeleteApiKeysApiKeyIDResponse429Headers
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -8817,6 +8924,11 @@ func (r DeleteApiKeysApiKeyIDResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r DeleteApiKeysApiKeyIDResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r DeleteApiKeysApiKeyIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -8853,6 +8965,11 @@ func (r DeleteApiKeysApiKeyIDResponse) ContentType() string {
 	return ""
 }
 
+// PatchApiKeysApiKeyIDResponse429Headers the declared response headers of an HTTP 429 response for PatchApiKeysApiKeyID
+type PatchApiKeysApiKeyIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PatchApiKeysApiKeyIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8860,8 +8977,12 @@ type PatchApiKeysApiKeyIDResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PatchApiKeysApiKeyIDResponse429Headers
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -8872,6 +8993,11 @@ func (r PatchApiKeysApiKeyIDResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r PatchApiKeysApiKeyIDResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PatchApiKeysApiKeyIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -8908,6 +9034,11 @@ func (r PatchApiKeysApiKeyIDResponse) ContentType() string {
 	return ""
 }
 
+// GetClustersClusterIDRigsResponse429Headers the declared response headers of an HTTP 429 response for GetClustersClusterIDRigs
+type GetClustersClusterIDRigsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetClustersClusterIDRigsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8917,10 +9048,14 @@ type GetClustersClusterIDRigsResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
 	// JSON501 the response for an HTTP 501 `application/json` response
 	JSON501 *N501
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetClustersClusterIDRigsResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -8936,6 +9071,11 @@ func (r GetClustersClusterIDRigsResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetClustersClusterIDRigsResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetClustersClusterIDRigsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -8977,6 +9117,11 @@ func (r GetClustersClusterIDRigsResponse) ContentType() string {
 	return ""
 }
 
+// DeleteClustersClusterIDRigsInstancesInstanceIDResponse429Headers the declared response headers of an HTTP 429 response for DeleteClustersClusterIDRigsInstancesInstanceID
+type DeleteClustersClusterIDRigsInstancesInstanceIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type DeleteClustersClusterIDRigsInstancesInstanceIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -8988,10 +9133,14 @@ type DeleteClustersClusterIDRigsInstancesInstanceIDResponse struct {
 	JSON404 *N404
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *N409
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
 	// JSON501 the response for an HTTP 501 `application/json` response
 	JSON501 *N501
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *DeleteClustersClusterIDRigsInstancesInstanceIDResponse429Headers
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
@@ -9012,6 +9161,11 @@ func (r DeleteClustersClusterIDRigsInstancesInstanceIDResponse) GetJSON404() *N4
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r DeleteClustersClusterIDRigsInstancesInstanceIDResponse) GetJSON409() *N409 {
 	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r DeleteClustersClusterIDRigsInstancesInstanceIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -9053,6 +9207,11 @@ func (r DeleteClustersClusterIDRigsInstancesInstanceIDResponse) ContentType() st
 	return ""
 }
 
+// PutClustersClusterIDRigsRigIDCapacityResponse429Headers the declared response headers of an HTTP 429 response for PutClustersClusterIDRigsRigIDCapacity
+type PutClustersClusterIDRigsRigIDCapacityResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PutClustersClusterIDRigsRigIDCapacityResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9064,10 +9223,14 @@ type PutClustersClusterIDRigsRigIDCapacityResponse struct {
 	JSON404 *N404
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *N409
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
 	// JSON501 the response for an HTTP 501 `application/json` response
 	JSON501 *N501
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PutClustersClusterIDRigsRigIDCapacityResponse429Headers
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
@@ -9088,6 +9251,11 @@ func (r PutClustersClusterIDRigsRigIDCapacityResponse) GetJSON404() *N404 {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r PutClustersClusterIDRigsRigIDCapacityResponse) GetJSON409() *N409 {
 	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PutClustersClusterIDRigsRigIDCapacityResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -9129,6 +9297,11 @@ func (r PutClustersClusterIDRigsRigIDCapacityResponse) ContentType() string {
 	return ""
 }
 
+// GetClustersClusterIDRigsRigIDErrorsResponse429Headers the declared response headers of an HTTP 429 response for GetClustersClusterIDRigsRigIDErrors
+type GetClustersClusterIDRigsRigIDErrorsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetClustersClusterIDRigsRigIDErrorsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9140,10 +9313,14 @@ type GetClustersClusterIDRigsRigIDErrorsResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
 	// JSON501 the response for an HTTP 501 `application/json` response
 	JSON501 *N501
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetClustersClusterIDRigsRigIDErrorsResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -9164,6 +9341,11 @@ func (r GetClustersClusterIDRigsRigIDErrorsResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetClustersClusterIDRigsRigIDErrorsResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetClustersClusterIDRigsRigIDErrorsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -9205,6 +9387,11 @@ func (r GetClustersClusterIDRigsRigIDErrorsResponse) ContentType() string {
 	return ""
 }
 
+// GetClustersClusterIDRigsRigIDInstancesResponse429Headers the declared response headers of an HTTP 429 response for GetClustersClusterIDRigsRigIDInstances
+type GetClustersClusterIDRigsRigIDInstancesResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetClustersClusterIDRigsRigIDInstancesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9216,10 +9403,14 @@ type GetClustersClusterIDRigsRigIDInstancesResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
 	// JSON501 the response for an HTTP 501 `application/json` response
 	JSON501 *N501
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetClustersClusterIDRigsRigIDInstancesResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -9240,6 +9431,11 @@ func (r GetClustersClusterIDRigsRigIDInstancesResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetClustersClusterIDRigsRigIDInstancesResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetClustersClusterIDRigsRigIDInstancesResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -9281,16 +9477,30 @@ func (r GetClustersClusterIDRigsRigIDInstancesResponse) ContentType() string {
 	return ""
 }
 
+// GetHealthResponse429Headers the declared response headers of an HTTP 429 response for GetHealth
+type GetHealthResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetHealthResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetHealthResponse429Headers
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r GetHealthResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetHealthResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetBody returns the raw response body bytes
@@ -9322,6 +9532,11 @@ func (r GetHealthResponse) ContentType() string {
 	return ""
 }
 
+// GetNodesResponse429Headers the declared response headers of an HTTP 429 response for GetNodes
+type GetNodesResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetNodesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9329,8 +9544,12 @@ type GetNodesResponse struct {
 	JSON200 *[]Node
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetNodesResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -9341,6 +9560,11 @@ func (r GetNodesResponse) GetJSON200() *[]Node {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r GetNodesResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetNodesResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -9377,6 +9601,11 @@ func (r GetNodesResponse) ContentType() string {
 	return ""
 }
 
+// GetNodesNodeIDResponse429Headers the declared response headers of an HTTP 429 response for GetNodesNodeID
+type GetNodesNodeIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetNodesNodeIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9386,8 +9615,12 @@ type GetNodesNodeIDResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetNodesNodeIDResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -9403,6 +9636,11 @@ func (r GetNodesNodeIDResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetNodesNodeIDResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetNodesNodeIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -9439,6 +9677,11 @@ func (r GetNodesNodeIDResponse) ContentType() string {
 	return ""
 }
 
+// PostNodesNodeIDResponse429Headers the declared response headers of an HTTP 429 response for PostNodesNodeID
+type PostNodesNodeIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostNodesNodeIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9448,8 +9691,12 @@ type PostNodesNodeIDResponse struct {
 	JSON404 *N404
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *N409
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostNodesNodeIDResponse429Headers
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -9465,6 +9712,11 @@ func (r PostNodesNodeIDResponse) GetJSON404() *N404 {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r PostNodesNodeIDResponse) GetJSON409() *N409 {
 	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostNodesNodeIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -9501,6 +9753,11 @@ func (r PostNodesNodeIDResponse) ContentType() string {
 	return ""
 }
 
+// GetSandboxesResponse429Headers the declared response headers of an HTTP 429 response for GetSandboxes
+type GetSandboxesResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetSandboxesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9510,8 +9767,12 @@ type GetSandboxesResponse struct {
 	JSON400 *N400
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetSandboxesResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -9527,6 +9788,11 @@ func (r GetSandboxesResponse) GetJSON400() *N400 {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r GetSandboxesResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetSandboxesResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -9563,6 +9829,11 @@ func (r GetSandboxesResponse) ContentType() string {
 	return ""
 }
 
+// PostSandboxesResponse429Headers the declared response headers of an HTTP 429 response for PostSandboxes
+type PostSandboxesResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostSandboxesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9572,12 +9843,16 @@ type PostSandboxesResponse struct {
 	JSON400 *N400
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
 	// JSON503 the response for an HTTP 503 `application/json` response
 	JSON503 *N503
 	// JSON504 the response for an HTTP 504 `application/json` response
 	JSON504 *N504
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostSandboxesResponse429Headers
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -9593,6 +9868,11 @@ func (r PostSandboxesResponse) GetJSON400() *N400 {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r PostSandboxesResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostSandboxesResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -9639,6 +9919,11 @@ func (r PostSandboxesResponse) ContentType() string {
 	return ""
 }
 
+// GetSandboxesMetricsResponse429Headers the declared response headers of an HTTP 429 response for GetSandboxesMetrics
+type GetSandboxesMetricsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetSandboxesMetricsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9648,8 +9933,12 @@ type GetSandboxesMetricsResponse struct {
 	JSON400 *N400
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetSandboxesMetricsResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -9665,6 +9954,11 @@ func (r GetSandboxesMetricsResponse) GetJSON400() *N400 {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r GetSandboxesMetricsResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetSandboxesMetricsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -9701,6 +9995,11 @@ func (r GetSandboxesMetricsResponse) ContentType() string {
 	return ""
 }
 
+// DeleteSandboxesSandboxIDResponse429Headers the declared response headers of an HTTP 429 response for DeleteSandboxesSandboxID
+type DeleteSandboxesSandboxIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type DeleteSandboxesSandboxIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9708,8 +10007,12 @@ type DeleteSandboxesSandboxIDResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *DeleteSandboxesSandboxIDResponse429Headers
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -9720,6 +10023,11 @@ func (r DeleteSandboxesSandboxIDResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r DeleteSandboxesSandboxIDResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r DeleteSandboxesSandboxIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -9756,6 +10064,11 @@ func (r DeleteSandboxesSandboxIDResponse) ContentType() string {
 	return ""
 }
 
+// GetSandboxesSandboxIDResponse429Headers the declared response headers of an HTTP 429 response for GetSandboxesSandboxID
+type GetSandboxesSandboxIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetSandboxesSandboxIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9765,8 +10078,12 @@ type GetSandboxesSandboxIDResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetSandboxesSandboxIDResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -9782,6 +10099,11 @@ func (r GetSandboxesSandboxIDResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetSandboxesSandboxIDResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetSandboxesSandboxIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -9818,6 +10140,11 @@ func (r GetSandboxesSandboxIDResponse) ContentType() string {
 	return ""
 }
 
+// PostSandboxesSandboxIDConnectResponse429Headers the declared response headers of an HTTP 429 response for PostSandboxesSandboxIDConnect
+type PostSandboxesSandboxIDConnectResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostSandboxesSandboxIDConnectResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9833,12 +10160,16 @@ type PostSandboxesSandboxIDConnectResponse struct {
 	JSON404 *N404
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *N409
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
 	// JSON503 the response for an HTTP 503 `application/json` response
 	JSON503 *N503
 	// JSON504 the response for an HTTP 504 `application/json` response
 	JSON504 *N504
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostSandboxesSandboxIDConnectResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -9869,6 +10200,11 @@ func (r PostSandboxesSandboxIDConnectResponse) GetJSON404() *N404 {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r PostSandboxesSandboxIDConnectResponse) GetJSON409() *N409 {
 	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostSandboxesSandboxIDConnectResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -9915,6 +10251,11 @@ func (r PostSandboxesSandboxIDConnectResponse) ContentType() string {
 	return ""
 }
 
+// PostSandboxesSandboxIDForkResponse429Headers the declared response headers of an HTTP 429 response for PostSandboxesSandboxIDFork
+type PostSandboxesSandboxIDForkResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostSandboxesSandboxIDForkResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -9926,10 +10267,14 @@ type PostSandboxesSandboxIDForkResponse struct {
 	JSON404 *N404
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *N409
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
 	// JSON503 the response for an HTTP 503 `application/json` response
 	JSON503 *N503
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostSandboxesSandboxIDForkResponse429Headers
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -9950,6 +10295,11 @@ func (r PostSandboxesSandboxIDForkResponse) GetJSON404() *N404 {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r PostSandboxesSandboxIDForkResponse) GetJSON409() *N409 {
 	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostSandboxesSandboxIDForkResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -9991,6 +10341,11 @@ func (r PostSandboxesSandboxIDForkResponse) ContentType() string {
 	return ""
 }
 
+// GetSandboxesSandboxIDLogsResponse429Headers the declared response headers of an HTTP 429 response for GetSandboxesSandboxIDLogs
+type GetSandboxesSandboxIDLogsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetSandboxesSandboxIDLogsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10000,8 +10355,12 @@ type GetSandboxesSandboxIDLogsResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetSandboxesSandboxIDLogsResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -10017,6 +10376,11 @@ func (r GetSandboxesSandboxIDLogsResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetSandboxesSandboxIDLogsResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetSandboxesSandboxIDLogsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -10053,6 +10417,11 @@ func (r GetSandboxesSandboxIDLogsResponse) ContentType() string {
 	return ""
 }
 
+// GetSandboxesSandboxIDMetricsResponse429Headers the declared response headers of an HTTP 429 response for GetSandboxesSandboxIDMetrics
+type GetSandboxesSandboxIDMetricsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetSandboxesSandboxIDMetricsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10064,8 +10433,12 @@ type GetSandboxesSandboxIDMetricsResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetSandboxesSandboxIDMetricsResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -10086,6 +10459,11 @@ func (r GetSandboxesSandboxIDMetricsResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetSandboxesSandboxIDMetricsResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetSandboxesSandboxIDMetricsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -10122,6 +10500,11 @@ func (r GetSandboxesSandboxIDMetricsResponse) ContentType() string {
 	return ""
 }
 
+// PutSandboxesSandboxIDNetworkResponse429Headers the declared response headers of an HTTP 429 response for PutSandboxesSandboxIDNetwork
+type PutSandboxesSandboxIDNetworkResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PutSandboxesSandboxIDNetworkResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10131,8 +10514,12 @@ type PutSandboxesSandboxIDNetworkResponse struct {
 	JSON404 *N404
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *N409
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PutSandboxesSandboxIDNetworkResponse429Headers
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -10148,6 +10535,11 @@ func (r PutSandboxesSandboxIDNetworkResponse) GetJSON404() *N404 {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r PutSandboxesSandboxIDNetworkResponse) GetJSON409() *N409 {
 	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PutSandboxesSandboxIDNetworkResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -10184,6 +10576,11 @@ func (r PutSandboxesSandboxIDNetworkResponse) ContentType() string {
 	return ""
 }
 
+// PostSandboxesSandboxIDPauseResponse429Headers the declared response headers of an HTTP 429 response for PostSandboxesSandboxIDPause
+type PostSandboxesSandboxIDPauseResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostSandboxesSandboxIDPauseResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10193,10 +10590,14 @@ type PostSandboxesSandboxIDPauseResponse struct {
 	JSON404 *N404
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *N409
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
 	// JSON503 the response for an HTTP 503 `application/json` response
 	JSON503 *N503
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostSandboxesSandboxIDPauseResponse429Headers
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -10212,6 +10613,11 @@ func (r PostSandboxesSandboxIDPauseResponse) GetJSON404() *N404 {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r PostSandboxesSandboxIDPauseResponse) GetJSON409() *N409 {
 	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostSandboxesSandboxIDPauseResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -10253,6 +10659,11 @@ func (r PostSandboxesSandboxIDPauseResponse) ContentType() string {
 	return ""
 }
 
+// PostSandboxesSandboxIDRefreshesResponse429Headers the declared response headers of an HTTP 429 response for PostSandboxesSandboxIDRefreshes
+type PostSandboxesSandboxIDRefreshesResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostSandboxesSandboxIDRefreshesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10260,6 +10671,10 @@ type PostSandboxesSandboxIDRefreshesResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostSandboxesSandboxIDRefreshesResponse429Headers
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -10270,6 +10685,11 @@ func (r PostSandboxesSandboxIDRefreshesResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r PostSandboxesSandboxIDRefreshesResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostSandboxesSandboxIDRefreshesResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetBody returns the raw response body bytes
@@ -10301,6 +10721,11 @@ func (r PostSandboxesSandboxIDRefreshesResponse) ContentType() string {
 	return ""
 }
 
+// PostSandboxesSandboxIDResumeResponse429Headers the declared response headers of an HTTP 429 response for PostSandboxesSandboxIDResume
+type PostSandboxesSandboxIDResumeResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostSandboxesSandboxIDResumeResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10314,12 +10739,16 @@ type PostSandboxesSandboxIDResumeResponse struct {
 	JSON404 *N404
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *N409
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
 	// JSON503 the response for an HTTP 503 `application/json` response
 	JSON503 *N503
 	// JSON504 the response for an HTTP 504 `application/json` response
 	JSON504 *N504
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostSandboxesSandboxIDResumeResponse429Headers
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -10345,6 +10774,11 @@ func (r PostSandboxesSandboxIDResumeResponse) GetJSON404() *N404 {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r PostSandboxesSandboxIDResumeResponse) GetJSON409() *N409 {
 	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostSandboxesSandboxIDResumeResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -10391,6 +10825,11 @@ func (r PostSandboxesSandboxIDResumeResponse) ContentType() string {
 	return ""
 }
 
+// PostSandboxesSandboxIDSnapshotsResponse429Headers the declared response headers of an HTTP 429 response for PostSandboxesSandboxIDSnapshots
+type PostSandboxesSandboxIDSnapshotsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostSandboxesSandboxIDSnapshotsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10402,8 +10841,12 @@ type PostSandboxesSandboxIDSnapshotsResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostSandboxesSandboxIDSnapshotsResponse429Headers
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -10424,6 +10867,11 @@ func (r PostSandboxesSandboxIDSnapshotsResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r PostSandboxesSandboxIDSnapshotsResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostSandboxesSandboxIDSnapshotsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -10460,6 +10908,11 @@ func (r PostSandboxesSandboxIDSnapshotsResponse) ContentType() string {
 	return ""
 }
 
+// PostSandboxesSandboxIDTimeoutResponse429Headers the declared response headers of an HTTP 429 response for PostSandboxesSandboxIDTimeout
+type PostSandboxesSandboxIDTimeoutResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostSandboxesSandboxIDTimeoutResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10467,8 +10920,12 @@ type PostSandboxesSandboxIDTimeoutResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostSandboxesSandboxIDTimeoutResponse429Headers
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -10479,6 +10936,11 @@ func (r PostSandboxesSandboxIDTimeoutResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r PostSandboxesSandboxIDTimeoutResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostSandboxesSandboxIDTimeoutResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -10520,6 +10982,11 @@ type GetSecretsResponse200Headers struct {
 	XNextToken *string
 }
 
+// GetSecretsResponse429Headers the declared response headers of an HTTP 429 response for GetSecrets
+type GetSecretsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetSecretsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10545,6 +11012,8 @@ type GetSecretsResponse struct {
 	JSON504 *N504
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *GetSecretsResponse200Headers
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetSecretsResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -10626,6 +11095,11 @@ func (r GetSecretsResponse) ContentType() string {
 	return ""
 }
 
+// PostSecretsResponse429Headers the declared response headers of an HTTP 429 response for PostSecrets
+type PostSecretsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostSecretsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10649,6 +11123,8 @@ type PostSecretsResponse struct {
 	JSON502 *N502
 	// JSON504 the response for an HTTP 504 `application/json` response
 	JSON504 *N504
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostSecretsResponse429Headers
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -10730,6 +11206,11 @@ func (r PostSecretsResponse) ContentType() string {
 	return ""
 }
 
+// DeleteSecretsSecretIDResponse429Headers the declared response headers of an HTTP 429 response for DeleteSecretsSecretID
+type DeleteSecretsSecretIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type DeleteSecretsSecretIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10751,6 +11232,8 @@ type DeleteSecretsSecretIDResponse struct {
 	JSON502 *N502
 	// JSON504 the response for an HTTP 504 `application/json` response
 	JSON504 *N504
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *DeleteSecretsSecretIDResponse429Headers
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
@@ -10827,6 +11310,11 @@ func (r DeleteSecretsSecretIDResponse) ContentType() string {
 	return ""
 }
 
+// GetSecretsSecretIDResponse429Headers the declared response headers of an HTTP 429 response for GetSecretsSecretID
+type GetSecretsSecretIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetSecretsSecretIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10850,6 +11338,8 @@ type GetSecretsSecretIDResponse struct {
 	JSON502 *N502
 	// JSON504 the response for an HTTP 504 `application/json` response
 	JSON504 *N504
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetSecretsSecretIDResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -10931,6 +11421,11 @@ func (r GetSecretsSecretIDResponse) ContentType() string {
 	return ""
 }
 
+// PostSecretsSecretIDResponse429Headers the declared response headers of an HTTP 429 response for PostSecretsSecretID
+type PostSecretsSecretIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostSecretsSecretIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -10954,6 +11449,8 @@ type PostSecretsSecretIDResponse struct {
 	JSON502 *N502
 	// JSON504 the response for an HTTP 504 `application/json` response
 	JSON504 *N504
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostSecretsSecretIDResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -11040,6 +11537,11 @@ type GetSnapshotsResponse200Headers struct {
 	XNextToken *string
 }
 
+// GetSnapshotsResponse429Headers the declared response headers of an HTTP 429 response for GetSnapshots
+type GetSnapshotsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetSnapshotsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11047,10 +11549,14 @@ type GetSnapshotsResponse struct {
 	JSON200 *[]SnapshotInfo
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *GetSnapshotsResponse200Headers
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetSnapshotsResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -11061,6 +11567,11 @@ func (r GetSnapshotsResponse) GetJSON200() *[]SnapshotInfo {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r GetSnapshotsResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetSnapshotsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11097,6 +11608,11 @@ func (r GetSnapshotsResponse) ContentType() string {
 	return ""
 }
 
+// GetTeamsResponse429Headers the declared response headers of an HTTP 429 response for GetTeams
+type GetTeamsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetTeamsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11104,8 +11620,12 @@ type GetTeamsResponse struct {
 	JSON200 *[]Team
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetTeamsResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -11116,6 +11636,11 @@ func (r GetTeamsResponse) GetJSON200() *[]Team {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r GetTeamsResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetTeamsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11152,6 +11677,11 @@ func (r GetTeamsResponse) ContentType() string {
 	return ""
 }
 
+// GetTeamsTeamIDMetricsResponse429Headers the declared response headers of an HTTP 429 response for GetTeamsTeamIDMetrics
+type GetTeamsTeamIDMetricsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetTeamsTeamIDMetricsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11163,8 +11693,12 @@ type GetTeamsTeamIDMetricsResponse struct {
 	JSON401 *N401
 	// JSON403 the response for an HTTP 403 `application/json` response
 	JSON403 *N403
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetTeamsTeamIDMetricsResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -11185,6 +11719,11 @@ func (r GetTeamsTeamIDMetricsResponse) GetJSON401() *N401 {
 // GetJSON403 returns the response for an HTTP 403 `application/json` response
 func (r GetTeamsTeamIDMetricsResponse) GetJSON403() *N403 {
 	return r.JSON403
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetTeamsTeamIDMetricsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11221,6 +11760,11 @@ func (r GetTeamsTeamIDMetricsResponse) ContentType() string {
 	return ""
 }
 
+// GetTeamsTeamIDMetricsMaxResponse429Headers the declared response headers of an HTTP 429 response for GetTeamsTeamIDMetricsMax
+type GetTeamsTeamIDMetricsMaxResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetTeamsTeamIDMetricsMaxResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11232,8 +11776,12 @@ type GetTeamsTeamIDMetricsMaxResponse struct {
 	JSON401 *N401
 	// JSON403 the response for an HTTP 403 `application/json` response
 	JSON403 *N403
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetTeamsTeamIDMetricsMaxResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -11254,6 +11802,11 @@ func (r GetTeamsTeamIDMetricsMaxResponse) GetJSON401() *N401 {
 // GetJSON403 returns the response for an HTTP 403 `application/json` response
 func (r GetTeamsTeamIDMetricsMaxResponse) GetJSON403() *N403 {
 	return r.JSON403
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetTeamsTeamIDMetricsMaxResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11290,6 +11843,11 @@ func (r GetTeamsTeamIDMetricsMaxResponse) ContentType() string {
 	return ""
 }
 
+// GetTemplatesResponse429Headers the declared response headers of an HTTP 429 response for GetTemplates
+type GetTemplatesResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetTemplatesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11297,8 +11855,12 @@ type GetTemplatesResponse struct {
 	JSON200 *[]Template
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetTemplatesResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -11309,6 +11871,11 @@ func (r GetTemplatesResponse) GetJSON200() *[]Template {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r GetTemplatesResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetTemplatesResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11345,6 +11912,11 @@ func (r GetTemplatesResponse) ContentType() string {
 	return ""
 }
 
+// GetTemplatesAliasesAliasResponse429Headers the declared response headers of an HTTP 429 response for GetTemplatesAliasesAlias
+type GetTemplatesAliasesAliasResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetTemplatesAliasesAliasResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11356,8 +11928,12 @@ type GetTemplatesAliasesAliasResponse struct {
 	JSON403 *N403
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetTemplatesAliasesAliasResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -11378,6 +11954,11 @@ func (r GetTemplatesAliasesAliasResponse) GetJSON403() *N403 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetTemplatesAliasesAliasResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetTemplatesAliasesAliasResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11414,6 +11995,11 @@ func (r GetTemplatesAliasesAliasResponse) ContentType() string {
 	return ""
 }
 
+// DeleteTemplatesTagsResponse429Headers the declared response headers of an HTTP 429 response for DeleteTemplatesTags
+type DeleteTemplatesTagsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type DeleteTemplatesTagsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11423,8 +12009,12 @@ type DeleteTemplatesTagsResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *DeleteTemplatesTagsResponse429Headers
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
@@ -11440,6 +12030,11 @@ func (r DeleteTemplatesTagsResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r DeleteTemplatesTagsResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r DeleteTemplatesTagsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11476,6 +12071,11 @@ func (r DeleteTemplatesTagsResponse) ContentType() string {
 	return ""
 }
 
+// PostTemplatesTagsResponse429Headers the declared response headers of an HTTP 429 response for PostTemplatesTags
+type PostTemplatesTagsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostTemplatesTagsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11487,8 +12087,12 @@ type PostTemplatesTagsResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostTemplatesTagsResponse429Headers
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -11509,6 +12113,11 @@ func (r PostTemplatesTagsResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r PostTemplatesTagsResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostTemplatesTagsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11545,18 +12154,32 @@ func (r PostTemplatesTagsResponse) ContentType() string {
 	return ""
 }
 
+// DeleteTemplatesTemplateIDResponse429Headers the declared response headers of an HTTP 429 response for DeleteTemplatesTemplateID
+type DeleteTemplatesTemplateIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type DeleteTemplatesTemplateIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *DeleteTemplatesTemplateIDResponse429Headers
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r DeleteTemplatesTemplateIDResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r DeleteTemplatesTemplateIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11598,6 +12221,11 @@ type GetTemplatesTemplateIDResponse200Headers struct {
 	XNextToken *string
 }
 
+// GetTemplatesTemplateIDResponse429Headers the declared response headers of an HTTP 429 response for GetTemplatesTemplateID
+type GetTemplatesTemplateIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetTemplatesTemplateIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11605,10 +12233,14 @@ type GetTemplatesTemplateIDResponse struct {
 	JSON200 *TemplateWithBuilds
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *GetTemplatesTemplateIDResponse200Headers
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetTemplatesTemplateIDResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -11619,6 +12251,11 @@ func (r GetTemplatesTemplateIDResponse) GetJSON200() *TemplateWithBuilds {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r GetTemplatesTemplateIDResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetTemplatesTemplateIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11655,6 +12292,11 @@ func (r GetTemplatesTemplateIDResponse) ContentType() string {
 	return ""
 }
 
+// PatchTemplatesTemplateIDResponse429Headers the declared response headers of an HTTP 429 response for PatchTemplatesTemplateID
+type PatchTemplatesTemplateIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PatchTemplatesTemplateIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11662,8 +12304,12 @@ type PatchTemplatesTemplateIDResponse struct {
 	JSON400 *N400
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PatchTemplatesTemplateIDResponse429Headers
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
@@ -11674,6 +12320,11 @@ func (r PatchTemplatesTemplateIDResponse) GetJSON400() *N400 {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r PatchTemplatesTemplateIDResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PatchTemplatesTemplateIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11710,6 +12361,11 @@ func (r PatchTemplatesTemplateIDResponse) ContentType() string {
 	return ""
 }
 
+// GetTemplatesTemplateIDBuildsBuildIDLogsResponse429Headers the declared response headers of an HTTP 429 response for GetTemplatesTemplateIDBuildsBuildIDLogs
+type GetTemplatesTemplateIDBuildsBuildIDLogsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetTemplatesTemplateIDBuildsBuildIDLogsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11719,8 +12375,12 @@ type GetTemplatesTemplateIDBuildsBuildIDLogsResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetTemplatesTemplateIDBuildsBuildIDLogsResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -11736,6 +12396,11 @@ func (r GetTemplatesTemplateIDBuildsBuildIDLogsResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetTemplatesTemplateIDBuildsBuildIDLogsResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetTemplatesTemplateIDBuildsBuildIDLogsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11772,6 +12437,11 @@ func (r GetTemplatesTemplateIDBuildsBuildIDLogsResponse) ContentType() string {
 	return ""
 }
 
+// GetTemplatesTemplateIDBuildsBuildIDStatusResponse429Headers the declared response headers of an HTTP 429 response for GetTemplatesTemplateIDBuildsBuildIDStatus
+type GetTemplatesTemplateIDBuildsBuildIDStatusResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetTemplatesTemplateIDBuildsBuildIDStatusResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11781,8 +12451,12 @@ type GetTemplatesTemplateIDBuildsBuildIDStatusResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetTemplatesTemplateIDBuildsBuildIDStatusResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -11798,6 +12472,11 @@ func (r GetTemplatesTemplateIDBuildsBuildIDStatusResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetTemplatesTemplateIDBuildsBuildIDStatusResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetTemplatesTemplateIDBuildsBuildIDStatusResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11834,6 +12513,11 @@ func (r GetTemplatesTemplateIDBuildsBuildIDStatusResponse) ContentType() string 
 	return ""
 }
 
+// GetTemplatesTemplateIDFilesHashResponse429Headers the declared response headers of an HTTP 429 response for GetTemplatesTemplateIDFilesHash
+type GetTemplatesTemplateIDFilesHashResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetTemplatesTemplateIDFilesHashResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11845,8 +12529,12 @@ type GetTemplatesTemplateIDFilesHashResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetTemplatesTemplateIDFilesHashResponse429Headers
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -11867,6 +12555,11 @@ func (r GetTemplatesTemplateIDFilesHashResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetTemplatesTemplateIDFilesHashResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetTemplatesTemplateIDFilesHashResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11903,6 +12596,11 @@ func (r GetTemplatesTemplateIDFilesHashResponse) ContentType() string {
 	return ""
 }
 
+// GetTemplatesTemplateIDTagsResponse429Headers the declared response headers of an HTTP 429 response for GetTemplatesTemplateIDTags
+type GetTemplatesTemplateIDTagsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetTemplatesTemplateIDTagsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11914,8 +12612,12 @@ type GetTemplatesTemplateIDTagsResponse struct {
 	JSON403 *N403
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetTemplatesTemplateIDTagsResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -11936,6 +12638,11 @@ func (r GetTemplatesTemplateIDTagsResponse) GetJSON403() *N403 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetTemplatesTemplateIDTagsResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetTemplatesTemplateIDTagsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -11978,6 +12685,11 @@ type GetV2SandboxesResponse200Headers struct {
 	XTotalRunning *int32
 }
 
+// GetV2SandboxesResponse429Headers the declared response headers of an HTTP 429 response for GetV2Sandboxes
+type GetV2SandboxesResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetV2SandboxesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -11987,10 +12699,14 @@ type GetV2SandboxesResponse struct {
 	JSON400 *N400
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *GetV2SandboxesResponse200Headers
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetV2SandboxesResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -12006,6 +12722,11 @@ func (r GetV2SandboxesResponse) GetJSON400() *N400 {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r GetV2SandboxesResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetV2SandboxesResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -12042,6 +12763,11 @@ func (r GetV2SandboxesResponse) ContentType() string {
 	return ""
 }
 
+// GetV2SandboxesSandboxIDLogsResponse429Headers the declared response headers of an HTTP 429 response for GetV2SandboxesSandboxIDLogs
+type GetV2SandboxesSandboxIDLogsResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetV2SandboxesSandboxIDLogsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12051,8 +12777,12 @@ type GetV2SandboxesSandboxIDLogsResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetV2SandboxesSandboxIDLogsResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -12068,6 +12798,11 @@ func (r GetV2SandboxesSandboxIDLogsResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetV2SandboxesSandboxIDLogsResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetV2SandboxesSandboxIDLogsResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -12109,6 +12844,11 @@ type GetV2TemplatesResponse200Headers struct {
 	XNextToken *string
 }
 
+// GetV2TemplatesResponse429Headers the declared response headers of an HTTP 429 response for GetV2Templates
+type GetV2TemplatesResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetV2TemplatesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12120,10 +12860,14 @@ type GetV2TemplatesResponse struct {
 	JSON401 *N401
 	// JSON403 the response for an HTTP 403 `application/json` response
 	JSON403 *N403
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
 	// Headers200 the parsed response headers for an HTTP 200 response
 	Headers200 *GetV2TemplatesResponse200Headers
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetV2TemplatesResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -12144,6 +12888,11 @@ func (r GetV2TemplatesResponse) GetJSON401() *N401 {
 // GetJSON403 returns the response for an HTTP 403 `application/json` response
 func (r GetV2TemplatesResponse) GetJSON403() *N403 {
 	return r.JSON403
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetV2TemplatesResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -12180,6 +12929,11 @@ func (r GetV2TemplatesResponse) ContentType() string {
 	return ""
 }
 
+// PatchV2TemplatesTemplateIDResponse429Headers the declared response headers of an HTTP 429 response for PatchV2TemplatesTemplateID
+type PatchV2TemplatesTemplateIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PatchV2TemplatesTemplateIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12189,8 +12943,12 @@ type PatchV2TemplatesTemplateIDResponse struct {
 	JSON400 *N400
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PatchV2TemplatesTemplateIDResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -12206,6 +12964,11 @@ func (r PatchV2TemplatesTemplateIDResponse) GetJSON400() *N400 {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r PatchV2TemplatesTemplateIDResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PatchV2TemplatesTemplateIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -12242,6 +13005,11 @@ func (r PatchV2TemplatesTemplateIDResponse) ContentType() string {
 	return ""
 }
 
+// PostV2TemplatesTemplateIDBuildsBuildIDResponse429Headers the declared response headers of an HTTP 429 response for PostV2TemplatesTemplateIDBuildsBuildID
+type PostV2TemplatesTemplateIDBuildsBuildIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostV2TemplatesTemplateIDBuildsBuildIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12249,8 +13017,12 @@ type PostV2TemplatesTemplateIDBuildsBuildIDResponse struct {
 	JSON400 *N400
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostV2TemplatesTemplateIDBuildsBuildIDResponse429Headers
 }
 
 // GetJSON400 returns the response for an HTTP 400 `application/json` response
@@ -12261,6 +13033,11 @@ func (r PostV2TemplatesTemplateIDBuildsBuildIDResponse) GetJSON400() *N400 {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r PostV2TemplatesTemplateIDBuildsBuildIDResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostV2TemplatesTemplateIDBuildsBuildIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -12297,6 +13074,11 @@ func (r PostV2TemplatesTemplateIDBuildsBuildIDResponse) ContentType() string {
 	return ""
 }
 
+// PostV3TemplatesResponse429Headers the declared response headers of an HTTP 429 response for PostV3Templates
+type PostV3TemplatesResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostV3TemplatesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12310,8 +13092,12 @@ type PostV3TemplatesResponse struct {
 	JSON403 *N403
 	// JSON409 the response for an HTTP 409 `application/json` response
 	JSON409 *N409
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostV3TemplatesResponse429Headers
 }
 
 // GetJSON202 returns the response for an HTTP 202 `application/json` response
@@ -12337,6 +13123,11 @@ func (r PostV3TemplatesResponse) GetJSON403() *N403 {
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
 func (r PostV3TemplatesResponse) GetJSON409() *N409 {
 	return r.JSON409
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostV3TemplatesResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -12373,6 +13164,11 @@ func (r PostV3TemplatesResponse) ContentType() string {
 	return ""
 }
 
+// GetVolumesResponse429Headers the declared response headers of an HTTP 429 response for GetVolumes
+type GetVolumesResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetVolumesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12380,8 +13176,12 @@ type GetVolumesResponse struct {
 	JSON200 *[]Volume
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetVolumesResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -12392,6 +13192,11 @@ func (r GetVolumesResponse) GetJSON200() *[]Volume {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r GetVolumesResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetVolumesResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -12428,6 +13233,11 @@ func (r GetVolumesResponse) ContentType() string {
 	return ""
 }
 
+// PostVolumesResponse429Headers the declared response headers of an HTTP 429 response for PostVolumes
+type PostVolumesResponse429Headers struct {
+	RetryAfter *int
+}
+
 type PostVolumesResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12437,8 +13247,12 @@ type PostVolumesResponse struct {
 	JSON400 *N400
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *PostVolumesResponse429Headers
 }
 
 // GetJSON201 returns the response for an HTTP 201 `application/json` response
@@ -12454,6 +13268,11 @@ func (r PostVolumesResponse) GetJSON400() *N400 {
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
 func (r PostVolumesResponse) GetJSON401() *N401 {
 	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r PostVolumesResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -12490,6 +13309,11 @@ func (r PostVolumesResponse) ContentType() string {
 	return ""
 }
 
+// DeleteVolumesVolumeIDResponse429Headers the declared response headers of an HTTP 429 response for DeleteVolumesVolumeID
+type DeleteVolumesVolumeIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type DeleteVolumesVolumeIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12497,8 +13321,12 @@ type DeleteVolumesVolumeIDResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *DeleteVolumesVolumeIDResponse429Headers
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -12509,6 +13337,11 @@ func (r DeleteVolumesVolumeIDResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r DeleteVolumesVolumeIDResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r DeleteVolumesVolumeIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -12545,6 +13378,11 @@ func (r DeleteVolumesVolumeIDResponse) ContentType() string {
 	return ""
 }
 
+// GetVolumesVolumeIDResponse429Headers the declared response headers of an HTTP 429 response for GetVolumesVolumeID
+type GetVolumesVolumeIDResponse429Headers struct {
+	RetryAfter *int
+}
+
 type GetVolumesVolumeIDResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -12554,8 +13392,12 @@ type GetVolumesVolumeIDResponse struct {
 	JSON401 *N401
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetVolumesVolumeIDResponse429Headers
 }
 
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
@@ -12571,6 +13413,11 @@ func (r GetVolumesVolumeIDResponse) GetJSON401() *N401 {
 // GetJSON404 returns the response for an HTTP 404 `application/json` response
 func (r GetVolumesVolumeIDResponse) GetJSON404() *N404 {
 	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetVolumesVolumeIDResponse) GetJSON429() *N429 {
+	return r.JSON429
 }
 
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
@@ -13932,6 +14779,13 @@ func ParseGetAdminSandboxesRunningCountsResponse(rsp *http.Response) (*GetAdminS
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -13939,6 +14793,19 @@ func ParseGetAdminSandboxesRunningCountsResponse(rsp *http.Response) (*GetAdminS
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetAdminSandboxesRunningCountsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -13993,6 +14860,13 @@ func ParsePostAdminTeamsTeamIDApiKeysResponse(rsp *http.Response) (*PostAdminTea
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14000,6 +14874,19 @@ func ParsePostAdminTeamsTeamIDApiKeysResponse(rsp *http.Response) (*PostAdminTea
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostAdminTeamsTeamIDApiKeysResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14043,6 +14930,13 @@ func ParseDeleteAdminTeamsTeamIDApiKeysApiKeyIDResponse(rsp *http.Response) (*De
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14050,6 +14944,19 @@ func ParseDeleteAdminTeamsTeamIDApiKeysApiKeyIDResponse(rsp *http.Response) (*De
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers DeleteAdminTeamsTeamIDApiKeysApiKeyIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14090,6 +14997,13 @@ func ParsePostAdminTeamsTeamIDBuildsCancelResponse(rsp *http.Response) (*PostAdm
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14097,6 +15011,19 @@ func ParsePostAdminTeamsTeamIDBuildsCancelResponse(rsp *http.Response) (*PostAdm
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostAdminTeamsTeamIDBuildsCancelResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14137,6 +15064,13 @@ func ParsePostAdminTeamsTeamIDSandboxesKillResponse(rsp *http.Response) (*PostAd
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14144,6 +15078,19 @@ func ParsePostAdminTeamsTeamIDSandboxesKillResponse(rsp *http.Response) (*PostAd
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostAdminTeamsTeamIDSandboxesKillResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14177,6 +15124,13 @@ func ParseGetApiKeysResponse(rsp *http.Response) (*GetApiKeysResponse, error) {
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14184,6 +15138,19 @@ func ParseGetApiKeysResponse(rsp *http.Response) (*GetApiKeysResponse, error) {
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetApiKeysResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14217,6 +15184,13 @@ func ParsePostApiKeysResponse(rsp *http.Response) (*PostApiKeysResponse, error) 
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14224,6 +15198,19 @@ func ParsePostApiKeysResponse(rsp *http.Response) (*PostApiKeysResponse, error) 
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostApiKeysResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14260,6 +15247,13 @@ func ParseDeleteApiKeysApiKeyIDResponse(rsp *http.Response) (*DeleteApiKeysApiKe
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14267,6 +15261,19 @@ func ParseDeleteApiKeysApiKeyIDResponse(rsp *http.Response) (*DeleteApiKeysApiKe
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers DeleteApiKeysApiKeyIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14303,6 +15310,13 @@ func ParsePatchApiKeysApiKeyIDResponse(rsp *http.Response) (*PatchApiKeysApiKeyI
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14310,6 +15324,19 @@ func ParsePatchApiKeysApiKeyIDResponse(rsp *http.Response) (*PatchApiKeysApiKeyI
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PatchApiKeysApiKeyIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14350,6 +15377,13 @@ func ParseGetClustersClusterIDRigsResponse(rsp *http.Response) (*GetClustersClus
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14364,6 +15398,19 @@ func ParseGetClustersClusterIDRigsResponse(rsp *http.Response) (*GetClustersClus
 		}
 		response.JSON501 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetClustersClusterIDRigsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14414,6 +15461,13 @@ func ParseDeleteClustersClusterIDRigsInstancesInstanceIDResponse(rsp *http.Respo
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14428,6 +15482,19 @@ func ParseDeleteClustersClusterIDRigsInstancesInstanceIDResponse(rsp *http.Respo
 		}
 		response.JSON501 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers DeleteClustersClusterIDRigsInstancesInstanceIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14478,6 +15545,13 @@ func ParsePutClustersClusterIDRigsRigIDCapacityResponse(rsp *http.Response) (*Pu
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14492,6 +15566,19 @@ func ParsePutClustersClusterIDRigsRigIDCapacityResponse(rsp *http.Response) (*Pu
 		}
 		response.JSON501 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PutClustersClusterIDRigsRigIDCapacityResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14539,6 +15626,13 @@ func ParseGetClustersClusterIDRigsRigIDErrorsResponse(rsp *http.Response) (*GetC
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14553,6 +15647,19 @@ func ParseGetClustersClusterIDRigsRigIDErrorsResponse(rsp *http.Response) (*GetC
 		}
 		response.JSON501 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetClustersClusterIDRigsRigIDErrorsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14600,6 +15707,13 @@ func ParseGetClustersClusterIDRigsRigIDInstancesResponse(rsp *http.Response) (*G
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14614,6 +15728,19 @@ func ParseGetClustersClusterIDRigsRigIDInstancesResponse(rsp *http.Response) (*G
 		}
 		response.JSON501 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetClustersClusterIDRigsRigIDInstancesResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14643,6 +15770,26 @@ func ParseGetHealthResponse(rsp *http.Response) (*GetHealthResponse, error) {
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetHealthResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14676,6 +15823,13 @@ func ParseGetNodesResponse(rsp *http.Response) (*GetNodesResponse, error) {
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14683,6 +15837,19 @@ func ParseGetNodesResponse(rsp *http.Response) (*GetNodesResponse, error) {
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetNodesResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14723,6 +15890,13 @@ func ParseGetNodesNodeIDResponse(rsp *http.Response) (*GetNodesNodeIDResponse, e
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14730,6 +15904,19 @@ func ParseGetNodesNodeIDResponse(rsp *http.Response) (*GetNodesNodeIDResponse, e
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetNodesNodeIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14773,6 +15960,13 @@ func ParsePostNodesNodeIDResponse(rsp *http.Response) (*PostNodesNodeIDResponse,
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14780,6 +15974,19 @@ func ParsePostNodesNodeIDResponse(rsp *http.Response) (*PostNodesNodeIDResponse,
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostNodesNodeIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14820,6 +16027,13 @@ func ParseGetSandboxesResponse(rsp *http.Response) (*GetSandboxesResponse, error
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14827,6 +16041,19 @@ func ParseGetSandboxesResponse(rsp *http.Response) (*GetSandboxesResponse, error
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetSandboxesResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14867,6 +16094,13 @@ func ParsePostSandboxesResponse(rsp *http.Response) (*PostSandboxesResponse, err
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14888,6 +16122,19 @@ func ParsePostSandboxesResponse(rsp *http.Response) (*PostSandboxesResponse, err
 		}
 		response.JSON504 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostSandboxesResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14928,6 +16175,13 @@ func ParseGetSandboxesMetricsResponse(rsp *http.Response) (*GetSandboxesMetricsR
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14935,6 +16189,19 @@ func ParseGetSandboxesMetricsResponse(rsp *http.Response) (*GetSandboxesMetricsR
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetSandboxesMetricsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -14971,6 +16238,13 @@ func ParseDeleteSandboxesSandboxIDResponse(rsp *http.Response) (*DeleteSandboxes
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -14978,6 +16252,19 @@ func ParseDeleteSandboxesSandboxIDResponse(rsp *http.Response) (*DeleteSandboxes
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers DeleteSandboxesSandboxIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -15018,6 +16305,13 @@ func ParseGetSandboxesSandboxIDResponse(rsp *http.Response) (*GetSandboxesSandbo
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -15025,6 +16319,19 @@ func ParseGetSandboxesSandboxIDResponse(rsp *http.Response) (*GetSandboxesSandbo
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetSandboxesSandboxIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -15086,6 +16393,13 @@ func ParsePostSandboxesSandboxIDConnectResponse(rsp *http.Response) (*PostSandbo
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -15107,6 +16421,19 @@ func ParsePostSandboxesSandboxIDConnectResponse(rsp *http.Response) (*PostSandbo
 		}
 		response.JSON504 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostSandboxesSandboxIDConnectResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -15154,6 +16481,13 @@ func ParsePostSandboxesSandboxIDForkResponse(rsp *http.Response) (*PostSandboxes
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -15168,6 +16502,19 @@ func ParsePostSandboxesSandboxIDForkResponse(rsp *http.Response) (*PostSandboxes
 		}
 		response.JSON503 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostSandboxesSandboxIDForkResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -15208,6 +16555,13 @@ func ParseGetSandboxesSandboxIDLogsResponse(rsp *http.Response) (*GetSandboxesSa
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -15215,6 +16569,19 @@ func ParseGetSandboxesSandboxIDLogsResponse(rsp *http.Response) (*GetSandboxesSa
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetSandboxesSandboxIDLogsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -15262,6 +16629,13 @@ func ParseGetSandboxesSandboxIDMetricsResponse(rsp *http.Response) (*GetSandboxe
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -15269,6 +16643,19 @@ func ParseGetSandboxesSandboxIDMetricsResponse(rsp *http.Response) (*GetSandboxe
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetSandboxesSandboxIDMetricsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -15312,6 +16699,13 @@ func ParsePutSandboxesSandboxIDNetworkResponse(rsp *http.Response) (*PutSandboxe
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -15319,6 +16713,19 @@ func ParsePutSandboxesSandboxIDNetworkResponse(rsp *http.Response) (*PutSandboxe
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PutSandboxesSandboxIDNetworkResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -15362,6 +16769,13 @@ func ParsePostSandboxesSandboxIDPauseResponse(rsp *http.Response) (*PostSandboxe
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -15376,6 +16790,19 @@ func ParsePostSandboxesSandboxIDPauseResponse(rsp *http.Response) (*PostSandboxe
 		}
 		response.JSON503 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostSandboxesSandboxIDPauseResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -15412,6 +16839,26 @@ func ParsePostSandboxesSandboxIDRefreshesResponse(rsp *http.Response) (*PostSand
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostSandboxesSandboxIDRefreshesResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -15466,6 +16913,13 @@ func ParsePostSandboxesSandboxIDResumeResponse(rsp *http.Response) (*PostSandbox
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -15487,6 +16941,19 @@ func ParsePostSandboxesSandboxIDResumeResponse(rsp *http.Response) (*PostSandbox
 		}
 		response.JSON504 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostSandboxesSandboxIDResumeResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -15534,6 +17001,13 @@ func ParsePostSandboxesSandboxIDSnapshotsResponse(rsp *http.Response) (*PostSand
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -15541,6 +17015,19 @@ func ParsePostSandboxesSandboxIDSnapshotsResponse(rsp *http.Response) (*PostSand
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostSandboxesSandboxIDSnapshotsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -15577,6 +17064,13 @@ func ParsePostSandboxesSandboxIDTimeoutResponse(rsp *http.Response) (*PostSandbo
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -15584,6 +17078,19 @@ func ParsePostSandboxesSandboxIDTimeoutResponse(rsp *http.Response) (*PostSandbo
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostSandboxesSandboxIDTimeoutResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -15686,6 +17193,16 @@ func ParseGetSecretsResponse(rsp *http.Response) (*GetSecretsResponse, error) {
 			headers.XNextToken = &value
 		}
 		response.Headers200 = &headers
+	case rsp.StatusCode == 429:
+		var headers GetSecretsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -15777,6 +17294,19 @@ func ParsePostSecretsResponse(rsp *http.Response) (*PostSecretsResponse, error) 
 
 	}
 
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostSecretsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
 	return response, nil
 }
 
@@ -15860,6 +17390,19 @@ func ParseDeleteSecretsSecretIDResponse(rsp *http.Response) (*DeleteSecretsSecre
 		}
 		response.JSON504 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers DeleteSecretsSecretIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -15951,6 +17494,19 @@ func ParseGetSecretsSecretIDResponse(rsp *http.Response) (*GetSecretsSecretIDRes
 
 	}
 
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetSecretsSecretIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
 	return response, nil
 }
 
@@ -16040,6 +17596,19 @@ func ParsePostSecretsSecretIDResponse(rsp *http.Response) (*PostSecretsSecretIDR
 
 	}
 
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostSecretsSecretIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
 	return response, nil
 }
 
@@ -16071,6 +17640,13 @@ func ParseGetSnapshotsResponse(rsp *http.Response) (*GetSnapshotsResponse, error
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16091,6 +17667,16 @@ func ParseGetSnapshotsResponse(rsp *http.Response) (*GetSnapshotsResponse, error
 			headers.XNextToken = &value
 		}
 		response.Headers200 = &headers
+	case rsp.StatusCode == 429:
+		var headers GetSnapshotsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16124,6 +17710,13 @@ func ParseGetTeamsResponse(rsp *http.Response) (*GetTeamsResponse, error) {
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16131,6 +17724,19 @@ func ParseGetTeamsResponse(rsp *http.Response) (*GetTeamsResponse, error) {
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetTeamsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16178,6 +17784,13 @@ func ParseGetTeamsTeamIDMetricsResponse(rsp *http.Response) (*GetTeamsTeamIDMetr
 		}
 		response.JSON403 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16185,6 +17798,19 @@ func ParseGetTeamsTeamIDMetricsResponse(rsp *http.Response) (*GetTeamsTeamIDMetr
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetTeamsTeamIDMetricsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16232,6 +17858,13 @@ func ParseGetTeamsTeamIDMetricsMaxResponse(rsp *http.Response) (*GetTeamsTeamIDM
 		}
 		response.JSON403 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16239,6 +17872,19 @@ func ParseGetTeamsTeamIDMetricsMaxResponse(rsp *http.Response) (*GetTeamsTeamIDM
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetTeamsTeamIDMetricsMaxResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16272,6 +17918,13 @@ func ParseGetTemplatesResponse(rsp *http.Response) (*GetTemplatesResponse, error
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16279,6 +17932,19 @@ func ParseGetTemplatesResponse(rsp *http.Response) (*GetTemplatesResponse, error
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetTemplatesResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16326,6 +17992,13 @@ func ParseGetTemplatesAliasesAliasResponse(rsp *http.Response) (*GetTemplatesAli
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16333,6 +18006,19 @@ func ParseGetTemplatesAliasesAliasResponse(rsp *http.Response) (*GetTemplatesAli
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetTemplatesAliasesAliasResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16376,6 +18062,13 @@ func ParseDeleteTemplatesTagsResponse(rsp *http.Response) (*DeleteTemplatesTagsR
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16383,6 +18076,19 @@ func ParseDeleteTemplatesTagsResponse(rsp *http.Response) (*DeleteTemplatesTagsR
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers DeleteTemplatesTagsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16430,6 +18136,13 @@ func ParsePostTemplatesTagsResponse(rsp *http.Response) (*PostTemplatesTagsRespo
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16437,6 +18150,19 @@ func ParsePostTemplatesTagsResponse(rsp *http.Response) (*PostTemplatesTagsRespo
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostTemplatesTagsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16466,6 +18192,13 @@ func ParseDeleteTemplatesTemplateIDResponse(rsp *http.Response) (*DeleteTemplate
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16473,6 +18206,19 @@ func ParseDeleteTemplatesTemplateIDResponse(rsp *http.Response) (*DeleteTemplate
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers DeleteTemplatesTemplateIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16506,6 +18252,13 @@ func ParseGetTemplatesTemplateIDResponse(rsp *http.Response) (*GetTemplatesTempl
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16526,6 +18279,16 @@ func ParseGetTemplatesTemplateIDResponse(rsp *http.Response) (*GetTemplatesTempl
 			headers.XNextToken = &value
 		}
 		response.Headers200 = &headers
+	case rsp.StatusCode == 429:
+		var headers GetTemplatesTemplateIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16562,6 +18325,13 @@ func ParsePatchTemplatesTemplateIDResponse(rsp *http.Response) (*PatchTemplatesT
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16569,6 +18339,19 @@ func ParsePatchTemplatesTemplateIDResponse(rsp *http.Response) (*PatchTemplatesT
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PatchTemplatesTemplateIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16609,6 +18392,13 @@ func ParseGetTemplatesTemplateIDBuildsBuildIDLogsResponse(rsp *http.Response) (*
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16616,6 +18406,19 @@ func ParseGetTemplatesTemplateIDBuildsBuildIDLogsResponse(rsp *http.Response) (*
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetTemplatesTemplateIDBuildsBuildIDLogsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16656,6 +18459,13 @@ func ParseGetTemplatesTemplateIDBuildsBuildIDStatusResponse(rsp *http.Response) 
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16663,6 +18473,19 @@ func ParseGetTemplatesTemplateIDBuildsBuildIDStatusResponse(rsp *http.Response) 
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetTemplatesTemplateIDBuildsBuildIDStatusResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16710,6 +18533,13 @@ func ParseGetTemplatesTemplateIDFilesHashResponse(rsp *http.Response) (*GetTempl
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16717,6 +18547,19 @@ func ParseGetTemplatesTemplateIDFilesHashResponse(rsp *http.Response) (*GetTempl
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetTemplatesTemplateIDFilesHashResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16764,6 +18607,13 @@ func ParseGetTemplatesTemplateIDTagsResponse(rsp *http.Response) (*GetTemplatesT
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16771,6 +18621,19 @@ func ParseGetTemplatesTemplateIDTagsResponse(rsp *http.Response) (*GetTemplatesT
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetTemplatesTemplateIDTagsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16811,6 +18674,13 @@ func ParseGetV2SandboxesResponse(rsp *http.Response) (*GetV2SandboxesResponse, e
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16838,6 +18708,16 @@ func ParseGetV2SandboxesResponse(rsp *http.Response) (*GetV2SandboxesResponse, e
 			headers.XTotalRunning = &value
 		}
 		response.Headers200 = &headers
+	case rsp.StatusCode == 429:
+		var headers GetV2SandboxesResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16878,6 +18758,13 @@ func ParseGetV2SandboxesSandboxIDLogsResponse(rsp *http.Response) (*GetV2Sandbox
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16885,6 +18772,19 @@ func ParseGetV2SandboxesSandboxIDLogsResponse(rsp *http.Response) (*GetV2Sandbox
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetV2SandboxesSandboxIDLogsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16932,6 +18832,13 @@ func ParseGetV2TemplatesResponse(rsp *http.Response) (*GetV2TemplatesResponse, e
 		}
 		response.JSON403 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16952,6 +18859,16 @@ func ParseGetV2TemplatesResponse(rsp *http.Response) (*GetV2TemplatesResponse, e
 			headers.XNextToken = &value
 		}
 		response.Headers200 = &headers
+	case rsp.StatusCode == 429:
+		var headers GetV2TemplatesResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -16992,6 +18909,13 @@ func ParsePatchV2TemplatesTemplateIDResponse(rsp *http.Response) (*PatchV2Templa
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -16999,6 +18923,19 @@ func ParsePatchV2TemplatesTemplateIDResponse(rsp *http.Response) (*PatchV2Templa
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PatchV2TemplatesTemplateIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -17035,6 +18972,13 @@ func ParsePostV2TemplatesTemplateIDBuildsBuildIDResponse(rsp *http.Response) (*P
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -17042,6 +18986,19 @@ func ParsePostV2TemplatesTemplateIDBuildsBuildIDResponse(rsp *http.Response) (*P
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostV2TemplatesTemplateIDBuildsBuildIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -17096,6 +19053,13 @@ func ParsePostV3TemplatesResponse(rsp *http.Response) (*PostV3TemplatesResponse,
 		}
 		response.JSON409 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -17103,6 +19067,19 @@ func ParsePostV3TemplatesResponse(rsp *http.Response) (*PostV3TemplatesResponse,
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostV3TemplatesResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -17136,6 +19113,13 @@ func ParseGetVolumesResponse(rsp *http.Response) (*GetVolumesResponse, error) {
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -17143,6 +19127,19 @@ func ParseGetVolumesResponse(rsp *http.Response) (*GetVolumesResponse, error) {
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetVolumesResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -17183,6 +19180,13 @@ func ParsePostVolumesResponse(rsp *http.Response) (*PostVolumesResponse, error) 
 		}
 		response.JSON401 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -17190,6 +19194,19 @@ func ParsePostVolumesResponse(rsp *http.Response) (*PostVolumesResponse, error) 
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers PostVolumesResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -17226,6 +19243,13 @@ func ParseDeleteVolumesVolumeIDResponse(rsp *http.Response) (*DeleteVolumesVolum
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -17233,6 +19257,19 @@ func ParseDeleteVolumesVolumeIDResponse(rsp *http.Response) (*DeleteVolumesVolum
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers DeleteVolumesVolumeIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
@@ -17273,6 +19310,13 @@ func ParseGetVolumesVolumeIDResponse(rsp *http.Response) (*GetVolumesVolumeIDRes
 		}
 		response.JSON404 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
@@ -17280,6 +19324,19 @@ func ParseGetVolumesVolumeIDResponse(rsp *http.Response) (*GetVolumesVolumeIDRes
 		}
 		response.JSON500 = &dest
 
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetVolumesVolumeIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
