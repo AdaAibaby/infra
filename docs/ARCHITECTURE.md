@@ -410,18 +410,19 @@ test path. It runs next to the API path and does not replace it yet.
 
 Two feature flags in `packages/shared/pkg/featureflags` control the new path:
 
-- `orchestrator-routing-publish` (orchestrator): write `sandbox:routing:{id}` on `MarkRunning` and
-  delete it on `MarkStopping`. A failed write is logged and counted
+- `orchestrator-routing-publish` (orchestrator, **default on**): write `sandbox:routing:{id}` on
+  `MarkRunning` and delete it on `MarkStopping`. A failed write is logged and counted
   (`orchestrator.routing.publish.total{result=error}`); the sandbox keeps running. Build sandboxes
   are skipped. The delete is guarded by `execution_id` in a Lua script, so a stale lifecycle never
   removes the record of a newer execution.
-- `orchestrator-routing-prioritized` (client-proxy): resolve the node from `sandbox:routing:{id}`
+- `orchestrator-routing-prioritized` (client-proxy, **default off**): resolve the node from `sandbox:routing:{id}`
   instead of `sandbox:catalog:{id}`. There is no fallback to the API-owned record on a miss. A miss
   goes to the auto-resume path (`ResumeSandbox` gRPC to the API), same as today.
 
-Rollout order: turn on `orchestrator-routing-publish` first and wait one maximum sandbox length,
-so every live sandbox has a record. Then turn on `orchestrator-routing-prioritized`. To roll back,
-turn off `orchestrator-routing-prioritized`; the API path is untouched.
+Rollout order: `orchestrator-routing-publish` is on by default, so every live sandbox has a record
+one maximum sandbox length after the orchestrator deploy. Then turn on
+`orchestrator-routing-prioritized`. To roll back, turn off `orchestrator-routing-prioritized`; the
+API path is untouched. Turn off `orchestrator-routing-publish` only to stop the extra Redis write.
 
 The TTL of both records is `sandbox_max_length_in_hours` from the write time. The record is
 deleted earlier in every normal stop path.

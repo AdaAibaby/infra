@@ -467,7 +467,10 @@ var (
 	// OrchestratorRoutingPublishFlag makes the orchestrator write the sandbox
 	// routing record (sandbox:routing:{id}) on MarkRunning and delete it on
 	// MarkStopping. Runs next to the API-owned sandbox:catalog:{id} record.
-	OrchestratorRoutingPublishFlag = NewBoolFlag("orchestrator-routing-publish", false)
+	// On by default: the write is best-effort and nothing reads the record
+	// until OrchestratorRoutingPrioritizedFlag is on. Turn off in LaunchDarkly
+	// to stop the extra Redis write.
+	OrchestratorRoutingPublishFlag = NewBoolFlag("orchestrator-routing-publish", true)
 	// OrchestratorRoutingPrioritizedFlag makes client-proxy resolve the node
 	// from the orchestrator-owned sandbox:routing:{id} record instead of the
 	// API-owned sandbox:catalog:{id} record. Turn on only after
