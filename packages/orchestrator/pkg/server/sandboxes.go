@@ -421,6 +421,8 @@ func (s *Server) Create(ctx context.Context, req *orchestrator.SandboxCreateRequ
 		},
 	)
 
+	sbx.SetExecutionStartedAt(time.Now())
+
 	return &orchestrator.SandboxCreateResponse{
 		ClientId:              s.info.ClientId,
 		SchedulingMetadata:    schedulingMetadata,
@@ -1340,6 +1342,7 @@ func (s *Server) checkpointResumeFresh(ctx context.Context, sbx *sandbox.Sandbox
 		sbx.APIStoredConfig,
 		// Defer routing until after the upgrade's post-/init (markSandboxLive below).
 		sandbox.WithDeferredLiveRegistration(),
+		sandbox.WithExecutionStartedAt(sbx.GetExecutionStartedAt()),
 	)
 	if err != nil {
 		telemetry.ReportCriticalError(ctx, "error resuming sandbox after checkpoint", err, telemetry.WithSandboxID(in.GetSandboxId()))

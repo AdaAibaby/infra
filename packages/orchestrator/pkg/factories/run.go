@@ -783,6 +783,15 @@ func run(config cfg.Config, opts Options) (success bool) {
 		reclaimClean = !summary.HasFailures()
 	}
 
+	if usesSandboxRuntime {
+		tracker, err := metrics.NewFirecrackerTracker(tel.MeterProvider, sandboxes)
+		if err != nil {
+			logger.L().Fatal(ctx, "failed to create Firecracker process tracker", zap.Error(err))
+		}
+		startService("Firecracker process tracker", func() error { return tracker.Start(ctx) })
+		closers = append(closers, closer{"Firecracker process tracker", tracker.Close})
+	}
+
 	// device pool
 	devicePool, err := nbd.NewDevicePool(config.NBDPoolSize)
 	if err != nil {

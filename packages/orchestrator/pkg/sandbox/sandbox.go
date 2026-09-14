@@ -328,11 +328,12 @@ type Metadata struct {
 	Config         *Config
 	Runtime        RuntimeMetadata
 
-	rwmu       sync.RWMutex // protects startedAt, endAt, stoppedAt, stopReason
-	startedAt  time.Time
-	endAt      time.Time
-	stoppedAt  time.Time
-	stopReason StopReason
+	rwmu               sync.RWMutex // protects timing and stop reason
+	startedAt          time.Time
+	endAt              time.Time
+	stoppedAt          time.Time
+	stopReason         StopReason
+	executionStartedAt time.Time
 }
 
 // GetEndAt returns the sandbox end time in a thread-safe manner.
@@ -535,6 +536,22 @@ func (m *Metadata) GetStartedAt() time.Time {
 	defer m.rwmu.RUnlock()
 
 	return m.startedAt
+}
+
+func (m *Metadata) GetExecutionStartedAt() time.Time {
+	m.rwmu.RLock()
+	defer m.rwmu.RUnlock()
+
+	return m.executionStartedAt
+}
+
+func (m *Metadata) SetExecutionStartedAt(t time.Time) {
+	m.rwmu.Lock()
+	defer m.rwmu.Unlock()
+
+	if m.executionStartedAt.IsZero() {
+		m.executionStartedAt = t
+	}
 }
 
 // SetStartedAt sets the sandbox start time in a thread-safe manner.
@@ -1124,6 +1141,8 @@ func handleSpanError(span trace.Span, err *error) {
 
 // resumeOptions carries the optional knobs of ResumeSandbox.
 type resumeOptions struct {
+	executionStartedAt time.Time
+
 	// denyEgress isolates the resumed sandbox from the network (except the
 	// orchestrator control path) before it is resumed.
 	denyEgress bool
@@ -1163,6 +1182,10 @@ func (o *resumeOptions) describesCustomerStart() bool {
 
 // ResumeOption customizes a ResumeSandbox call.
 type ResumeOption func(*resumeOptions)
+
+func WithExecutionStartedAt(startedAt time.Time) ResumeOption {
+	return func(o *resumeOptions) { o.executionStartedAt = startedAt }
+}
 
 // WithDenyEgress denies all network egress for the resumed sandbox — except the
 // orchestrator control path — before Firecracker is resumed, so neither envd
@@ -1574,8 +1597,9 @@ func (f *Factory) ResumeSandbox(
 		Config:  config,
 		Runtime: runtime,
 
-		startedAt: startedAt,
-		endAt:     endAt,
+		startedAt:          startedAt,
+		endAt:              endAt,
+		executionStartedAt: ropts.executionStartedAt,
 	}
 
 	sbx := &Sandbox{

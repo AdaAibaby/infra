@@ -509,9 +509,15 @@ const (
 )
 
 const (
-	ApiOrchestratorCountMeterName     GaugeIntType = "api.orchestrator.status"
-	OrchestratorStatusGaugeName       GaugeIntType = "orchestrator.status"
-	OrchestratorSandboxLimitGaugeName GaugeIntType = "orchestrator.sandbox.limit"
+	ApiOrchestratorCountMeterName        GaugeIntType = "api.orchestrator.status"
+	OrchestratorStatusGaugeName          GaugeIntType = "orchestrator.status"
+	OrchestratorSandboxLimitGaugeName    GaugeIntType = "orchestrator.sandbox.limit"
+	FirecrackerProcesses                 GaugeIntType = "orchestrator.firecracker.processes"
+	FirecrackerProcessesUntracked        GaugeIntType = "orchestrator.firecracker.processes.untracked"
+	FirecrackerProcessesOverMaxLength    GaugeIntType = "orchestrator.firecracker.processes.over_max_length"
+	FirecrackerProcessesUnknownMaxLength GaugeIntType = "orchestrator.firecracker.processes.unknown_max_length"
+	FirecrackerTrackerSuccess            GaugeIntType = "orchestrator.firecracker.tracker.success"
+	FirecrackerTrackerLastSuccessAge     GaugeIntType = "orchestrator.firecracker.tracker.last_success_age"
 
 	// Orchestrator node resources allocated to running sandboxes (sum across running sandboxes)
 	OrchestratorCpuAllocatedGaugeName    GaugeIntType = "orchestrator.sandbox.cpu.allocated"
@@ -706,6 +712,12 @@ var gaugeFloatUnits = map[GaugeFloatType]string{
 }
 
 var gaugeIntDesc = map[GaugeIntType]string{
+	FirecrackerProcesses:                 "Non-exited Firecracker OS processes in the tracker's last complete scan.",
+	FirecrackerProcessesUntracked:        "Firecracker processes older than five minutes and absent from lifecycle tracking.",
+	FirecrackerProcessesOverMaxLength:    "Customer Firecracker processes beyond their known sandbox start plus maximum length; excludes builds and temporary VMs.",
+	FirecrackerProcessesUnknownMaxLength: "Firecracker processes whose customer maximum length cannot be determined; excludes known builds and temporary VMs.",
+	FirecrackerTrackerSuccess:            "Whether the latest Firecracker process tracker scan completed successfully (1 or 0).",
+	FirecrackerTrackerLastSuccessAge:     "Seconds since the last complete Firecracker tracker scan, computed at collection time; omitted before the first success.",
 	ApiOrchestratorCountMeterName:        "Counter of running orchestrators.",
 	OrchestratorStatusGaugeName:          "Self-reported orchestrator status (always 1, labelled with status and version).",
 	OrchestratorSandboxLimitGaugeName:    "Configured maximum number of running sandboxes on the orchestrator node.",
@@ -723,6 +735,12 @@ var gaugeIntDesc = map[GaugeIntType]string{
 }
 
 var gaugeIntUnits = map[GaugeIntType]string{
+	FirecrackerProcesses:                 "{process}",
+	FirecrackerProcessesUntracked:        "{process}",
+	FirecrackerProcessesOverMaxLength:    "{process}",
+	FirecrackerProcessesUnknownMaxLength: "{process}",
+	FirecrackerTrackerSuccess:            "1",
+	FirecrackerTrackerLastSuccessAge:     "s",
 	ApiOrchestratorCountMeterName:        "{orchestrator}",
 	OrchestratorStatusGaugeName:          "{orchestrator}",
 	OrchestratorSandboxLimitGaugeName:    "{sandbox}",
