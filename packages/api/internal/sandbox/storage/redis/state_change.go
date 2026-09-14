@@ -186,20 +186,6 @@ func (s *Storage) createCallback(teamID uuid.UUID, sandboxID, transitionKey, res
 			restoreErr = s.restoreToRunning(cbCtx, teamID, sandboxID, stateAction.TargetState)
 		}
 
-		lockKey := redis_utils.GetLockKey(transitionKey)
-		lock, err := s.locker.Obtain(cbCtx, lockKey, lockTimeout)
-		if err != nil {
-			logger.L().Warn(cbCtx, "Failed to obtain lock in callback", logger.WithSandboxID(sandboxID), zap.String("transitionID", transitionID), zap.Error(err))
-
-			return
-		}
-		defer func() {
-			err = lock.Release(context.WithoutCancel(cbCtx))
-			if err != nil {
-				logger.L().Error(cbCtx, "Failed to release lock in callback", logger.WithSandboxID(sandboxID), zap.String("transitionID", transitionID), zap.Error(err))
-			}
-		}()
-
 		// Determine result value for waiters:
 		// - Restore failure: propagate so callers know state is inconsistent
 		// - Transient original failure: signal success so concurrent ops (e.g. kill) can proceed
@@ -211,16 +197,11 @@ func (s *Storage) createCallback(teamID uuid.UUID, sandboxID, transitionKey, res
 			resultValue = cbErr.Error()
 		}
 
-		// Set result key with short TTL
-		setErr := s.redisClient.Set(cbCtx, resultKey, resultValue, transitionResultKeyTTL).Err()
-		if setErr != nil {
-			logger.L().Warn(cbCtx, "Failed to set transition result", logger.WithSandboxID(sandboxID), zap.String("transitionID", transitionID), zap.Error(setErr))
-		}
-
-		// Delete transition key
-		delErr := s.redisClient.Del(cbCtx, transitionKey).Err()
-		if delErr != nil {
-			logger.L().Warn(cbCtx, "Failed to delete transition key", logger.WithSandboxID(sandboxID), zap.Error(delErr))
+		// Publish the result before waiters can observe completion; expired owners cannot delete a successor's key.
+		err := finishTransitionScript.Run(cbCtx, s.redisClient, []string{transitionKey, resultKey},
+			transitionID, resultValue, int(transitionResultKeyTTL.Seconds())).Err()
+		if err != nil {
+			logger.L().Warn(cbCtx, "Failed to finish state transition", logger.WithSandboxID(sandboxID), zap.String("transitionID", transitionID), zap.Error(err))
 		}
 
 		// Notify subscribers that the transition is complete so waitForTransition
