@@ -12,6 +12,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
+	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 )
 
 const (
@@ -42,6 +43,27 @@ if info.execution_id == ARGV[1] then
   return 1
 end
 return 2
+`)
+
+// An existing route's owner and TTL must survive a delayed rollback.
+var restoreIfSameExecution = redis.NewScript(`
+local v = redis.call('GET', KEYS[1])
+if v then
+  local ok, info = pcall(cjson.decode, v)
+  if not (ok and type(info) == 'table' and type(info.execution_id) == 'string') then
+    return redis.error_reply('invalid sandbox route')
+  end
+  if info.execution_id ~= ARGV[1] then
+    return 0
+  end
+  return 1
+end
+if tonumber(ARGV[3]) > 0 then
+  redis.call('SET', KEYS[1], ARGV[2], 'PX', ARGV[3])
+else
+  redis.call('SET', KEYS[1], ARGV[2])
+end
+return 1
 `)
 
 const (
@@ -121,6 +143,34 @@ func (c *RedisSandboxCatalog) StoreSandbox(ctx context.Context, sandboxID string
 	}
 
 	return nil
+}
+
+// RestoreSandbox fills a missing route and refuses one owned by another execution.
+func (c *RedisSandboxCatalog) RestoreSandbox(ctx context.Context, sandboxID string, sandboxInfo *SandboxInfo, expiration time.Duration) error {
+	return telemetry.Observe0(ctx, tracer, "sandbox-catalog-restore", func(ctx context.Context) error {
+		ctx, cancel := context.WithTimeout(ctx, catalogRedisTimeout)
+		defer cancel()
+
+		data, err := json.Marshal(sandboxInfo)
+		if err != nil {
+			return fmt.Errorf("failed to marshal sandbox info: %w", err)
+		}
+
+		ttlMillis := expiration.Milliseconds()
+		if expiration > 0 {
+			ttlMillis = max(1, ttlMillis)
+		}
+		written, err := restoreIfSameExecution.Run(ctx, c.redisClient, []string{c.getCatalogKey(sandboxID)},
+			sandboxInfo.ExecutionID, data, ttlMillis).Int()
+		if err != nil {
+			return fmt.Errorf("failed to restore sandbox route: %w", err)
+		}
+		if written == 0 {
+			return ErrSandboxExecutionMismatch
+		}
+
+		return nil
+	})
 }
 
 // DeleteSandbox is best-effort: a Redis error is logged and swallowed, the entry then expires via TTL.

@@ -29,3 +29,5 @@ type CatalogProvider string
 var tracer = otel.Tracer("github.com/e2b-dev/infra/packages/shared/pkg/sandbox-catalog")
 
 var ErrSandboxNotFound = errors.New("sandbox not found")
+
+var ErrSandboxExecutionMismatch = errors.New("sandbox route belongs to another execution")
