@@ -7,8 +7,11 @@ import (
 	"fmt"
 	"time"
 
+	"go.uber.org/zap"
+
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/template/build/storage/paths"
 	templatemanager "github.com/e2b-dev/infra/packages/shared/pkg/grpc/template-manager"
+	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 )
 
 const signedUrlExpiration = time.Minute * 30
@@ -29,14 +32,21 @@ func (s *ServerStore) InitLayerFileUpload(ctx context.Context, in *templatemanag
 		return nil, fmt.Errorf("failed to open layer files cache: %w", err)
 	}
 
-	signedUrl, err := s.buildStorage.UploadSignedURL(ctx, path, signedUrlExpiration)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get signed url: %w", err)
-	}
-
 	exists, err := obj.Exists(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check if layer files exists: %w", err)
+	}
+
+	signedUrl, err := s.buildStorage.UploadSignedURL(ctx, path, signedUrlExpiration)
+	if err != nil {
+		// A cache hit needs no upload URL, so any signing failure — a provider that cannot sign, or a transient credential/network error — is fatal only on a miss; the request carries no force-upload intent, so a forced re-upload degrades to using the cached entry here.
+		if exists {
+			logger.L().Warn(ctx, "serving layer-file cache hit without an upload URL: signing the upload URL failed", zap.Error(err))
+
+			return &templatemanager.InitLayerFileUploadResponse{Present: true}, nil
+		}
+
+		return nil, fmt.Errorf("failed to get signed url: %w", err)
 	}
 
 	return &templatemanager.InitLayerFileUploadResponse{
