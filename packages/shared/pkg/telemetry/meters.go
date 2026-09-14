@@ -23,7 +23,9 @@ const (
 	ApiOrchestratorResumeOriginNodeRemap CounterType = "api.orchestrator.resume_origin_node_remapped"
 	// ApiOrchestratorPauseRefusalRestore counts what became of a pause the
 	// node refused retryably: outcome restored | restore_failed |
-	// route_restore_failed, caller request | eviction.
+	// route_restore_failed | superseded, caller request | eviction.
+	// superseded: the ID was reclaimed by a new incarnation meanwhile; nothing
+	// was restored, removed, or killed.
 	ApiOrchestratorPauseRefusalRestore CounterType = "api.orchestrator.pause_refusal_restore"
 	// ApiEvictorFsOnlyAutoPause counts timeout auto-pauses whose policy asked
 	// for a filesystem-only snapshot. Unlabeled since the fs-only version

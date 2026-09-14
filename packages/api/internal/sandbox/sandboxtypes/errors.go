@@ -55,7 +55,12 @@ func (PauseQueueExhaustedError) Error() string {
 }
 
 // ErrExecutionMismatch reports that the stored sandbox is a different
-// incarnation than the caller intended to remove — the one it saw was already
-// removed and the ID reused by a resume or recreate. Raised only when the
-// caller opted in via RemoveOpts.ExpectExecutionID.
+// incarnation than the caller intended to act on — the one it saw was already
+// removed and the ID reused by a resume or recreate. Raised by StartRemoving
+// when the caller opted in via RemoveOpts.ExpectExecutionID, and always by
+// RestoreRunning.
 var ErrExecutionMismatch = errors.New("sandbox execution no longer matches")
+
+// ErrRestoreConflict reports that the record was rewritten between the
+// restore's read and its compare-and-set; nothing was written.
+var ErrRestoreConflict = errors.New("sandbox changed during restoration")

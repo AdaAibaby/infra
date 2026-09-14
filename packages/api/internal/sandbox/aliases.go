@@ -19,6 +19,7 @@ type (
 	RemoveOpts  = sandboxtypes.RemoveOpts
 
 	TransitionEffect = sandboxtypes.TransitionEffect
+	StateTransition  = sandboxtypes.StateTransition
 
 	InvalidStateTransitionError = sandboxtypes.InvalidStateTransitionError
 	LimitExceededError          = sandboxtypes.LimitExceededError
@@ -55,6 +56,7 @@ var (
 	ErrEvictionInProgress = sandboxtypes.ErrEvictionInProgress
 	ErrEvictionNotNeeded  = sandboxtypes.ErrEvictionNotNeeded
 	ErrExecutionMismatch  = sandboxtypes.ErrExecutionMismatch
+	ErrRestoreConflict    = sandboxtypes.ErrRestoreConflict
 	ErrTransitionRestored = sandboxtypes.ErrTransitionRestored
 
 	AllowedTransitions = sandboxtypes.AllowedTransitions

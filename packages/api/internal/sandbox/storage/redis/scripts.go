@@ -5,6 +5,19 @@ import "github.com/redis/go-redis/v9"
 // Lua scripts for atomic operations.
 // These scripts ensure true atomicity in Redis cluster mode
 var (
+	// Add bypasses the storage lock; compare the record atomically before restoring it.
+	restoreSandboxScript = redis.NewScript(`
+		local current = redis.call('GET', KEYS[1])
+		if current == ARGV[2] then
+			return 1
+		end
+		if current ~= ARGV[1] then
+			return 0
+		end
+		redis.call('SET', KEYS[1], ARGV[2], 'KEEPTTL')
+		return 1
+	`)
+
 	finishTransitionScript = redis.NewScript(`
 		redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3])
 		if redis.call('GET', KEYS[1]) == ARGV[1] then

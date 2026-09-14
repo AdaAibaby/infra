@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/launchdarkly/go-server-sdk/v7/testhelpers/ldtestdata"
+	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/metric/noop"
@@ -149,11 +150,14 @@ func refusedPauseErr() error {
 	return status.Error(codes.ResourceExhausted, "node is busy persisting sandbox, please retry")
 }
 
-func newRefusalFixture(t *testing.T, restoreFlag bool, clusterID uuid.UUID, pauseErr error) refusalFixture {
+func newRefusalFixture(t *testing.T, restoreFlag bool, clusterID uuid.UUID, pauseErr error, hooks ...redis.Hook) refusalFixture {
 	t.Helper()
 
 	db := testutils.SetupDatabase(t)
 	redisClient := redis_utils.SetupInstance(t)
+	for _, hook := range hooks {
+		redisClient.AddHook(hook)
+	}
 
 	storage, err := sandboxredis.NewStorage(redisClient, noop.NewMeterProvider(), nil)
 	require.NoError(t, err)
@@ -341,7 +345,7 @@ type failingCatalog struct {
 	e2bcatalog.SandboxesCatalog
 }
 
-func (failingCatalog) StoreSandbox(context.Context, string, *e2bcatalog.SandboxInfo, time.Duration) error {
+func (failingCatalog) RestoreSandbox(context.Context, string, *e2bcatalog.SandboxInfo, time.Duration) error {
 	return errors.New("catalog unavailable")
 }
 
@@ -396,6 +400,47 @@ func TestRemoveSandbox_FailedRestoreKillsTheRefusedSandbox(t *testing.T) {
 	assert.Equal(t, map[string]int64{"restore_failed/request": 1}, f.restoreOutcomes(t))
 }
 
+// A refused pause whose record was removed and the ID reclaimed by a new
+// incarnation while the RPC was in flight must leave that incarnation alone:
+// its record is not rewritten with the stale one, not removed, and its VM is
+// not killed on the node.
+func TestRemoveSandbox_SupersededRefusalLeavesNewIncarnationAlone(t *testing.T) {
+	t.Parallel()
+
+	f := newRefusalFixture(t, true, consts.LocalClusterID, refusedPauseErr())
+	node, ok := f.o.nodes.Get(f.o.scopedNodeID(consts.LocalClusterID, "node-1"))
+	require.True(t, ok)
+
+	resumed := f.sbx
+	resumed.ExecutionID = uuid.NewString()
+	resumed.MaxInstanceLength = 3 * time.Hour
+	resumed.EndTime = time.Now().Add(2 * time.Hour)
+
+	stub := &pauseStubClient{err: refusedPauseErr()}
+	stub.onPause = func() {
+		f.o.sandboxStore.Remove(t.Context(), f.sbx.TeamID, f.sbx.SandboxID)
+		require.NoError(t, f.o.sandboxStore.Add(t.Context(), resumed, nil))
+	}
+	node.SetSandboxClient(stub)
+
+	err := f.removePause(t)
+	require.ErrorIs(t, err, ErrSandboxNotFound, "the caller's sandbox is gone, as when it was removed before the pause")
+	require.ErrorIs(t, err, sandbox.ErrExecutionMismatch)
+	require.NotErrorIs(t, err, PauseQueueExhaustedError{})
+
+	stored, err := f.o.sandboxStore.Get(t.Context(), f.sbx.TeamID, f.sbx.SandboxID)
+	require.NoError(t, err, "the incarnation that reclaimed the ID must survive")
+	assert.Equal(t, resumed.ExecutionID, stored.ExecutionID)
+	assert.Equal(t, sandbox.StateRunning, stored.State)
+	assert.WithinDuration(t, resumed.EndTime, stored.EndTime, time.Second, "its expiry is its own, not the stale rollback's")
+	assert.True(t, stored.RefusedUntil.IsZero(), "the refusal is the old incarnation's, not stamped on the new one")
+
+	assert.Zero(t, stub.deleteCount(), "the node must not be asked to kill the sandbox that now owns the ID")
+	time.Sleep(200 * time.Millisecond)
+	assert.Zero(t, f.recorder.stoppedCount(), "no stopped event for a removal someone else already completed")
+	assert.Equal(t, map[string]int64{"superseded/request": 1}, f.restoreOutcomes(t))
+}
+
 // The edge answers Aborted when the node refused but the route could not be
 // put back: the sandbox cannot be kept, so the record goes, the VM is killed
 // now, and the outcome is counted as a failed route restore.
@@ -427,10 +472,10 @@ func TestRestoreRefusedPause_ClusterNodeSkipsCatalog(t *testing.T) {
 
 	f := newRefusalFixture(t, true, uuid.New(), refusedPauseErr())
 
-	_, _, finish, err := f.o.sandboxStore.StartRemoving(t.Context(), f.sbx.TeamID, f.sbx.SandboxID, sandbox.RemoveOpts{Action: sandbox.StateActionPause})
+	transition, _, finish, err := f.o.sandboxStore.StartRemoving(t.Context(), f.sbx.TeamID, f.sbx.SandboxID, sandbox.RemoveOpts{Action: sandbox.StateActionPause})
 	require.NoError(t, err)
 
-	require.Equal(t, restoreOutcomeRestored, f.o.restoreRefusedPause(t.Context(), f.sbx.TeamID, f.sbx))
+	require.Equal(t, restoreOutcomeRestored, f.o.restoreRefusedPause(t.Context(), transition))
 	finish(t.Context(), PauseQueueExhaustedError{})
 
 	stored, err := f.o.sandboxStore.Get(t.Context(), f.sbx.TeamID, f.sbx.SandboxID)

@@ -13,7 +13,16 @@ import (
 	e2bcatalog "github.com/e2b-dev/infra/packages/shared/pkg/sandbox-catalog"
 )
 
+type restorableCatalog interface {
+	e2bcatalog.SandboxesCatalog
+	RestoreSandbox(ctx context.Context, sandboxID string, sandboxInfo *e2bcatalog.SandboxInfo, expiration time.Duration) error
+}
+
 func (o *Orchestrator) addSandboxToRoutingTable(ctx context.Context, sandbox sandbox.Sandbox) error {
+	return o.writeSandboxToRoutingTable(ctx, sandbox, o.routingCatalog.StoreSandbox)
+}
+
+func (o *Orchestrator) writeSandboxToRoutingTable(ctx context.Context, sandbox sandbox.Sandbox, write func(context.Context, string, *e2bcatalog.SandboxInfo, time.Duration) error) error {
 	node := o.GetNode(sandbox.ClusterID, sandbox.NodeID)
 	if node == nil {
 		return fmt.Errorf("node '%s' not found", sandbox.NodeID)
@@ -37,7 +46,7 @@ func (o *Orchestrator) addSandboxToRoutingTable(ctx context.Context, sandbox san
 
 	lifetime := time.Duration(info.MaxLengthInHours) * time.Hour
 
-	return o.routingCatalog.StoreSandbox(ctx, sandbox.SandboxID, &info, lifetime)
+	return write(ctx, sandbox.SandboxID, &info, lifetime)
 }
 
 func (o *Orchestrator) addSandboxToRoutingTableOrLog(ctx context.Context, sandbox sandbox.Sandbox) {

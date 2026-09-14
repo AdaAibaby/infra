@@ -42,7 +42,8 @@ func (o *Orchestrator) CreateSnapshotTemplate(ctx context.Context, teamID uuid.U
 	ctx, span := tracer.Start(ctx, "create-snapshot-template")
 	defer span.End()
 
-	sbx, alreadyDone, finishSnapshotting, err := o.sandboxStore.StartRemoving(ctx, teamID, sandboxID, sandbox.RemoveOpts{Action: sandbox.StateActionSnapshot})
+	transition, alreadyDone, finishSnapshotting, err := o.sandboxStore.StartRemoving(ctx, teamID, sandboxID, sandbox.RemoveOpts{Action: sandbox.StateActionSnapshot})
+	sbx := transition.Sandbox
 	if err != nil {
 		return SnapshotTemplateResult{}, fmt.Errorf("failed to start snapshotting: %w", err)
 	}

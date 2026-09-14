@@ -50,7 +50,7 @@ type Orchestrator struct {
 	featureFlagsClient            *featureflags.Client
 	analytics                     *analyticscollector.Analytics
 	posthogClient                 *analyticscollector.PosthogClient
-	routingCatalog                e2bcatalog.SandboxesCatalog
+	routingCatalog                restorableCatalog
 	sqlcDB                        *sqlcdb.Client
 	tel                           *telemetry.Client
 	clusters                      *clusters.Pool

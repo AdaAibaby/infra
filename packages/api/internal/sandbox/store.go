@@ -129,12 +129,12 @@ func (s *Store) Update(ctx context.Context, teamID uuid.UUID, sandboxID string, 
 	return s.storage.Update(ctx, teamID, sandboxID, updateFunc)
 }
 
-func (s *Store) StartRemoving(ctx context.Context, teamID uuid.UUID, sandboxID string, opts RemoveOpts) (Sandbox, bool, func(context.Context, error), error) {
+func (s *Store) StartRemoving(ctx context.Context, teamID uuid.UUID, sandboxID string, opts RemoveOpts) (StateTransition, bool, func(context.Context, error), error) {
 	return s.storage.StartRemoving(ctx, teamID, sandboxID, opts)
 }
 
-func (s *Store) RestoreRunning(ctx context.Context, teamID uuid.UUID, sandboxID string, fromState State, retryAfter time.Duration) (Sandbox, error) {
-	return s.storage.RestoreRunning(ctx, teamID, sandboxID, fromState, retryAfter)
+func (s *Store) RestoreRunning(ctx context.Context, transition StateTransition, retryAfter time.Duration) (Sandbox, error) {
+	return s.storage.RestoreRunning(ctx, transition, retryAfter)
 }
 
 func (s *Store) WaitForStateChange(ctx context.Context, teamID uuid.UUID, sandboxID string) error {
