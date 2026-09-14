@@ -771,15 +771,15 @@ var (
 	//	psi=1
 	//	psi=1 nokaslr
 	//
-	// Empty (the default) is the command line every sandbox has always booted with, so a
-	// team that is not targeted is unaffected. Adding a parameter is a flag edit — no
+	// Empty (the default) is the default command line, so a team that is not targeted is
+	// unaffected. Adding a parameter is a flag edit — no
 	// orchestrator change and no deploy.
 	//
 	// Parsed the way the kernel parses a command line: whitespace separates parameters,
 	// the first '=' separates a name from its value, and a parameter with no '=' has an
 	// empty value. The orchestrator rejects the whole fragment if it sets a parameter it
 	// reserves (init, clocksource, root, ip, console, rootflags, panic, reboot, loglevel,
-	// quiet — see packages/orchestrator/pkg/sandbox/fc), falling back to the default
+	// quiet, selinux — see packages/orchestrator/pkg/sandbox/fc), falling back to the default
 	// command line rather than failing the build. The parsed parameters are recorded in
 	// the template's metadata and replayed when a filesystem-only snapshot cold-boots, so
 	// a snapshot keeps booting the way it was built even if this flag later changes.

@@ -21,7 +21,9 @@ type KernelArgs map[string]string
 // come from an operator-set flag, not from a sandbox — but because overriding one produces a
 // sandbox that fails indistinguishably from an orchestrator bug: a guest that never boots, has
 // no network, writes its console where nobody reads it, or whose clock jumps after a resume.
-// Everything outside this set is guest-kernel tuning the guest alone lives with.
+// selinux is reserved for the same reason: the default disables it, and a fragment that
+// re-arms it hangs a policy-shipping image before envd starts. Everything outside this set
+// is guest-kernel tuning the guest alone lives with.
 var reservedCmdlineParams = map[string]struct{}{
 	"init":        {},
 	"clocksource": {},
@@ -33,6 +35,7 @@ var reservedCmdlineParams = map[string]struct{}{
 	"reboot":      {},
 	"loglevel":    {},
 	"quiet":       {},
+	"selinux":     {},
 }
 
 // ParseCmdlineArgs parses a guest kernel command line fragment the way the kernel itself does:
@@ -113,6 +116,10 @@ func buildKernelArgsFor(arch string, ipv4 string, options ProcessOptions) Kernel
 		"random.trust_cpu": "on",
 
 		"rootflags": ext4RootFlags,
+
+		// The kernel defaults to SELinux; an image whose /etc/selinux/config says enforcing
+		// would hang on the unlabeled rootfs before envd starts.
+		"selinux": "0",
 	}
 
 	// The i8042 controller and kvm-clock exist only on x86; an arm64 guest has neither and

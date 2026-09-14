@@ -103,8 +103,7 @@ type ProcessOptions struct {
 	KvmClock bool
 
 	// CmdlineArgs are extra guest kernel command line arguments overlaid on the
-	// defaults. Empty is the command line every sandbox has always booted with.
-	// Rejected wholesale if they include a key the orchestrator reserves
+	// defaults. Empty is the default command line. Rejected wholesale if they include a key the orchestrator reserves
 	// (see ValidateCmdlineArgs).
 	//
 	// Only boots that produce or restore a template's kernel need to set this: the
