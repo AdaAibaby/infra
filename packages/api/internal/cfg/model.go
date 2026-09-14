@@ -130,6 +130,11 @@ type Config struct {
 	// forbidden response the feature gate produces.
 	SecretsStoreBackendGrpcAddress string `env:"SECRETS_STORE_BACKEND_GRPC_ADDRESS"`
 
+	// WebhooksBackendGrpcAddress is the sandbox events and webhook management
+	// backend. Unset leaves those routes registered and answering as they do
+	// when the backend is absent, so the surface does not depend on the wiring.
+	WebhooksBackendGrpcAddress string `env:"WEBHOOKS_BACKEND_GRPC_ADDRESS"`
+
 	VolumesToken VolumesTokenConfig
 
 	AuthProvider      sharedauth.ProviderConfig `env:"AUTH_PROVIDER_CONFIG"`

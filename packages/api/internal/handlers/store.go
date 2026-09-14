@@ -42,6 +42,8 @@ import (
 	sharedclusters "github.com/e2b-dev/infra/packages/shared/pkg/clusters/discovery"
 	"github.com/e2b-dev/infra/packages/shared/pkg/env"
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
+	webhookevents "github.com/e2b-dev/infra/packages/shared/pkg/grpc/contracts/webhooks/events"
+	webhookmanagement "github.com/e2b-dev/infra/packages/shared/pkg/grpc/contracts/webhooks/management"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logs/loki"
 	"github.com/e2b-dev/infra/packages/shared/pkg/servicediscovery"
@@ -225,6 +227,12 @@ type APIStore struct {
 	// as they do when the feature gate is closed.
 	secretsConn       *grpc.ClientConn
 	secretsManagement managementv1.SecretManagementServiceClient
+
+	// The sandbox events and webhook management backend, dialed only when an
+	// address is configured. Its routes stay registered either way.
+	webhooksConn      *grpc.ClientConn
+	webhookManagement webhookmanagement.WebhookManagementServiceClient
+	sandboxEvents     webhookevents.SandboxEventsServiceClient
 }
 
 func NewAPIStore(ctx context.Context, tel *telemetry.Client, redisClient redis.UniversalClient, featureFlags *featureflags.Client, config cfg.Config) *APIStore {
@@ -372,6 +380,21 @@ func NewAPIStore(ctx context.Context, tel *telemetry.Client, redisClient redis.U
 		secretsManagement = managementv1.NewSecretManagementServiceClient(secretsConn)
 	}
 
+	var (
+		webhooksConn      *grpc.ClientConn
+		webhookManagement webhookmanagement.WebhookManagementServiceClient
+		sandboxEvents     webhookevents.SandboxEventsServiceClient
+	)
+	if config.WebhooksBackendGrpcAddress != "" {
+		webhooksConn, err = newWebhooksClient(config.WebhooksBackendGrpcAddress)
+		if err != nil {
+			logger.L().Fatal(ctx, "Initializing webhooks backend client", zap.Error(err))
+		}
+
+		webhookManagement = webhookmanagement.NewWebhookManagementServiceClient(webhooksConn)
+		sandboxEvents = webhookevents.NewSandboxEventsServiceClient(webhooksConn)
+	}
+
 	a := &APIStore{
 		config:                config,
 		orchestrator:          orch,
@@ -396,6 +419,9 @@ func NewAPIStore(ctx context.Context, tel *telemetry.Client, redisClient redis.U
 		sandboxListSem:        sandboxListSem,
 		snapshotBuildQuerySem: snapshotBuildQuerySem,
 		secretsConn:           secretsConn,
+		webhooksConn:          webhooksConn,
+		webhookManagement:     webhookManagement,
+		sandboxEvents:         sandboxEvents,
 		secretsManagement:     secretsManagement,
 	}
 
@@ -480,6 +506,12 @@ func (a *APIStore) Close(ctx context.Context) error {
 	if a.secretsConn != nil {
 		if err := a.secretsConn.Close(); err != nil {
 			errs = append(errs, fmt.Errorf("closing secrets store management client: %w", err))
+		}
+	}
+
+	if a.webhooksConn != nil {
+		if err := a.webhooksConn.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing webhooks backend client: %w", err))
 		}
 	}
 

@@ -102,7 +102,8 @@ Supporting packages: `packages/shared` (protos, telemetry, storage clients, feat
 The control-plane entry point (Gin, OpenAPI-generated from `spec/openapi.yml`, port 80).
 
 - **Resources**: sandboxes (create/list/kill/pause/resume/connect/timeout/metrics/logs),
-  templates and builds, teams, volumes, API keys, secrets, admin operations.
+  templates and builds, teams, volumes, API keys, secrets, sandbox events and webhooks,
+  admin operations.
 - **Auth** (via `packages/auth`): team API keys (`X-API-Key`, `e2b_` prefix), auth-provider JWTs
   (OIDC), and either an admin token or a service JWT verified from the configured admin JWKS.
   Backed by an auth DB (Postgres) with a Redis team cache.
@@ -137,6 +138,20 @@ The control-plane entry point (Gin, OpenAPI-generated from `spec/openapi.yml`, p
   a marker to a value at sandbox egress, never here. Without a configured address, or with the flag
   off, the routes stay registered and answer 403. Responses are `Cache-Control: no-store`, request bodies are capped at 512 KiB, and values
   at 64 KiB.
+- **Sandbox events and webhooks**: `/events/sandboxes` reads a team's sandbox lifecycle events,
+  and `/events/webhooks` manages the webhook subscriptions those events are delivered to, along
+  with each subscription's delivery attempts and delivery statistics. The API stores none of
+  this: it authenticates the caller, resolves the team's cluster, and forwards the request over
+  two unary gRPC contracts (`e2b.webhooks.events.v1` and `e2b.webhooks.management.v1`) to the
+  backend named by `WEBHOOKS_BACKEND_GRPC_ADDRESS`. The team and cluster come from the
+  authenticated context, never from the request, and a team with no cluster selects the local
+  one. Without a configured address the routes stay registered and answer 503, so the surface
+  does not depend on how a deployment is wired. A backend failure the caller cannot act on is
+  answered with the endpoint's own message; the outcomes that keep their identity are
+  not-found, a rejected request, the webhook-count limit, and a timeout. A create or update
+  body carries the webhook's signing secret, so a request rejected before the handler has its
+  body kept out of the response, the access log and the span. Reads are capped at 100
+  deliveries per page.
 - **Rig passthrough**: admin endpoints under `/clusters/{clusterID}/rigs` manage a cluster's
   orchestrator node pools ("rigs"). They list rigs, change rig capacity, list and terminate
   instances, and read recent scaling errors. Every handler delegates to the cluster's edge service

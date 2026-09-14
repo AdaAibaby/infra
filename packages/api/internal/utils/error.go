@@ -63,6 +63,13 @@ func ErrorHandler(c *gin.Context, message string, statusCode int) {
 		strings.HasPrefix(c.Request.URL.Path, "/envs"):
 		errMsg = fmt.Errorf("OpenAPI validation error, old endpoints: %s", message)
 		message = "Endpoints are deprecated, please update your SDK to use the new endpoints."
+	case strings.HasPrefix(c.Request.URL.Path, "/events/webhooks"):
+		// A webhook create or update body carries the caller's signing secret,
+		// which is enough to forge a delivery for that team, so the body is
+		// not read into the error the way it is below. The validator's own
+		// account of what it refused is kept: the spec documents these 400s,
+		// and the message names the field rather than quoting its value.
+		errMsg = fmt.Errorf("OpenAPI validation error: %s", message)
 	default:
 		data, err := c.GetRawData()
 		if err == nil {
