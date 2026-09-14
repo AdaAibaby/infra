@@ -1105,7 +1105,9 @@ func (f *Factory) CreateSandbox(
 	}()
 
 	if !createOpts.deferMarkRunning {
-		f.Sandboxes.MarkRunning(ctx, sbx)
+		if err := f.Sandboxes.MarkRunning(ctx, sbx); err != nil {
+			return nil, err
+		}
 	}
 
 	return sbx, nil
@@ -1736,7 +1738,9 @@ func (f *Factory) ResumeSandbox(
 	// does not inflate the node's reported allocation or emit per-sandbox metrics,
 	// and skip health checks it would never need.
 	if !ropts.skipLiveRegistration && !ropts.deferMarkRunning {
-		f.Sandboxes.MarkRunning(ctx, sbx)
+		if err := f.Sandboxes.MarkRunning(ctx, sbx); err != nil {
+			return nil, err
+		}
 	}
 
 	telemetry.ReportEvent(execCtx, "envd initialized")

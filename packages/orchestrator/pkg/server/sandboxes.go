@@ -209,6 +209,15 @@ func (s *Server) Create(ctx context.Context, req *orchestrator.SandboxCreateRequ
 		}
 	}
 
+	reservation, err := s.sandboxFactory.Sandboxes.Reserve(req.GetSandbox().GetSandboxId())
+	if err != nil {
+		return nil, s.sandboxAlreadyRunning(ctx, req.GetSandbox().GetSandboxId(), req.GetSandbox().GetExecutionId(), err)
+	}
+	var rollback *sandbox.Cleanup
+	defer func() {
+		s.finishSandboxStart(ctx, reservation, rollback, createErr)
+	}()
+
 	maxRunningSandboxesPerNode := s.info.MaxSandboxes.Load()
 
 	runningSandboxes := int64(s.sandboxFactory.Sandboxes.Count())
@@ -352,6 +361,8 @@ func (s *Server) Create(ctx context.Context, req *orchestrator.SandboxCreateRequ
 		return nil, status.Errorf(codes.Internal, "failed to create sandbox: %s", err)
 	}
 
+	rollback = sandbox.NewCleanup()
+	rollback.Add(ctx, func(ctx context.Context) error { return stopAndCloseSandbox(ctx, sbx) })
 	s.setupSandboxLifecycle(ctx, sbx)
 
 	// Resume-time envd live-upgrade. The API /resume maps to Create
@@ -362,14 +373,7 @@ func (s *Server) Create(ctx context.Context, req *orchestrator.SandboxCreateRequ
 		var upErr error
 		envdUpgraded, upErr = s.maybeUpgradeEnvd(ctx, sbx)
 		if upErr != nil {
-			// Only an unrecoverable post-execve failure (new envd left
-			// uninitialized) returns an error; fail the resume rather than hand
-			// back a bricked sandbox. MarkRunning is deferred until markSandboxLive
-			// below, so the sandbox is not yet in the live registry — MarkStopping
-			// is a no-op here and stopSandboxAsync does the physical teardown.
 			sbx.SetStopReason(sandbox.StopReasonKilled)
-			s.sandboxFactory.Sandboxes.MarkStopping(ctx, sbx.Runtime.SandboxID, sbx.LifecycleID)
-			s.stopSandboxAsync(context.WithoutCancel(ctx), sbx)
 
 			return nil, upErr
 		}
@@ -379,7 +383,9 @@ func (s *Server) Create(ctx context.Context, req *orchestrator.SandboxCreateRequ
 	// has run its post-/init and restored the access token — so the sandbox is
 	// never routable during the upgrade's sub-second pre-init auth window. Both
 	// the resume and reboot paths above defer this.
-	s.markSandboxLive(ctx, sbx)
+	if err := s.markSandboxLive(ctx, sbx, reservation); err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to register sandbox: %s", err)
+	}
 
 	// Read scheduling metadata after the sandbox resumed so the template's
 	// memfile/rootfs devices (and their headers) are resolved.
@@ -1268,20 +1274,21 @@ func (s *Server) checkpointInPlace(ctx context.Context, sbx *sandbox.Sandbox, in
 // from the produced build (new FC process, same ExecutionID). This is the
 // pre-in-place checkpoint flow and the fallback whenever in-place is not
 // available (async-WP sandbox or in-place-checkpoint flag off).
-func (s *Server) checkpointResumeFresh(ctx context.Context, sbx *sandbox.Sandbox, in *orchestrator.SandboxCheckpointRequest) (*orchestrator.SandboxCheckpointResponse, error) {
-	// The old sandbox is being replaced: remove it from the live registry up
-	// front (also the natural exclusion against concurrent lifecycle RPCs —
-	// a second Checkpoint or a Kill no longer finds it) and always stop it
-	// when done. Without the MarkStopping, the stale entry would block the
-	// resumed sandbox's MarkRunning (InsertIfAbsent) and keep routing traffic
-	// to a dead lifecycle; without the deferred stop, a failure past this
-	// point would leak a running but unaddressable Firecracker process.
-	marked := s.sandboxFactory.Sandboxes.MarkStopping(ctx, sbx.Runtime.SandboxID, sbx.LifecycleID)
-	if !marked {
-		telemetry.ReportCriticalError(ctx, "failed to mark sandbox as stopping", nil, telemetry.WithSandboxID(in.GetSandboxId()))
+func (s *Server) checkpointResumeFresh(ctx context.Context, sbx *sandbox.Sandbox, in *orchestrator.SandboxCheckpointRequest) (_ *orchestrator.SandboxCheckpointResponse, checkpointErr error) {
+	reservation, err := s.sandboxFactory.Sandboxes.MarkStoppingReserved(ctx, sbx.Runtime.SandboxID, sbx.LifecycleID)
+	if errors.Is(err, sandbox.ErrSandboxOperationInProgress) {
+		return nil, status.Errorf(codes.FailedPrecondition, "an operation is already in progress for sandbox '%s'", in.GetSandboxId())
+	}
+	if err != nil {
+		telemetry.ReportCriticalError(ctx, "failed to mark sandbox as stopping", err, telemetry.WithSandboxID(in.GetSandboxId()))
 
 		return nil, status.Errorf(codes.Internal, "failed to checkpoint sandbox '%s'", in.GetSandboxId())
 	}
+	rollback := sandbox.NewCleanup()
+	rollback.Add(ctx, func(ctx context.Context) error { return stopAndCloseSandbox(ctx, sbx) })
+	defer func() {
+		s.finishSandboxStart(ctx, reservation, rollback, checkpointErr)
+	}()
 
 	// Always stop the old sandbox when done — on success the resumed sandbox
 	// takes over, on failure this prevents a leaked sandbox that is running
@@ -1339,6 +1346,7 @@ func (s *Server) checkpointResumeFresh(ctx context.Context, sbx *sandbox.Sandbox
 
 		return nil, status.Errorf(codes.Internal, "error resuming sandbox after checkpoint: %s", err)
 	}
+	rollback.Add(ctx, func(ctx context.Context) error { return stopAndCloseSandbox(ctx, resumedSbx) })
 
 	// Collect prefetch data immediately after resume while it's most accurate
 	prefetchData, prefetchErr := resumedSbx.MemoryPrefetchData(ctx)
@@ -1354,20 +1362,18 @@ func (s *Server) checkpointResumeFresh(ctx context.Context, sbx *sandbox.Sandbox
 	// post-execve failure (new envd left uninitialized), which fails the
 	// checkpoint rather than leave a bricked sandbox.
 	if _, upErr := s.maybeUpgradeEnvd(ctx, resumedSbx); upErr != nil {
-		// Bricked past the execve — tear the resumed sandbox down. MarkRunning is
-		// deferred until markSandboxLive below, so the sandbox is not yet in the
-		// live registry: MarkStopping is a no-op and stopSandboxAsync does the
-		// physical teardown.
 		resumedSbx.SetStopReason(sandbox.StopReasonKilled)
-		s.sandboxFactory.Sandboxes.MarkStopping(ctx, resumedSbx.Runtime.SandboxID, resumedSbx.LifecycleID)
-		s.stopSandboxAsync(context.WithoutCancel(ctx), resumedSbx)
 
 		return nil, upErr
 	}
 
 	// Promote to the live registry now that any resume-time upgrade's post-/init
 	// has restored auth — the sandbox was resumed with routing deferred.
-	s.markSandboxLive(ctx, resumedSbx)
+	if err := s.markSandboxLive(ctx, resumedSbx, reservation); err != nil {
+		telemetry.ReportCriticalError(ctx, "error registering resumed sandbox after checkpoint", err, telemetry.WithSandboxID(in.GetSandboxId()))
+
+		return nil, status.Errorf(codes.Internal, "error registering resumed sandbox after checkpoint: %s", err)
+	}
 
 	// Embed prefetch data into the metadata so it's uploaded with the snapshot files in a single pass.
 	if prefetchErr == nil {
@@ -1388,7 +1394,6 @@ func (s *Server) checkpointResumeFresh(ctx context.Context, sbx *sandbox.Sandbox
 	if err := s.runCheckpointUpload(ctx, resumedSbx, res, in, codes.Internal, func() {
 		resumedSbx.SetStopReason(sandbox.StopReasonKilled)
 		s.sandboxFactory.Sandboxes.MarkStopping(ctx, resumedSbx.Runtime.SandboxID, resumedSbx.LifecycleID)
-		s.stopSandboxAsync(context.WithoutCancel(ctx), resumedSbx)
 	}); err != nil {
 		return nil, err
 	}
@@ -1620,20 +1625,64 @@ func (s *Server) uploadSnapshotAsync(ctx context.Context, sbx *sandbox.Sandbox, 
 	})
 }
 
-// setupSandboxLifecycle sets up the cleanup goroutine for a sandbox.
-// markSandboxLive promotes a resumed sandbox to the live registry and starts its
-// health checks. It is the counterpart to WithDeferredLiveRegistration (resume)
-// and RebootSandbox's deferMarkRunning: callers on the resume-time upgrade path
-// resume with routing deferred and call this only after maybeUpgradeEnvd has
-// completed its post-/init, so the sandbox never appears in routing during the
-// upgrade's pre-init auth window. Idempotent — MarkRunning is InsertIfAbsent.
-func (s *Server) markSandboxLive(ctx context.Context, sbx *sandbox.Sandbox) {
-	s.sandboxFactory.Sandboxes.MarkRunning(ctx, sbx)
-
-	go sbx.Checks.Start(context.WithoutCancel(ctx))
+type sandboxTeardown interface {
+	Stop(ctx context.Context) error
+	Wait(ctx context.Context) error
+	Close(ctx context.Context) error
 }
 
+func stopAndCloseSandbox(ctx context.Context, sbx sandboxTeardown) error {
+	ctx = context.WithoutCancel(ctx)
+	stopErr := sbx.Stop(ctx)
+	// Stop only signals UFFD; drain must wait for its exit.
+	waitErr := sbx.Wait(ctx)
+	closeErr := sbx.Close(ctx)
+
+	return errors.Join(stopErr, waitErr, closeErr)
+}
+
+func (s *Server) finishSandboxStart(ctx context.Context, reservation *sandbox.Reservation, rollback *sandbox.Cleanup, operationErr error) {
+	if operationErr == nil || rollback == nil {
+		reservation.Release()
+
+		return
+	}
+
+	releaseWork := s.info.TrackWork()
+	go func() {
+		defer releaseWork()
+		defer reservation.Release()
+		ctx := context.WithoutCancel(ctx)
+		if err := rollback.Run(ctx); err != nil {
+			telemetry.ReportCriticalError(ctx, "failed to clean up sandbox start", err)
+		}
+	}()
+}
+
+func (s *Server) markSandboxLive(ctx context.Context, sbx *sandbox.Sandbox, reservation *sandbox.Reservation) error {
+	if err := reservation.MarkRunning(ctx, sbx); err != nil {
+		sbx.SetStopReason(sandbox.StopReasonKilled)
+
+		return err
+	}
+
+	go sbx.Checks.Start(context.WithoutCancel(ctx))
+
+	return nil
+}
+
+func (s *Server) sandboxAlreadyRunning(ctx context.Context, sandboxID, executionID string, cause error) error {
+	telemetry.ReportCriticalError(ctx, "refusing to create sandbox: its ID is already taken on this node", cause,
+		telemetry.WithSandboxID(sandboxID),
+		attribute.String("requested_execution_id", executionID),
+	)
+
+	return status.Errorf(codes.AlreadyExists, "sandbox '%s' is already running on this node: %s", sandboxID, cause)
+}
+
+// setupSandboxLifecycle sets up the cleanup goroutine for a sandbox.
 func (s *Server) setupSandboxLifecycle(ctx context.Context, sbx *sandbox.Sandbox) {
+	s.sandboxFactory.Sandboxes.TrackLifecycle(ctx, sbx)
 	releaseWork := s.info.TrackWork()
 	go func() {
 		defer releaseWork()

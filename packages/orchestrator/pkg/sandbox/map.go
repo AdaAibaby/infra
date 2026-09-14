@@ -27,13 +27,13 @@ type MapSubscriber interface {
 	OnNetworkRelease(ctx context.Context, sbx *Sandbox)
 }
 
-// Map tracks sandboxes in three indexes, managed independently:
+// Map tracks live sandboxes, outstanding lifecycle cleanup, and network assignments.
 //
 //   - live: keyed by sandboxID, holds the current routable lifecycle per
 //     sandbox from MarkRunning until MarkStopping. It serves the API/proxy
 //     lookup paths (Get, Items, Count).
 //   - lifecycles: keyed by sandboxID/lifecycleID, holds every lifecycle whose
-//     cleanup is still outstanding, from MarkRunning until MarkStopped in
+//     cleanup is still outstanding, from TrackLifecycle until MarkStopped in
 //     Close. During checkpoint/resume an old lifecycle can still be cleaning
 //     up while a new lifecycle with the same sandboxID is already live, so a
 //     sandboxID can map to multiple lifecycle entries. Shutdown uses this set
@@ -41,16 +41,13 @@ type MapSubscriber interface {
 //     just for sandboxes to stop being routable.
 //   - network: an IP-to-sandbox index managed by AssignNetwork and
 //     NetworkReleased, serving GetByHostPort lookups.
-//
-// Invariant: live is a subset of lifecycles; MarkRunning inserts into both.
-// The live and lifecycles maps could later be merged into a single registry
-// keyed by sandboxID/lifecycleID with a running/stopping state per entry;
-// they are kept separate for now to stay close to the pre-existing live-map
-// shape.
 type Map struct {
 	live       *smap.Map[*Sandbox]
 	lifecycles *smap.Map[*Sandbox]
 	network    *smap.Map[*Sandbox]
+
+	registryMu   sync.Mutex
+	reservations map[string]*Reservation
 
 	lifecycleMu      sync.Mutex
 	lifecycleChanged chan struct{}
@@ -64,6 +61,7 @@ func NewSandboxesMap() *Map {
 		live:             smap.New[*Sandbox](),
 		lifecycles:       smap.New[*Sandbox](),
 		network:          smap.New[*Sandbox](),
+		reservations:     map[string]*Reservation{},
 		lifecycleChanged: make(chan struct{}),
 	}
 }
@@ -156,9 +154,13 @@ func (m *Map) AssignNetwork(ctx context.Context, sbx *Sandbox) {
 	)
 }
 
-func (m *Map) trackLifecycle(ctx context.Context, sbx *Sandbox) {
+func (m *Map) TrackLifecycle(ctx context.Context, sbx *Sandbox) {
 	m.lifecycleMu.Lock()
-	m.lifecycles.Insert(sandboxLifecycleKey(sbx.Runtime.SandboxID, sbx.LifecycleID), sbx)
+	if !m.lifecycles.InsertIfAbsent(sandboxLifecycleKey(sbx.Runtime.SandboxID, sbx.LifecycleID), sbx) {
+		m.lifecycleMu.Unlock()
+
+		return
+	}
 	m.notifyLifecycleChangeLocked()
 	m.lifecycleMu.Unlock()
 
@@ -168,13 +170,82 @@ func (m *Map) trackLifecycle(ctx context.Context, sbx *Sandbox) {
 	)
 }
 
-// MarkRunning makes the sandbox visible to Get/Items/Count and notifies OnInsert subscribers.
-func (m *Map) MarkRunning(ctx context.Context, sbx *Sandbox) {
-	if !m.live.InsertIfAbsent(sbx.Runtime.SandboxID, sbx) {
-		return
-	}
+// ErrSandboxAlreadyRunning reports a live or reserved sandbox ID.
+var ErrSandboxAlreadyRunning = errors.New("sandbox is already running on this node")
 
-	m.trackLifecycle(ctx, sbx)
+var ErrSandboxOperationInProgress = errors.New("sandbox operation already in progress")
+
+// Reservation prevents concurrent starts; a failed start retains it through its own cleanup.
+type Reservation struct {
+	m         *Map
+	sandboxID string
+}
+
+// Reserve takes the sandbox ID for a create that is about to start a VM.
+// Refused with ErrSandboxAlreadyRunning while the ID is live or reserved.
+func (m *Map) Reserve(sandboxID string) (*Reservation, error) {
+	m.registryMu.Lock()
+	defer m.registryMu.Unlock()
+
+	if live, ok := m.live.Get(sandboxID); ok {
+		return nil, fmt.Errorf("%w: lifecycle %s (execution %s) is live", ErrSandboxAlreadyRunning, live.LifecycleID, live.Runtime.ExecutionID)
+	}
+	if _, ok := m.reservations[sandboxID]; ok {
+		return nil, fmt.Errorf("%w: another create is in flight", ErrSandboxAlreadyRunning)
+	}
+	r := &Reservation{m: m, sandboxID: sandboxID}
+	m.reservations[sandboxID] = r
+
+	return r, nil
+}
+
+// Release ends operation ownership; the live entry and physical lifecycles remain independent.
+func (r *Reservation) Release() {
+	r.m.registryMu.Lock()
+	defer r.m.registryMu.Unlock()
+
+	if r.m.reservations[r.sandboxID] == r {
+		delete(r.m.reservations, r.sandboxID)
+	}
+}
+
+func (r *Reservation) MarkRunning(ctx context.Context, sbx *Sandbox) error {
+	return r.m.markRunning(ctx, sbx, r)
+}
+
+// MarkRunning registers an unreserved ID. Reserved IDs require Reservation.MarkRunning.
+func (m *Map) MarkRunning(ctx context.Context, sbx *Sandbox) error {
+	return m.markRunning(ctx, sbx, nil)
+}
+
+func (m *Map) markRunning(ctx context.Context, sbx *Sandbox, reservation *Reservation) error {
+	m.registryMu.Lock()
+	if reservation != nil && reservation.sandboxID != sbx.Runtime.SandboxID {
+		m.registryMu.Unlock()
+
+		return errors.New("sandbox reservation no longer held")
+	}
+	if m.reservations[sbx.Runtime.SandboxID] != reservation {
+		m.registryMu.Unlock()
+
+		return fmt.Errorf("%w: registration does not own the reservation", ErrSandboxAlreadyRunning)
+	}
+	if live, ok := m.live.Get(sbx.Runtime.SandboxID); ok {
+		m.registryMu.Unlock()
+		if live.LifecycleID == sbx.LifecycleID {
+			return nil
+		}
+
+		return fmt.Errorf("%w: lifecycle %s (execution %s) is live", ErrSandboxAlreadyRunning, live.LifecycleID, live.Runtime.ExecutionID)
+	}
+	if sbx.cleanup != nil && sbx.cleanup.hasRun.Load() {
+		m.registryMu.Unlock()
+
+		return errors.New("sandbox cleanup has already started")
+	}
+	m.TrackLifecycle(ctx, sbx)
+	m.live.Insert(sbx.Runtime.SandboxID, sbx)
+	m.registryMu.Unlock()
 
 	m.trigger(ctx, func(ctx context.Context, s MapSubscriber) {
 		s.OnInsert(ctx, sbx)
@@ -187,19 +258,42 @@ func (m *Map) MarkRunning(ctx context.Context, sbx *Sandbox) {
 		logger.WithKernelVersion(sbx.Config.FirecrackerConfig.KernelVersion),
 		logger.WithFirecrackerVersion(sbx.Config.FirecrackerConfig.FirecrackerVersion),
 	)
+
+	return nil
 }
 
 // MarkStopping removes the sandbox from live queries (Get, Items, Count) and notifies OnStopping subscribers.
 // Returns true if the sandbox was successfully removed.
 func (m *Map) MarkStopping(ctx context.Context, sandboxID, lifecycleID string) bool {
-	var stopped *Sandbox
+	_, err := m.markStopping(ctx, sandboxID, lifecycleID, false)
 
+	return err == nil
+}
+
+// MarkStoppingReserved exchanges the matching live entry for a checkpoint hold before notifying subscribers.
+func (m *Map) MarkStoppingReserved(ctx context.Context, sandboxID, lifecycleID string) (*Reservation, error) {
+	return m.markStopping(ctx, sandboxID, lifecycleID, true)
+}
+
+func (m *Map) markStopping(ctx context.Context, sandboxID, lifecycleID string, reserve bool) (*Reservation, error) {
+	var (
+		stopped     *Sandbox
+		reservation *Reservation
+		stopErr     error
+	)
+
+	m.registryMu.Lock()
 	m.live.RemoveCb(sandboxID, func(_ string, sbx *Sandbox, exists bool) bool {
 		if !exists {
 			return false
 		}
 
 		if sbx.LifecycleID != lifecycleID {
+			return false
+		}
+		if reserve && m.reservations[sandboxID] != nil {
+			stopErr = ErrSandboxOperationInProgress
+
 			return false
 		}
 
@@ -212,16 +306,25 @@ func (m *Map) MarkStopping(ctx context.Context, sandboxID, lifecycleID string) b
 
 		return true
 	})
+	if stopped != nil && reserve {
+		reservation = &Reservation{m: m, sandboxID: sandboxID}
+		m.reservations[sandboxID] = reservation
+	}
+	m.registryMu.Unlock()
 
 	if stopped == nil {
-		return false
+		if stopErr != nil {
+			return nil, stopErr
+		}
+
+		return nil, fmt.Errorf("sandbox '%s' lifecycle '%s' is no longer live", sandboxID, lifecycleID)
 	}
 
 	m.trigger(ctx, func(ctx context.Context, s MapSubscriber) {
 		s.OnStopping(ctx, stopped)
 	})
 
-	return true
+	return reservation, nil
 }
 
 func (m *Map) MarkStopped(ctx context.Context, sbx *Sandbox) {
