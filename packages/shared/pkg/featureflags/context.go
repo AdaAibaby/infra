@@ -178,3 +178,8 @@ func CompressFileTypeContext(fileType string) ldcontext.Context {
 func CompressUseCaseContext(useCase string) ldcontext.Context {
 	return ldcontext.NewWithKind(CompressUseCaseKind, useCase)
 }
+
+// BatcherContext targets one named ClickHouse writer.
+func BatcherContext(name string) ldcontext.Context {
+	return ldcontext.NewWithKind(BatcherKind, name)
+}

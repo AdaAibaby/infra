@@ -35,6 +35,7 @@ const (
 	TeamKind             ldcontext.Kind = "team"
 	UserKind             ldcontext.Kind = "user"
 	ClusterKind          ldcontext.Kind = "cluster"
+	BatcherKind          ldcontext.Kind = "batcher.name"
 	InstanceGroupKind    ldcontext.Kind = "instance-group"
 	deploymentKind       ldcontext.Kind = "deployment"
 	TierKind             ldcontext.Kind = "tier"
@@ -869,9 +870,13 @@ var (
 	// sandbox_host_stats flush. Each orchestrator flushes its own small batch,
 	// so without it the server writes one tiny part per node per flush; with
 	// it the server buffers those inserts and writes one part per buffer flush.
-	// wait_for_async_insert stays at the server default, so a rejected flush
-	// still fails the batch and reaches the error handler.
+	// Used as the fallback when the shared async flag cannot be evaluated.
 	ClickhouseHostStatsAsyncInsertFlag = NewBoolFlag("clickhouse-host-stats-async-insert", false)
+
+	// ClickhouseAsyncInsertFlag shares the existing async key across named writers.
+	// Do not seed the offline store: each writer supplies its own legacy fallback.
+	ClickhouseAsyncInsertFlag        = BoolFlag{name: "clickhouse-async-insert", fallback: true}
+	ClickhouseWaitForAsyncInsertFlag = NewBoolFlag("clickhouse-wait-for-async-insert", true)
 )
 
 // LogsWriteConfigFlag controls where sandbox/external logs are written, so

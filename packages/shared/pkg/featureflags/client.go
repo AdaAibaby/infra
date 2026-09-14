@@ -114,6 +114,17 @@ func (c *Client) BoolFlag(ctx context.Context, flag BoolFlag, contexts ...ldcont
 	return getFlag(ctx, c.ld, c.ld.BoolVariationCtx, flag, c.allContexts(ctx, contexts))
 }
 
+// BoolFlagOverride returns whether a flag was successfully evaluated. Callers
+// with different legacy defaults can distinguish an explicit false from a fallback.
+func (c *Client) BoolFlagOverride(ctx context.Context, flag BoolFlag, contexts ...ldcontext.Context) (bool, bool) {
+	if c.ld == nil {
+		return false, false
+	}
+	value, detail, err := c.ld.BoolVariationDetailCtx(ctx, flag.Key(), mergeContexts(ctx, c.allContexts(ctx, contexts)), flag.Fallback())
+
+	return value, err == nil && !detail.IsDefaultValue()
+}
+
 func (c *Client) JSONFlag(ctx context.Context, flag JSONFlag, contexts ...ldcontext.Context) ldvalue.Value {
 	return getFlag(ctx, c.ld, c.ld.JSONVariationCtx, flag, c.allContexts(ctx, contexts))
 }

@@ -80,3 +80,14 @@ func TestAllContextsIncludesRegisteredProviders(t *testing.T) {
 
 	require.Equal(t, "node-1", seen["node"])
 }
+
+func TestClickhouseAsyncOfflineFallback(t *testing.T) {
+	t.Parallel()
+	client, err := NewClientWithDatasource(launchDarklyOfflineStore)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, client.Close(context.WithoutCancel(t.Context()))) })
+	_, ok := client.BoolFlagOverride(t.Context(), ClickhouseAsyncInsertFlag, BatcherContext("sandbox-events"))
+	require.False(t, ok, "offline defaults must not override writer-specific async behavior")
+	require.True(t, client.BoolFlag(t.Context(), ClickhouseAsyncInsertFlag))
+	require.True(t, client.BoolFlag(t.Context(), ClickhouseWaitForAsyncInsertFlag))
+}

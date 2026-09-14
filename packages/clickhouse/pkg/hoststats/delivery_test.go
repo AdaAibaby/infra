@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/ClickHouse/clickhouse-go/v2"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 	"github.com/launchdarkly/go-server-sdk/v7/testhelpers/ldtestdata"
 	"github.com/stretchr/testify/require"
 
@@ -74,26 +75,26 @@ func TestClickhouseDelivery_InsertSettingsFlagOnEnablesAsyncInsert(t *testing.T)
 	setAsyncInsertFlag(t, source, true)
 	d := &ClickhouseDelivery{ff: ff}
 
-	require.Equal(t, clickhouse.Settings{"async_insert": 1}, d.insertSettings(t.Context()))
+	require.Equal(t, clickhouse.Settings{"async_insert": 1, "wait_for_async_insert": 1}, d.insertSettings(t.Context()))
 }
 
-func TestClickhouseDelivery_InsertSettingsFlagOffKeepsServerDefaults(t *testing.T) {
+func TestClickhouseDelivery_InsertSettingsFlagOffKeepsServerAsyncDefault(t *testing.T) {
 	t.Parallel()
 
 	ff, source := newTestFeatureFlags(t)
 	setAsyncInsertFlag(t, source, false)
 	d := &ClickhouseDelivery{ff: ff}
 
-	require.Nil(t, d.insertSettings(t.Context()))
+	require.Equal(t, clickhouse.Settings{"wait_for_async_insert": 1}, d.insertSettings(t.Context()))
 }
 
-func TestClickhouseDelivery_InsertSettingsUnsetFlagKeepsServerDefaults(t *testing.T) {
+func TestClickhouseDelivery_InsertSettingsUnsetFlagKeepsServerAsyncDefault(t *testing.T) {
 	t.Parallel()
 
 	ff, _ := newTestFeatureFlags(t)
 	d := &ClickhouseDelivery{ff: ff}
 
-	require.Nil(t, d.insertSettings(t.Context()), "flag must fall back to off so a deploy changes nothing until flipped")
+	require.Equal(t, clickhouse.Settings{"wait_for_async_insert": 1}, d.insertSettings(t.Context()))
 }
 
 func TestClickhouseDelivery_InsertSettingsNilFeatureFlagsKeepsServerDefaults(t *testing.T) {
@@ -102,4 +103,15 @@ func TestClickhouseDelivery_InsertSettingsNilFeatureFlagsKeepsServerDefaults(t *
 	d := &ClickhouseDelivery{ff: nil}
 
 	require.Nil(t, d.insertSettings(t.Context()))
+}
+
+func TestClickhouseDelivery_SharedAsyncFlagOverridesLegacyFlag(t *testing.T) {
+	t.Parallel()
+	ff, source := newTestFeatureFlags(t)
+	setAsyncInsertFlag(t, source, true)
+	source.Update(source.Flag(featureflags.ClickhouseAsyncInsertFlag.Key()).VariationForAll(false))
+	d := &ClickhouseDelivery{ff: ff, batcherName: DefaultBatcherName}
+	require.Equal(t, clickhouse.Settings{"async_insert": 0, "wait_for_async_insert": 1}, d.insertSettings(t.Context()))
+	source.Update(source.Flag(featureflags.ClickhouseAsyncInsertFlag.Key()).ValueForAll(ldvalue.String("invalid boolean")))
+	require.Equal(t, clickhouse.Settings{"async_insert": 1, "wait_for_async_insert": 1}, d.insertSettings(t.Context()), "invalid shared flag preserves legacy async behavior")
 }
