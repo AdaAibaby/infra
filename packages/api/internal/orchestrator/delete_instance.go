@@ -27,6 +27,8 @@ import (
 // node-refused, restored auto-pause alone before asking the node again.
 const refusalRetryAfter = 10 * time.Second
 
+const pauseTimeout = 80 * time.Second
+
 func (o *Orchestrator) RemoveSandbox(ctx context.Context, teamID uuid.UUID, sandboxID string, opts sandbox.RemoveOpts) error {
 	ctx, span := tracer.Start(ctx, "remove-sandbox")
 	defer span.End()
@@ -110,6 +112,13 @@ func (o *Orchestrator) RemoveSandbox(ctx context.Context, teamID uuid.UUID, sand
 		}
 
 		return nil
+	}
+
+	if opts.Action == sandbox.StateActionPause {
+		// Once the transition commits, caller cancellation must not abandon its snapshot.
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), pauseTimeout)
+		defer cancel()
 	}
 
 	// Team and cluster contexts travel explicitly: the evictor's sweep has

@@ -18,7 +18,7 @@ import (
 
 const (
 	lockTimeout            = time.Minute
-	transitionKeyTTL       = 70 * time.Second // Should be longer than the longest expected state transition time
+	transitionKeyTTL       = 95 * time.Second // Outlives the 80-second pause and 10-second terminal write.
 	transitionResultKeyTTL = 30 * time.Second
 	lockRetryMinInterval   = 200 * time.Millisecond
 	lockRetryMaxInterval   = time.Second

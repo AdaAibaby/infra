@@ -485,6 +485,11 @@ sequenceDiagram
   orchestrator pauses the VM, snapshots it, diffs memory (dirty-page tracking) and rootfs (COW
   cache) against the template, caches the snapshot locally, and uploads asynchronously to object
   storage (with a retry budget). The sandbox leaves the Redis catalog.
+  Once the API acquires the pause transition, routing cleanup, snapshot DB upsert, and the node
+  RPC share a detached 80-second budget; the Redis transition key has a 95-second TTL.
+  The node inherits that deadline for admission and snapshotting. Caller cancellation cannot
+  abandon the snapshot or its RPC result; terminal build-status writes have a separate detached
+  ten-second budget. Snapshot uploads and sandbox teardown retain their separate background lifetimes.
   - **Deferred rootfs export** (gated by the `deferred-rootfs-export` flag in
     `packages/shared/pkg/featureflags`): instead of diffing the rootfs on the pause critical
     path, the orchestrator ejects the writable COW cache during pause and returns, then seals it
