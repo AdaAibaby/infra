@@ -25,6 +25,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 )
 
 const staleLogWarningMessage = "dropping envd log with a stale pre-resume timestamp"
@@ -50,7 +51,7 @@ func TestAPIStoreLogsUsesSourceSandboxIdentity(t *testing.T) {
 	sbx := &sandbox.Sandbox{
 		LifecycleStartedAt: time.Now().UTC().Add(-time.Minute),
 		Metadata: &sandbox.Metadata{
-			Runtime: sandbox.RuntimeMetadata{
+			Runtime: sandboxtypes.RuntimeMetadata{
 				SandboxID:  "sandbox-1",
 				TemplateID: "template-1",
 				TeamID:     "team-1",
@@ -147,7 +148,7 @@ func TestAPIStoreLogsOmitsUnknownBuildAndCountsMissingTeam(t *testing.T) { //nol
 	sbx := &sandbox.Sandbox{
 		LifecycleStartedAt: time.Now().UTC().Add(-time.Minute),
 		Metadata: &sandbox.Metadata{
-			Runtime: sandbox.RuntimeMetadata{
+			Runtime: sandboxtypes.RuntimeMetadata{
 				SandboxID:  "sandbox-1",
 				TemplateID: "template-1",
 			},
@@ -215,7 +216,7 @@ func TestAPIStoreLogsRejectsMismatchedInstanceIDBeforeReplacingIdentity(t *testi
 	sbx := &sandbox.Sandbox{
 		LifecycleStartedAt: time.Now().UTC().Add(-time.Minute),
 		Metadata: &sandbox.Metadata{
-			Runtime: sandbox.RuntimeMetadata{
+			Runtime: sandboxtypes.RuntimeMetadata{
 				SandboxID:  "sandbox-1",
 				TemplateID: "template-1",
 				TeamID:     "team-1",
@@ -370,7 +371,7 @@ func TestAPIStoreLogsSamplesStaleTimestampWarning(t *testing.T) { //nolint:paral
 	sbx := &sandbox.Sandbox{
 		LifecycleStartedAt: lifecycleStart,
 		Metadata: &sandbox.Metadata{
-			Runtime: sandbox.RuntimeMetadata{
+			Runtime: sandboxtypes.RuntimeMetadata{
 				SandboxID:  "sandbox-1",
 				TemplateID: "template-1",
 				TeamID:     "team-1",

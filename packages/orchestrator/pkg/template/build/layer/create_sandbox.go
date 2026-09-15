@@ -21,6 +21,7 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/fc/models"
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/id"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/units"
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
 )
@@ -134,13 +135,13 @@ func (cs *CreateSandbox) Sandbox(
 	sbx, err := cs.sandboxFactory.CreateSandbox(
 		ctx,
 		cs.config,
-		sandbox.RuntimeMetadata{
+		sandboxtypes.RuntimeMetadata{
 			TemplateID:  layerExecutor.Config.TemplateID,
 			SandboxID:   config.InstanceBuildPrefix + id.Generate(),
 			ExecutionID: uuid.NewString(),
 			TeamID:      layerExecutor.Config.TeamID,
 			BuildID:     layerExecutor.Template.BuildID,
-			SandboxType: sandbox.SandboxTypeBuild,
+			SandboxType: sandboxtypes.SandboxTypeBuild,
 		},
 		template,
 		cs.timeout,

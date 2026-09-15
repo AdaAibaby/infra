@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 )
 
 func TestMapMarkRunningTracksLifecycle(t *testing.T) {
@@ -515,7 +516,7 @@ func testMapSandbox(t *testing.T, lifecycleID string) *Sandbox {
 		LifecycleID: lifecycleID,
 		Metadata: &Metadata{
 			Config:  NewConfig(Config{}),
-			Runtime: RuntimeMetadata{SandboxID: "sandbox-1"},
+			Runtime: sandboxtypes.RuntimeMetadata{SandboxID: "sandbox-1"},
 		},
 		Resources: &Resources{Slot: slot},
 	}

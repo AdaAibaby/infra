@@ -15,6 +15,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/block"
 	sbxtemplate "github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/template"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/template/metadata"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage"
 )
 
@@ -62,11 +63,11 @@ type fakeHarvestResumer struct {
 	inst       harvestInstance
 	err        error
 	called     bool
-	gotRuntime sandbox.RuntimeMetadata
+	gotRuntime sandboxtypes.RuntimeMetadata
 	gotConfig  *sandbox.Config
 }
 
-func (f *fakeHarvestResumer) ResumeForHarvest(_ context.Context, _ sbxtemplate.Template, config *sandbox.Config, runtime sandbox.RuntimeMetadata, _, _ time.Time) (harvestInstance, error) {
+func (f *fakeHarvestResumer) ResumeForHarvest(_ context.Context, _ sbxtemplate.Template, config *sandbox.Config, runtime sandboxtypes.RuntimeMetadata, _, _ time.Time) (harvestInstance, error) {
 	f.called = true
 	f.gotRuntime = runtime
 	f.gotConfig = config
@@ -178,7 +179,7 @@ func testHarvestSandbox() *sandbox.Sandbox {
 			}),
 			// BuildID deliberately differs from the harvest's buildID ("build-1")
 			// so TestHarvestRun_ThrowawayIdentity catches a regression to it.
-			Runtime: sandbox.RuntimeMetadata{SandboxID: "sandbox-1", TeamID: "team-1", BuildID: "original-build", TemplateID: "tmpl-1"},
+			Runtime: sandboxtypes.RuntimeMetadata{SandboxID: "sandbox-1", TeamID: "team-1", BuildID: "original-build", TemplateID: "tmpl-1"},
 		},
 	}
 }

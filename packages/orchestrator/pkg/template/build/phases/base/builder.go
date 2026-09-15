@@ -34,6 +34,7 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/id"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage"
 )
 
@@ -208,13 +209,13 @@ func (bb *BaseBuilder) buildLayerFromOCI(
 		ctx,
 		userLogger,
 		baseSbxConfig,
-		sandbox.RuntimeMetadata{
+		sandboxtypes.RuntimeMetadata{
 			TemplateID:  bb.Config.TemplateID,
 			SandboxID:   config.InstanceBuildPrefix + id.Generate(),
 			ExecutionID: uuid.NewString(),
 			TeamID:      bb.Config.TeamID,
 			BuildID:     bb.Template.BuildID,
-			SandboxType: sandbox.SandboxTypeBuild,
+			SandboxType: sandboxtypes.SandboxTypeBuild,
 		},
 		localTemplate,
 		rootfsPath,

@@ -17,6 +17,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/cfg"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox"
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage"
 )
 
@@ -117,7 +118,7 @@ func (r *runner) fphBenchOnce(ctx context.Context, opts fphBenchOptions, withFph
 	buildID := uuid.New().String()
 	defer cleanupLocalBuild(buildID)
 
-	runtime := sandbox.RuntimeMetadata{
+	runtime := sandboxtypes.RuntimeMetadata{
 		TemplateID:  r.buildID,
 		TeamID:      "local",
 		SandboxID:   fmt.Sprintf("fph-bench-%d", time.Now().UnixNano()),

@@ -22,6 +22,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/template/metadata"
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
@@ -95,7 +96,7 @@ type harvestRun struct {
 type harvestResumer interface {
 	// ResumeForHarvest resumes a throwaway, network-isolated, unregistered copy
 	// of the snapshot; the caller reaps the returned instance.
-	ResumeForHarvest(ctx context.Context, t sbxtemplate.Template, config *sandbox.Config, runtime sandbox.RuntimeMetadata, startedAt, endAt time.Time) (harvestInstance, error)
+	ResumeForHarvest(ctx context.Context, t sbxtemplate.Template, config *sandbox.Config, runtime sandboxtypes.RuntimeMetadata, startedAt, endAt time.Time) (harvestInstance, error)
 }
 
 // harvestInstance is the subset of a resumed sandbox the harvest uses.
@@ -123,7 +124,7 @@ type factoryResumer struct {
 	factory *sandbox.Factory
 }
 
-func (r factoryResumer) ResumeForHarvest(ctx context.Context, t sbxtemplate.Template, config *sandbox.Config, runtime sandbox.RuntimeMetadata, startedAt, endAt time.Time) (harvestInstance, error) {
+func (r factoryResumer) ResumeForHarvest(ctx context.Context, t sbxtemplate.Template, config *sandbox.Config, runtime sandboxtypes.RuntimeMetadata, startedAt, endAt time.Time) (harvestInstance, error) {
 	sbx, err := r.factory.ResumeSandbox(
 		ctx,
 		t,
@@ -404,7 +405,7 @@ func (h *prefetchHarvester) resumeMapping(
 	// it in the factory's sandbox table (for network assignment and health), but
 	// it is never added to the server lifecycle or proxy pool and is reaped here,
 	// so it is not externally addressable.
-	runtime := sandbox.RuntimeMetadata{
+	runtime := sandboxtypes.RuntimeMetadata{
 		TemplateID:  sbx.Runtime.TemplateID,
 		SandboxID:   "prefetch-harvest-" + sbx.Runtime.SandboxID,
 		ExecutionID: uuid.NewString(),

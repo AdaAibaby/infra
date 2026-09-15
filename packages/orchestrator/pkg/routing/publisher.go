@@ -26,6 +26,7 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 	catalog "github.com/e2b-dev/infra/packages/shared/pkg/sandbox-catalog"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 )
 
@@ -104,7 +105,7 @@ func New(
 // OnInsert writes the routing record when the flag is on. Build sandboxes are
 // never routable and are skipped.
 func (p *Publisher) OnInsert(ctx context.Context, sbx *sandbox.Sandbox) {
-	if sbx.Runtime.SandboxType != sandbox.SandboxTypeSandbox {
+	if sbx.Runtime.SandboxType != sandboxtypes.SandboxTypeSandbox {
 		return
 	}
 
@@ -166,7 +167,7 @@ func (p *Publisher) OnInsert(ctx context.Context, sbx *sandbox.Sandbox) {
 // The delete is guarded by execution ID in Redis, so a stale lifecycle never
 // removes the record of a newer execution.
 func (p *Publisher) OnStopping(ctx context.Context, sbx *sandbox.Sandbox) {
-	if sbx.Runtime.SandboxType != sandbox.SandboxTypeSandbox {
+	if sbx.Runtime.SandboxType != sandboxtypes.SandboxTypeSandbox {
 		return
 	}
 

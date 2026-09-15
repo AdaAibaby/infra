@@ -13,6 +13,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
 )
 
@@ -110,7 +111,7 @@ func newFsFreezeSandbox(t *testing.T, envdURL string) *Sandbox {
 				AccessToken: &token,
 			},
 		},
-		Runtime: RuntimeMetadata{SandboxID: "test-sandbox"},
+		Runtime: sandboxtypes.RuntimeMetadata{SandboxID: "test-sandbox"},
 	}}
 	s.featureFlags = ff
 	s.internalConfig.envdServerURLOverride = envdURL

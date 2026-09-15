@@ -25,6 +25,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/template/metadata"
 	"github.com/e2b-dev/infra/packages/shared/pkg/consts"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
 )
@@ -707,7 +708,7 @@ func resolveEnvdDefaultUser(meta metadata.Template, configured *string) (*string
 // this counter is the denominator its decline is read against. Deriving it twice is how the
 // two came to disagree — this counted a recorded workdir, the gate counted a recorded workdir
 // that was also not re-sent. With no metadata in scope the divergence cannot come back.
-func recordEnvdDefaults(ctx context.Context, source string, sbxType SandboxType, workdirWithheld bool) {
+func recordEnvdDefaults(ctx context.Context, source string, sbxType sandboxtypes.SandboxType, workdirWithheld bool) {
 	attrs := metric.WithAttributes(
 		attribute.String("source", source),
 		attribute.String("sandbox_type", string(sbxType)),

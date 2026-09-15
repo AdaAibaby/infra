@@ -43,6 +43,7 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/limit"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 	sbxlogger "github.com/e2b-dev/infra/packages/shared/pkg/logger/sandbox"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
@@ -213,7 +214,7 @@ func BenchmarkBaseImageLaunch(b *testing.B) {
 		},
 	})
 
-	runtime := sandbox.RuntimeMetadata{
+	runtime := sandboxtypes.RuntimeMetadata{
 		TemplateID:  templateID,
 		SandboxID:   "sandbox-id",
 		ExecutionID: "execution-id",
@@ -349,7 +350,7 @@ type testContainer struct {
 	sandboxFactory *sandbox.Factory
 	tmpl           template.Template
 	sandboxConfig  *sandbox.Config
-	runtime        sandbox.RuntimeMetadata
+	runtime        sandboxtypes.RuntimeMetadata
 }
 
 func (tc *testContainer) testOneItem(b *testing.B, buildID, kernelVersion, fcVersion string) {

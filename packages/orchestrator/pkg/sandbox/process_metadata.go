@@ -2,7 +2,11 @@
 
 package sandbox
 
-import "time"
+import (
+	"time"
+
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
+)
 
 type ProcessMetadata struct {
 	SandboxID      string
@@ -38,7 +42,7 @@ func (m *Map) ProcessMetadata() map[string]ProcessMetadata {
 			StartedAt:      sbx.GetExecutionStartedAt(),
 			MaxLengthHours: sbx.Config.MaxSandboxLengthHours,
 			Temporary:      sbx.skipStartupMetrics,
-			Build:          sbx.Runtime.SandboxType == SandboxTypeBuild,
+			Build:          sbx.Runtime.SandboxType == sandboxtypes.SandboxTypeBuild,
 			Tracked:        tracked,
 		}
 	}

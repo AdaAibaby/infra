@@ -44,6 +44,7 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 	sbxlogger "github.com/e2b-dev/infra/packages/shared/pkg/logger/sandbox"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage"
 	"github.com/e2b-dev/infra/packages/shared/pkg/templates"
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
@@ -133,7 +134,7 @@ func TestSmokeAllFCVersions(t *testing.T) { //nolint:paralleltest // subtests sh
 						FirecrackerVersion: meta.Template.FirecrackerVersion,
 					},
 				}),
-				sandbox.RuntimeMetadata{
+				sandboxtypes.RuntimeMetadata{
 					TemplateID:  "smoke-" + fcMajor,
 					TeamID:      "smoke",
 					SandboxID:   fmt.Sprintf("sbx-smoke-%s-%d", fcMajor, time.Now().UnixNano()),

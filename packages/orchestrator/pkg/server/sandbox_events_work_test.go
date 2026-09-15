@@ -24,6 +24,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/service"
 	"github.com/e2b-dev/infra/packages/shared/pkg/events"
 	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/orchestrator"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 )
 
 type sandboxEventDeliveryFunc func(context.Context, string, events.SandboxEvent) error
@@ -39,7 +40,7 @@ func eventWorkSandbox() *sandbox.Sandbox {
 		LifecycleID: "lifecycle-1",
 		Metadata: &sandbox.Metadata{
 			Config: sandbox.NewConfig(sandbox.Config{BaseTemplateID: "template-1", Vcpu: 2, RamMB: 512}),
-			Runtime: sandbox.RuntimeMetadata{
+			Runtime: sandboxtypes.RuntimeMetadata{
 				SandboxID: "sandbox-1", TeamID: uuid.NewString(), ExecutionID: "execution-1",
 			},
 		},

@@ -19,6 +19,7 @@ import (
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 )
 
@@ -161,7 +162,7 @@ func newMemoryTestSandbox(t *testing.T, url string) (*Sandbox, string) {
 	s := &Sandbox{Metadata: &Metadata{
 		internalConfig: internalConfig{EnvdInitRequestTimeout: 5 * time.Second, envdServerURLOverride: url},
 		Config:         NewConfig(Config{Envd: EnvdMetadata{Version: "test-" + id}, RamMB: testSandboxRamMB}),
-		Runtime:        RuntimeMetadata{SandboxID: "sbx-" + id},
+		Runtime:        sandboxtypes.RuntimeMetadata{SandboxID: "sbx-" + id},
 	}}
 
 	return s, id

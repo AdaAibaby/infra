@@ -1,6 +1,4 @@
-//go:build linux
-
-package sandbox
+package sandboxtypes
 
 import (
 	"testing"
@@ -110,6 +108,39 @@ func TestLogFieldsOmitsEmptyIDs(t *testing.T) {
 			for _, key := range tc.present {
 				assert.Contains(t, got, key)
 			}
+		})
+	}
+}
+
+func TestSandboxTypeString(t *testing.T) {
+	t.Parallel()
+	for input, want := range map[SandboxType]string{"": "sandbox", SandboxTypeSandbox: "sandbox", SandboxTypeBuild: "build", "custom": "custom"} {
+		require.Equal(t, want, input.String())
+	}
+}
+
+// The whole per-class DSCP split hangs off this mapping: if a build sandbox
+// stops reporting EgressClassBuild, build egress silently reverts to the
+// sandbox class and nothing else in the stack notices.
+func TestSandboxType_EgressClass(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		sandboxType SandboxType
+		want        EgressClass
+	}{
+		{name: "build sandboxes get the build class", sandboxType: SandboxTypeBuild, want: EgressClassBuild},
+		{name: "regular sandboxes get the sandbox class", sandboxType: SandboxTypeSandbox, want: EgressClassSandbox},
+		{name: "the empty type is a regular sandbox", sandboxType: "", want: EgressClassSandbox},
+		{name: "an unknown type falls back to the sandbox class", sandboxType: SandboxType("something-else"), want: EgressClassSandbox},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, tt.want, tt.sandboxType.EgressClass())
 		})
 	}
 }

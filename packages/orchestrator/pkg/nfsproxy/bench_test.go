@@ -21,6 +21,7 @@ import (
 	nfscfg "github.com/e2b-dev/infra/packages/orchestrator/pkg/nfsproxy/cfg"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 )
 
 const (
@@ -64,7 +65,7 @@ func startBenchProxy(b *testing.B) *benchProxy {
 					{ID: volumeID, Name: volumeName, Path: "/mnt/vol", Type: volumeType},
 				},
 			}),
-			Runtime: sandbox.RuntimeMetadata{
+			Runtime: sandboxtypes.RuntimeMetadata{
 				SandboxID: uuid.NewString(),
 				TeamID:    teamID.String(),
 			},

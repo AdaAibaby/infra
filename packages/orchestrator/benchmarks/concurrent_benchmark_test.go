@@ -60,6 +60,7 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/limit"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 	sbxlogger "github.com/e2b-dev/infra/packages/shared/pkg/logger/sandbox"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
@@ -359,7 +360,7 @@ func BenchmarkConcurrentResume(b *testing.B) {
 
 	// warm-up: create and destroy one sandbox to prime caches
 	b.Log("warming up: creating one sandbox to prime caches...")
-	warmupRuntime := sandbox.RuntimeMetadata{
+	warmupRuntime := sandboxtypes.RuntimeMetadata{
 		TemplateID:  templateID,
 		SandboxID:   "warmup-" + uuid.NewString()[:8],
 		ExecutionID: "warmup-exec",
@@ -429,7 +430,7 @@ func runConcurrentResume(
 
 	for i := range n {
 		wg.Go(func() {
-			runtime := sandbox.RuntimeMetadata{
+			runtime := sandboxtypes.RuntimeMetadata{
 				TemplateID:  templateID,
 				SandboxID:   fmt.Sprintf("bench-%d-%s", i, uuid.NewString()[:8]),
 				ExecutionID: fmt.Sprintf("bench-exec-%d", i),

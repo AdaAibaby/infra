@@ -44,6 +44,7 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/envd/process"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 	sbxlogger "github.com/e2b-dev/infra/packages/shared/pkg/logger/sandbox"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
@@ -437,7 +438,7 @@ func wrapTemplate(tmpl template.Template, noPrefetch bool) template.Template {
 // startSandbox starts a sandbox from the build, either resuming from its memory
 // snapshot or cold-booting (rebooting) from its rootfs when -reboot or
 // -force-reboot is set.
-func (r *runner) startSandbox(ctx context.Context, runtime sandbox.RuntimeMetadata, start, end time.Time) (*sandbox.Sandbox, error) {
+func (r *runner) startSandbox(ctx context.Context, runtime sandboxtypes.RuntimeMetadata, start, end time.Time) (*sandbox.Sandbox, error) {
 	if r.reboot || r.forceReboot {
 		var procOpts []func(*fc.ProcessOptions)
 		if r.console {
@@ -456,7 +457,7 @@ func (r *runner) startSandbox(ctx context.Context, runtime sandbox.RuntimeMetada
 }
 
 func (r *runner) resumeOnce(ctx context.Context, iter int) (time.Duration, error) {
-	runtime := sandbox.RuntimeMetadata{
+	runtime := sandboxtypes.RuntimeMetadata{
 		TemplateID:  r.buildID,
 		TeamID:      "local",
 		SandboxID:   fmt.Sprintf("sbx-%d-%d", time.Now().UnixNano(), iter),
@@ -475,7 +476,7 @@ func (r *runner) resumeOnce(ctx context.Context, iter int) (time.Duration, error
 }
 
 func (r *runner) interactive(ctx context.Context) error {
-	runtime := sandbox.RuntimeMetadata{
+	runtime := sandboxtypes.RuntimeMetadata{
 		TemplateID:  r.buildID,
 		TeamID:      "local",
 		SandboxID:   fmt.Sprintf("sbx-%d", time.Now().UnixNano()),
@@ -523,7 +524,7 @@ func (r *runner) cmdMode(ctx context.Context, opts runOptions) error {
 }
 
 func (r *runner) cmdOnce(ctx context.Context, opts runOptions, verbose bool) (cmdTimings, error) {
-	runtime := sandbox.RuntimeMetadata{
+	runtime := sandboxtypes.RuntimeMetadata{
 		TemplateID:  r.buildID,
 		TeamID:      "local",
 		SandboxID:   fmt.Sprintf("sbx-%d", time.Now().UnixNano()),
@@ -723,7 +724,7 @@ func (r *runner) pauseMode(ctx context.Context, opts pauseOptions) error {
 }
 
 func (r *runner) pauseOnce(ctx context.Context, opts pauseOptions, verbose bool) (pauseTimings, error) {
-	runtime := sandbox.RuntimeMetadata{
+	runtime := sandboxtypes.RuntimeMetadata{
 		TemplateID:  r.buildID,
 		TeamID:      "local",
 		SandboxID:   fmt.Sprintf("sbx-%d", time.Now().UnixNano()),
@@ -1012,7 +1013,7 @@ func (r *runner) collectAndUploadPrefetch(ctx context.Context, opts pauseOptions
 	for i := range prefetchCollectionIterations {
 		fmt.Printf("   Run %d/%d...", i+1, prefetchCollectionIterations)
 
-		runtime := sandbox.RuntimeMetadata{
+		runtime := sandboxtypes.RuntimeMetadata{
 			TemplateID:  opts.newBuildID,
 			TeamID:      "local",
 			SandboxID:   fmt.Sprintf("prefetch-%d-%d", time.Now().UnixNano(), i),

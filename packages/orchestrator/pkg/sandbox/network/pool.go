@@ -17,6 +17,7 @@ import (
 
 	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/orchestrator"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
 )
@@ -92,31 +93,12 @@ type Config struct {
 	NetworkVersion int `env:"NETWORK_VERSION" envDefault:"1"`
 }
 
-// EgressClass selects which configured egress DSCP applies to a sandbox. It
-// mirrors sandbox.SandboxType, which this package cannot import (cycle).
-type EgressClass uint8
-
-const (
-	// EgressClassSandbox is a regular, customer-facing sandbox.
-	EgressClassSandbox EgressClass = iota
-	// EgressClassBuild is a template-build sandbox.
-	EgressClassBuild
-)
-
-func (c EgressClass) String() string {
-	if c == EgressClassBuild {
-		return "build"
-	}
-
-	return "sandbox"
-}
-
 const maxDSCP = 63 // DSCP is the top 6 bits of the IPv4 TOS / IPv6 traffic-class byte.
 
 // EgressDSCP returns the DSCP class to stamp on egress for the given kind of
 // sandbox. 0 means "leave the field alone".
-func (c Config) EgressDSCP(class EgressClass) uint8 {
-	if class == EgressClassBuild && c.BuildSandboxEgressDSCP != nil {
+func (c Config) EgressDSCP(class sandboxtypes.EgressClass) uint8 {
+	if class == sandboxtypes.EgressClassBuild && c.BuildSandboxEgressDSCP != nil {
 		return *c.BuildSandboxEgressDSCP
 	}
 
@@ -132,8 +114,8 @@ type EgressTOS struct {
 }
 
 // For picks the byte for the class.
-func (e EgressTOS) For(class EgressClass) int {
-	if class == EgressClassBuild {
+func (e EgressTOS) For(class sandboxtypes.EgressClass) int {
+	if class == sandboxtypes.EgressClassBuild {
 		return e.Build
 	}
 
@@ -143,15 +125,15 @@ func (e EgressTOS) For(class EgressClass) int {
 // EgressTOS resolves both configured DSCP classes into TOS bytes.
 func (c Config) EgressTOS() EgressTOS {
 	return EgressTOS{
-		Sandbox: int(c.EgressDSCP(EgressClassSandbox)) << 2,
-		Build:   int(c.EgressDSCP(EgressClassBuild)) << 2,
+		Sandbox: int(c.EgressDSCP(sandboxtypes.EgressClassSandbox)) << 2,
+		Build:   int(c.EgressDSCP(sandboxtypes.EgressClassBuild)) << 2,
 	}
 }
 
 // untenantedDSCP is the class an idle pooled slot carries between tenants:
 // CreateNetwork seeds it and recycle restores it — the two must agree.
 func (c Config) untenantedDSCP() uint8 {
-	return c.EgressDSCP(EgressClassSandbox)
+	return c.EgressDSCP(sandboxtypes.EgressClassSandbox)
 }
 
 // DSCP builds the pointer BuildSandboxEgressDSCP takes: DSCP(0) is an
@@ -272,7 +254,7 @@ func (p *Pool) Populate(ctx context.Context) {
 	}
 }
 
-func (p *Pool) Get(ctx context.Context, network *orchestrator.SandboxNetworkConfig, class EgressClass) (*Slot, error) {
+func (p *Pool) Get(ctx context.Context, network *orchestrator.SandboxNetworkConfig, class sandboxtypes.EgressClass) (*Slot, error) {
 	var slot *Slot
 
 	select {
@@ -311,7 +293,7 @@ func (p *Pool) Get(ctx context.Context, network *orchestrator.SandboxNetworkConf
 	return slot, nil
 }
 
-func (p *Pool) configureSlot(ctx context.Context, slot *Slot, network *orchestrator.SandboxNetworkConfig, class EgressClass) error {
+func (p *Pool) configureSlot(ctx context.Context, slot *Slot, network *orchestrator.SandboxNetworkConfig, class sandboxtypes.EgressClass) error {
 	// Slots are created before their tenant is known, so a build re-stamps the
 	// rule CreateNetwork installed. No-op when both classes resolve alike.
 	if err := slot.applyEgressDSCP(ctx, p.config.EgressDSCP(class)); err != nil {

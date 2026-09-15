@@ -44,6 +44,7 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/orchestrator"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 	sbxlogger "github.com/e2b-dev/infra/packages/shared/pkg/logger/sandbox"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage/header"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
@@ -198,14 +199,6 @@ type EnvdMetadata struct {
 	Version        string
 }
 
-// SandboxType distinguishes build sandboxes from regular sandboxes.
-type SandboxType string
-
-const (
-	SandboxTypeSandbox SandboxType = "sandbox"
-	SandboxTypeBuild   SandboxType = "build"
-)
-
 // inPlaceStateFlipTimeout bounds the FC pause and resume calls of an in-place
 // checkpoint. The PATCH is a state flip that normally completes in
 // milliseconds, but the bound must exceed Firecracker's own internal 30s
@@ -231,72 +224,10 @@ const (
 	StopReasonCrashed StopReason = "crashed"
 )
 
-// String returns the sandbox type as a string, defaulting to "sandbox" if empty.
-func (t SandboxType) String() string {
-	if t == "" {
-		return string(SandboxTypeSandbox)
-	}
-
-	return string(t)
-}
-
-// EgressClass maps the sandbox type onto the network package's egress class.
-// The network package cannot use SandboxType directly (import cycle). The empty
-// type, like String, is treated as a regular sandbox.
-func (t SandboxType) EgressClass() network.EgressClass {
-	if t == SandboxTypeBuild {
-		return network.EgressClassBuild
-	}
-
-	return network.EgressClassSandbox
-}
-
-type RuntimeMetadata struct {
-	TemplateID  string
-	SandboxID   string
-	ExecutionID string
-
-	// TeamID is best-effort metadata; not always populated so do not use for
-	// decisions or feature-flag targeting.
-	TeamID string
-
-	BuildID     string
-	SandboxType SandboxType
-}
-
-// LogFields returns the identity fields for every line logged on this
-// sandbox's behalf. Ids that are not populated are omitted rather than emitted
-// blank.
-func (r RuntimeMetadata) LogFields() []zap.Field {
-	fields := make([]zap.Field, 0, 5)
-
-	for _, f := range []struct {
-		value string
-		field func(string) zap.Field
-	}{
-		{r.SandboxID, logger.WithSandboxID},
-		{r.TemplateID, logger.WithTemplateID},
-		{r.TeamID, logger.WithTeamID},
-		{r.BuildID, logger.WithBuildID},
-		{r.ExecutionID, logger.WithExecutionID},
-	} {
-		if f.value != "" {
-			fields = append(fields, f.field(f.value))
-		}
-	}
-
-	return fields
-}
-
-// Logger returns the process logger tagged with LogFields.
-func (r RuntimeMetadata) Logger() logger.Logger {
-	return logger.L().With(r.LogFields()...)
-}
-
 // sandboxLDContext builds an LD context with envd/kernel/FC-version attributes for
 // per-sandbox flag targeting. Team/template targeting comes from the team and
 // template contexts the caller embeds in ctx.
-func sandboxLDContext(runtime RuntimeMetadata, config *Config) ldcontext.Context {
+func sandboxLDContext(runtime sandboxtypes.RuntimeMetadata, config *Config) ldcontext.Context {
 	return ldcontext.NewBuilder(runtime.SandboxID).
 		Kind(featureflags.SandboxKind).
 		SetString(featureflags.SandboxTemplateAttribute, runtime.TemplateID).
@@ -326,7 +257,7 @@ type internalConfig struct {
 type Metadata struct {
 	internalConfig internalConfig
 	Config         *Config
-	Runtime        RuntimeMetadata
+	Runtime        sandboxtypes.RuntimeMetadata
 
 	rwmu               sync.RWMutex // protects timing and stop reason
 	startedAt          time.Time
@@ -876,7 +807,7 @@ func withNetworkAssignReason(reason NetworkAssignReason) CreateOption {
 func (f *Factory) CreateSandbox(
 	ctx context.Context,
 	config *Config,
-	runtime RuntimeMetadata,
+	runtime sandboxtypes.RuntimeMetadata,
 	template template.Template,
 	sandboxTimeout time.Duration,
 	rootfsCachePath string,
@@ -1233,7 +1164,7 @@ func (f *Factory) ResumeSandbox(
 	ctx context.Context,
 	t template.Template,
 	config *Config,
-	runtime RuntimeMetadata,
+	runtime sandboxtypes.RuntimeMetadata,
 	startedAt time.Time,
 	endAt time.Time,
 	apiConfigToStore *orchestrator.SandboxConfig,
@@ -4075,7 +4006,7 @@ func getNetworkSlot(
 	cleanup *Cleanup,
 	networkConfig *orchestrator.SandboxNetworkConfig,
 	networkReleased network.ReleaseNotify,
-	egressClass network.EgressClass,
+	egressClass sandboxtypes.EgressClass,
 ) *utils.Promise[*network.Slot] {
 	return utils.NewPromise(func() (*network.Slot, error) {
 		ctx, span := tracer.Start(ctx, "get network-slot")

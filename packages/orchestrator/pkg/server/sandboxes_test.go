@@ -21,6 +21,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/service"
 	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/orchestrator"
 	"github.com/e2b-dev/infra/packages/shared/pkg/id"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 )
 
@@ -58,7 +59,7 @@ func Test_server_List(t *testing.T) {
 						TemplateId: "template-id",
 					},
 					Metadata: &sandbox.Metadata{
-						Runtime: sandbox.RuntimeMetadata{
+						Runtime: sandboxtypes.RuntimeMetadata{
 							SandboxID:   listSandboxID,
 							TeamID:      listTeamID,
 							ExecutionID: listExecutionID,
@@ -128,7 +129,7 @@ func TestGetSandboxExecutionData(t *testing.T) {
 				Vcpu:  2,
 				RamMB: 512,
 			}),
-			Runtime: sandbox.RuntimeMetadata{
+			Runtime: sandboxtypes.RuntimeMetadata{
 				SandboxID: id.Generate(),
 			},
 		},

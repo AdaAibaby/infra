@@ -28,6 +28,7 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/orchestrator"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage/header"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 	"github.com/e2b-dev/infra/packages/shared/pkg/units"
@@ -77,7 +78,7 @@ func (f *Factory) RebootSandbox(
 	ctx context.Context,
 	t template.Template,
 	config *Config,
-	runtime RuntimeMetadata,
+	runtime sandboxtypes.RuntimeMetadata,
 	endAt time.Time,
 	apiConfigToStore *orchestrator.SandboxConfig,
 	deferMarkRunning bool,
@@ -367,7 +368,7 @@ func chainPreBoot(fns ...PreBootFn) PreBootFn {
 // stays "none".
 func (f *Factory) fsRecoverPreBoot(
 	ctx context.Context,
-	runtime RuntimeMetadata,
+	runtime sandboxtypes.RuntimeMetadata,
 	fsQuiesced bool,
 	requestFilesystemBoot bool,
 	record func(rootfs.RecoverOutcome),
@@ -497,7 +498,7 @@ func (f *Factory) resolveOfflineTarget(
 func (f *Factory) envdOfflineUpgradePreBoot(
 	ctx context.Context,
 	config *Config,
-	runtime RuntimeMetadata,
+	runtime sandboxtypes.RuntimeMetadata,
 	fsQuiesced bool,
 ) PreBootFn {
 	from := config.Envd.Version

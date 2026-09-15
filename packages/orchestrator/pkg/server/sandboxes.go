@@ -40,6 +40,7 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 	sbxlogger "github.com/e2b-dev/infra/packages/shared/pkg/logger/sandbox"
 	"github.com/e2b-dev/infra/packages/shared/pkg/retry"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
@@ -291,13 +292,13 @@ func (s *Server) Create(ctx context.Context, req *orchestrator.SandboxCreateRequ
 		telemetry.WithFirecrackerVersion(config.FirecrackerConfig.FirecrackerVersion),
 	)
 
-	runtime := sandbox.RuntimeMetadata{
+	runtime := sandboxtypes.RuntimeMetadata{
 		TemplateID:  req.GetSandbox().GetTemplateId(),
 		SandboxID:   req.GetSandbox().GetSandboxId(),
 		ExecutionID: req.GetSandbox().GetExecutionId(),
 		TeamID:      req.GetSandbox().GetTeamId(),
 		BuildID:     req.GetSandbox().GetBuildId(),
-		SandboxType: sandbox.SandboxTypeSandbox,
+		SandboxType: sandboxtypes.SandboxTypeSandbox,
 	}
 
 	meta, err := template.Metadata()
@@ -1329,7 +1330,7 @@ func (s *Server) checkpointResumeFresh(ctx context.Context, sbx *sandbox.Sandbox
 		ctx,
 		template,
 		sbx.Config,
-		sandbox.RuntimeMetadata{
+		sandboxtypes.RuntimeMetadata{
 			TemplateID:  sbx.Runtime.TemplateID,
 			SandboxID:   sbx.Runtime.SandboxID,
 			ExecutionID: sbx.Runtime.ExecutionID,

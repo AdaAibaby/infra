@@ -30,6 +30,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/template/metadata"
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/orchestrator"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage/header"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
@@ -139,7 +140,7 @@ func admissionTestSandbox(t *testing.T, sandboxID string, slotIdx int, durable *
 				Envd:              sandbox.EnvdMetadata{Version: "9.9.9"},
 				FirecrackerConfig: fc.Config{FirecrackerVersion: "v1.14.1", KernelVersion: "vmlinux-6.1"},
 			}),
-			Runtime: sandbox.RuntimeMetadata{SandboxID: sandboxID},
+			Runtime: sandboxtypes.RuntimeMetadata{SandboxID: sandboxID},
 		},
 		Resources: &sandbox.Resources{Slot: slot},
 		Template:  admissionTestTemplate{memfile: &admissionRODevice{durable: durable, waiting: make(chan struct{})}},

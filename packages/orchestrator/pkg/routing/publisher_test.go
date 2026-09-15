@@ -15,6 +15,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network"
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	catalog "github.com/e2b-dev/infra/packages/shared/pkg/sandbox-catalog"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 )
 
 type memoryCatalog struct {
@@ -119,7 +120,7 @@ const (
 	testExecutionID = "exec-1"
 )
 
-func testSandbox(t *testing.T, sandboxID, lifecycleID string, sandboxType sandbox.SandboxType) *sandbox.Sandbox {
+func testSandbox(t *testing.T, sandboxID, lifecycleID string, sandboxType sandboxtypes.SandboxType) *sandbox.Sandbox {
 	t.Helper()
 
 	slot, err := network.NewSlot("test", 1, network.Config{}, network.NoopEgressProxy{})
@@ -129,7 +130,7 @@ func testSandbox(t *testing.T, sandboxID, lifecycleID string, sandboxType sandbo
 		LifecycleID: lifecycleID,
 		Metadata: &sandbox.Metadata{
 			Config: sandbox.NewConfig(sandbox.Config{MaxSandboxLengthHours: 2}),
-			Runtime: sandbox.RuntimeMetadata{
+			Runtime: sandboxtypes.RuntimeMetadata{
 				SandboxID:   sandboxID,
 				ExecutionID: testExecutionID,
 				SandboxType: sandboxType,
@@ -147,7 +148,7 @@ func TestPublisher_OnInsertWritesRecord(t *testing.T) {
 
 	c := newMemoryCatalog()
 	p := newPublisher(t, c, true)
-	sbx := testSandbox(t, "sbx-1", "lc-1", sandbox.SandboxTypeSandbox)
+	sbx := testSandbox(t, "sbx-1", "lc-1", sandboxtypes.SandboxTypeSandbox)
 
 	p.OnInsert(t.Context(), sbx)
 
@@ -166,7 +167,7 @@ func TestPublisher_OnStoppingDeletesRecord(t *testing.T) {
 
 	c := newMemoryCatalog()
 	p := newPublisher(t, c, true)
-	sbx := testSandbox(t, "sbx-1", "lc-1", sandbox.SandboxTypeSandbox)
+	sbx := testSandbox(t, "sbx-1", "lc-1", sandboxtypes.SandboxTypeSandbox)
 
 	p.OnInsert(t.Context(), sbx)
 	p.OnStopping(t.Context(), sbx)
@@ -180,7 +181,7 @@ func TestPublisher_FlagOffWritesNothingAndLeaksNoState(t *testing.T) {
 
 	c := newMemoryCatalog()
 	p := newPublisher(t, c, false)
-	sbx := testSandbox(t, "sbx-1", "lc-1", sandbox.SandboxTypeSandbox)
+	sbx := testSandbox(t, "sbx-1", "lc-1", sandboxtypes.SandboxTypeSandbox)
 
 	p.OnInsert(t.Context(), sbx)
 
@@ -198,7 +199,7 @@ func TestPublisher_BuildSandboxIsSkipped(t *testing.T) {
 
 	c := newMemoryCatalog()
 	p := newPublisher(t, c, true)
-	sbx := testSandbox(t, "build-1", "lc-1", sandbox.SandboxTypeBuild)
+	sbx := testSandbox(t, "build-1", "lc-1", sandboxtypes.SandboxTypeBuild)
 
 	p.OnInsert(t.Context(), sbx)
 
@@ -212,7 +213,7 @@ func TestPublisher_StoreErrorIsSwallowed(t *testing.T) {
 	c := newMemoryCatalog()
 	c.storeErr = errors.New("redis down")
 	p := newPublisher(t, c, true)
-	sbx := testSandbox(t, "sbx-1", "lc-1", sandbox.SandboxTypeSandbox)
+	sbx := testSandbox(t, "sbx-1", "lc-1", sandboxtypes.SandboxTypeSandbox)
 
 	p.OnInsert(t.Context(), sbx)
 
@@ -231,7 +232,7 @@ func TestPublisher_StopBeforeInsertLeavesTombstoneAndSkipsWrite(t *testing.T) {
 	// A record owned by another writer for the same sandbox must survive a stop
 	// of a lifecycle this publisher never published.
 	require.NoError(t, c.StoreSandbox(t.Context(), "sbx-1", &catalog.SandboxInfo{ExecutionID: "exec-1"}, time.Hour))
-	sbx := testSandbox(t, "sbx-1", "lc-old", sandbox.SandboxTypeSandbox)
+	sbx := testSandbox(t, "sbx-1", "lc-old", sandboxtypes.SandboxTypeSandbox)
 
 	// MarkStopping can fire before OnInsert (MarkRunning inserts into the live
 	// map first). The stop leaves a tombstone ...
@@ -253,7 +254,7 @@ func TestPublisher_StopDuringInFlightStoreWaitsAndDeletes(t *testing.T) {
 	c.storeStarted = make(chan struct{})
 	c.storeRelease = make(chan struct{})
 	p := newPublisher(t, c, true)
-	sbx := testSandbox(t, "sbx-1", "lc-1", sandbox.SandboxTypeSandbox)
+	sbx := testSandbox(t, "sbx-1", "lc-1", sandboxtypes.SandboxTypeSandbox)
 
 	insertDone := make(chan struct{})
 	go func() {
@@ -288,7 +289,7 @@ func TestPublisher_DeleteErrorForgetsLifecycle(t *testing.T) {
 
 	c := newMemoryCatalog()
 	p := newPublisher(t, c, true)
-	sbx := testSandbox(t, "sbx-1", "lc-1", sandbox.SandboxTypeSandbox)
+	sbx := testSandbox(t, "sbx-1", "lc-1", sandboxtypes.SandboxTypeSandbox)
 
 	p.OnInsert(t.Context(), sbx)
 	c.deleteErr = errors.New("redis down")
@@ -307,7 +308,7 @@ func TestPublisher_ViaSandboxMap(t *testing.T) {
 	sandboxes := sandbox.NewSandboxesMap()
 	sandboxes.Subscribe(p)
 
-	sbx := testSandbox(t, "sbx-1", "lc-1", sandbox.SandboxTypeSandbox)
+	sbx := testSandbox(t, "sbx-1", "lc-1", sandboxtypes.SandboxTypeSandbox)
 
 	sandboxes.MarkRunning(t.Context(), sbx)
 	_, err := c.GetSandbox(t.Context(), "sbx-1")
