@@ -135,8 +135,10 @@ func handlePausedSandbox(
 
 // selectCatalog picks the routing source per request: the orchestrator-owned
 // record when OrchestratorRoutingPrioritizedFlag is on, else the API-owned one.
-func selectCatalog(ctx context.Context, featureFlags *featureflags.Client, apiCatalog, orchestratorCatalog catalog.SandboxesCatalog) catalog.SandboxesCatalog {
-	if orchestratorCatalog != nil && featureFlags.BoolFlag(ctx, featureflags.OrchestratorRoutingPrioritizedFlag) {
+// The sandbox ID is passed as a LaunchDarkly context so the flag can be rolled
+// out progressively per sandbox.
+func selectCatalog(ctx context.Context, featureFlags *featureflags.Client, sandboxID string, apiCatalog, orchestratorCatalog catalog.SandboxesCatalog) catalog.SandboxesCatalog {
+	if orchestratorCatalog != nil && featureFlags.BoolFlag(ctx, featureflags.OrchestratorRoutingPrioritizedFlag, featureflags.SandboxContext(sandboxID)) {
 		return orchestratorCatalog
 	}
 
@@ -161,7 +163,7 @@ func NewClientProxy(meterProvider metric.MeterProvider, serviceName string, port
 
 			trafficAccessToken := r.Header.Get(proxygrpc.MetadataTrafficAccessToken)
 			envdAccessToken := r.Header.Get(proxygrpc.MetadataEnvdHTTPAccessToken)
-			routingSource := selectCatalog(ctx, featureFlagsClient, catalog, orchestratorCatalog)
+			routingSource := selectCatalog(ctx, featureFlagsClient, sandboxId, catalog, orchestratorCatalog)
 			nodeIP, err := catalogResolution(ctx, sandboxId, port, trafficAccessToken, envdAccessToken, routingSource, pausedSandboxResumer)
 			if err != nil {
 				if resumeDeniedErr, ok := errors.AsType[*reverseproxy.SandboxResumePermissionDeniedError](err); ok {

@@ -417,21 +417,21 @@ func TestSelectCatalog(t *testing.T) {
 	t.Run("flag off reads the api catalog", func(t *testing.T) {
 		t.Parallel()
 
-		got := selectCatalog(t.Context(), newFFWithRoutingFlag(t, false), apiCatalog, orchestratorCatalog)
+		got := selectCatalog(t.Context(), newFFWithRoutingFlag(t, false), "sbx-1", apiCatalog, orchestratorCatalog)
 		require.Equal(t, apiCatalog, got)
 	})
 
 	t.Run("flag on reads the orchestrator catalog", func(t *testing.T) {
 		t.Parallel()
 
-		got := selectCatalog(t.Context(), newFFWithRoutingFlag(t, true), apiCatalog, orchestratorCatalog)
+		got := selectCatalog(t.Context(), newFFWithRoutingFlag(t, true), "sbx-1", apiCatalog, orchestratorCatalog)
 		require.Equal(t, orchestratorCatalog, got)
 	})
 
 	t.Run("flag on without an orchestrator catalog falls back to the api catalog", func(t *testing.T) {
 		t.Parallel()
 
-		got := selectCatalog(t.Context(), newFFWithRoutingFlag(t, true), apiCatalog, nil)
+		got := selectCatalog(t.Context(), newFFWithRoutingFlag(t, true), "sbx-1", apiCatalog, nil)
 		require.Equal(t, apiCatalog, got)
 	})
 }
