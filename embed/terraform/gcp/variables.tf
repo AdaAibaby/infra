@@ -42,7 +42,7 @@ variable "boot_disk_type" {
 }
 
 variable "image" {
-  description = "Boot image. The stack requires Ubuntu 24.04 (apt, writable /etc, glibc >= 2.34). x86-64 only: this template is a nested-virtualization VM whose startup script installs Docker's amd64 apt repository; GCE's arm64 VM types have no nested virtualization, and its arm64 metal types (where the stack does run) would need a different template."
+  description = "Boot image. The stack requires Ubuntu 24.04 (apt, writable /etc, glibc >= 2.34). x86-64 only: this template is a nested-virtualization VM whose startup script installs Docker's amd64 apt repository; GCE's arm64 machine types have no nested virtualization, metal included (the kernel reports the feature unavailable, 2026-09-14); the metal types have a bare /dev/kvm and run the stack directly, so an arm64 shape would be a metal instance without this template's nested-virt VM."
   type        = string
   default     = "projects/ubuntu-os-cloud/global/images/family/ubuntu-2404-lts-amd64"
 }
