@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -34,7 +36,19 @@ import (
 
 const statusLogInterval = time.Second * 20
 
+// trackedWorkBound is the longest a tracked pause can hold its count: the
+// pause budget, then the terminal build-status write, which opens a fresh
+// budget once the pause context has expired.
+const trackedWorkBound = pauseTimeout + buildStatusWriteTimeout
+
+// workDrainGrace pads trackedWorkBound so the drain outlasts the work.
+const workDrainGrace = 5 * time.Second
+
 var ErrNodeNotFound = errors.New("node not found")
+
+// ErrDraining is defined in the sandbox package so the evictor can classify it
+// without an import cycle.
+var ErrDraining = sandbox.ErrDraining
 
 // SnapshotCacheInvalidator invalidates cached snapshot entries.
 type SnapshotCacheInvalidator interface {
@@ -66,6 +80,13 @@ type Orchestrator struct {
 
 	snapshotUpsertSem *utils.AdjustableSemaphore
 	redisStorage      *redisbackend.Storage
+
+	// work tracks operations that continue after their caller is gone, so a
+	// drain waits for them instead of killing them mid-write.
+	work            sync.WaitGroup
+	outstandingWork atomic.Int64
+	drainMu         sync.RWMutex
+	draining        bool
 
 	// localClusterOwnsOrchestrators makes connectToClusterNode register
 	// local-cluster instances that report the Orchestrator role as nodes.
@@ -270,6 +291,54 @@ func (o *Orchestrator) startStatusLogging(ctx context.Context) {
 				zap.Any("template_managers", templateManagers),
 			)
 		}
+	}
+}
+
+// TrackWork registers an operation that outlives its caller. It reports false
+// once the drain has started, so new work cannot be admitted behind a drain
+// that already stopped waiting.
+func (o *Orchestrator) TrackWork() (func(), bool) {
+	o.drainMu.RLock()
+	defer o.drainMu.RUnlock()
+
+	if o.draining {
+		return nil, false
+	}
+
+	o.work.Add(1)
+	o.outstandingWork.Add(1)
+
+	return func() {
+		o.outstandingWork.Add(-1)
+		o.work.Done()
+	}, true
+}
+
+func (o *Orchestrator) OutstandingWork() int64 {
+	return o.outstandingWork.Load()
+}
+
+// Drain stops admitting tracked work and waits for what is in flight, bounded
+// by the budget that work stops itself at.
+func (o *Orchestrator) Drain(ctx context.Context) error {
+	o.drainMu.Lock()
+	o.draining = true
+	o.drainMu.Unlock()
+
+	ctx, cancel := context.WithTimeout(ctx, trackedWorkBound+workDrainGrace)
+	defer cancel()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		o.work.Wait()
+	}()
+
+	select {
+	case <-done:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
 	}
 }
 

@@ -509,7 +509,12 @@ sequenceDiagram
   RPC share a detached 80-second budget; the Redis transition key has a 95-second TTL.
   The node inherits that deadline for admission and snapshotting. Caller cancellation cannot
   abandon the snapshot or its RPC result; terminal build-status writes have a separate detached
-  ten-second budget. Snapshot uploads and sandbox teardown retain their separate background lifetimes.
+  ten-second budget. Snapshot uploads and sandbox teardown retain their separate background
+  lifetimes. Shutdown drains pauses still in flight — after the HTTP and gRPC drains, before the
+  database and Redis clients close — so a deploy cannot cut a snapshot short. The drain stops
+  admitting pauses first, so the eviction sweep cannot start one behind it; a refused pause
+  leaves the sandbox running for another replica. The wait is bounded by the pause budget plus
+  the terminal build-status write it falls through to, plus a short grace.
   - **Deferred rootfs export** (gated by the `deferred-rootfs-export` flag in
     `packages/shared/pkg/featureflags`): instead of diffing the rootfs on the pause critical
     path, the orchestrator ejects the writable COW cache during pause and returns, then seals it

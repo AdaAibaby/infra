@@ -458,7 +458,10 @@ func TestStartRemoving_TransitionKeyTTL(t *testing.T) {
 
 	ttl, err := client.TTL(ctx, transitionKey).Result()
 	require.NoError(t, err)
-	assert.Greater(t, ttl, 90*time.Second, "transition ownership must outlast pause and build-status write budgets")
+	// The floor is the drain's tracked-work bound (pause plus terminal write);
+	// TestDrainBudgetsNest in the orchestrator package pins the constants'
+	// ordering, this checks Redis actually applied the TTL.
+	assert.Greater(t, ttl, 90*time.Second)
 	assert.LessOrEqual(t, ttl, transitionKeyTTL)
 }
 

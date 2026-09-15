@@ -46,6 +46,10 @@ var ErrEvictionNotNeeded = errors.New("sandbox eviction not needed")
 // the state changed, but not to the one they waited for.
 var ErrTransitionRestored = errors.New("pause refused and sandbox restored to running")
 
+// ErrDraining is this replica's refusal to start work that would outlive its
+// shutdown; the sandbox keeps running and another replica can take it.
+var ErrDraining = errors.New("api is draining")
+
 // PauseQueueExhaustedError is a node's retryable refusal to snapshot right
 // now; the sandbox keeps running and the same request can be retried.
 type PauseQueueExhaustedError struct{}

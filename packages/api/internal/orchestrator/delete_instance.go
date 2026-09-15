@@ -33,6 +33,16 @@ func (o *Orchestrator) RemoveSandbox(ctx context.Context, teamID uuid.UUID, sand
 	ctx, span := tracer.Start(ctx, "remove-sandbox")
 	defer span.End()
 
+	// A pause outlives its caller, so it is tracked from the start: a drain
+	// that already stopped waiting must not admit one.
+	if opts.Action == sandbox.StateActionPause {
+		releaseWork, ok := o.TrackWork()
+		if !ok {
+			return ErrDraining
+		}
+		defer releaseWork()
+	}
+
 	transition, alreadyDone, finish, err := o.sandboxStore.StartRemoving(ctx, teamID, sandboxID, opts)
 	sbx := transition.Sandbox
 	if err != nil {

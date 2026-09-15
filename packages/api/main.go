@@ -606,6 +606,13 @@ func run() int {
 		})
 		drainWG.Wait()
 
+		// A pause outlives the request that started it and writes its snapshot
+		// past the HTTP drain budget, so wait for it here: cleanup below closes
+		// the database and Redis clients it is still using.
+		if err := apiStore.Drain(ctx); err != nil {
+			l.Error(ctx, "sandbox work did not finish before shutdown", zap.Error(err))
+		}
+
 		// Drain pprof after, so that it is still available during the shutdown process for debugging if needed.
 		pprofShutdownCtx, pprofCancel := context.WithTimeout(ctx, pprofShutdownTimeout)
 		defer pprofCancel()

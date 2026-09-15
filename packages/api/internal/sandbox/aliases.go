@@ -58,6 +58,7 @@ var (
 	ErrExecutionMismatch  = sandboxtypes.ErrExecutionMismatch
 	ErrRestoreConflict    = sandboxtypes.ErrRestoreConflict
 	ErrTransitionRestored = sandboxtypes.ErrTransitionRestored
+	ErrDraining           = sandboxtypes.ErrDraining
 
 	AllowedTransitions = sandboxtypes.AllowedTransitions
 

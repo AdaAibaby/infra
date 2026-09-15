@@ -16,9 +16,14 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 )
 
+// TransitionKeyTTL bounds how long a removal owns its transition key. It must
+// outlive the longest pause plus its terminal build-status write, or waiters
+// read the vanished key as success while the owner is still committing.
+const TransitionKeyTTL = 95 * time.Second
+
 const (
 	lockTimeout            = time.Minute
-	transitionKeyTTL       = 95 * time.Second // Outlives the 80-second pause and 10-second terminal write.
+	transitionKeyTTL       = TransitionKeyTTL
 	transitionResultKeyTTL = 30 * time.Second
 	lockRetryMinInterval   = 200 * time.Millisecond
 	lockRetryMaxInterval   = time.Second

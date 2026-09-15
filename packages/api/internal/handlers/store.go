@@ -448,6 +448,17 @@ func NewAPIStore(ctx context.Context, tel *telemetry.Client, redisClient redis.U
 	return a
 }
 
+// Drain stops admitting sandbox work that outlives its request and waits for
+// what is in flight. It runs before Close, which tears down the clients that
+// work uses.
+func (a *APIStore) Drain(ctx context.Context) error {
+	if a.orchestrator == nil {
+		return nil
+	}
+
+	return a.orchestrator.Drain(ctx)
+}
+
 func (a *APIStore) Close(ctx context.Context) error {
 	a.templateSpawnCounter.Close(ctx)
 
