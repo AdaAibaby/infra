@@ -1549,3 +1549,33 @@ func GetBlockDriveThrottleConfig(ctx context.Context, ff *Client) BlockDriveThro
 		Bandwidth: bw,
 	}
 }
+
+// IsolatedSchedulingHostsFlag names the cluster hosts on the isolated side of
+// the sandbox scheduling partition, as a JSON array of cluster host (node) IDs:
+//
+//	["node-a", "node-b"]
+//
+// Null or empty (the default) leaves scheduling unpartitioned. The list is a
+// policy, not a view of the fleet: it says nothing about which of those hosts
+// are online, and hosts missing from the cluster simply never come up as
+// candidates. Target it per cluster.
+var IsolatedSchedulingHostsFlag = NewJSONFlag("isolated-scheduling-hosts", ldvalue.Null())
+
+// GetIsolatedSchedulingHosts reads IsolatedSchedulingHostsFlag as a set. A
+// value that is not an array of non-empty strings reads as empty, leaving
+// scheduling unpartitioned rather than stranding every sandbox on a typo.
+func GetIsolatedSchedulingHosts(ctx context.Context, ff *Client, contexts ...ldcontext.Context) map[string]struct{} {
+	value := ff.JSONFlag(ctx, IsolatedSchedulingHostsFlag, contexts...)
+
+	hosts := make(map[string]struct{}, value.Count())
+	for i := range value.Count() {
+		host := value.GetByIndex(i).StringValue()
+		if host == "" {
+			continue
+		}
+
+		hosts[host] = struct{}{}
+	}
+
+	return hosts
+}

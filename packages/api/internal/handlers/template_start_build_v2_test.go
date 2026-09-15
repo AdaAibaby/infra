@@ -136,7 +136,6 @@ func TestPostV3TemplatesMinimumFreeDiskPersistence(t *testing.T) {
 				},
 			})
 
-			//nolint:contextcheck // PostV3Templates reads the context from c.Request.
 			store.PostV3Templates(c)
 			require.Equal(t, tt.status, recorder.Code, recorder.Body.String())
 

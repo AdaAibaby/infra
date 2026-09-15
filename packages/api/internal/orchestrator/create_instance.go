@@ -367,6 +367,8 @@ func (o *Orchestrator) CreateSandbox(
 	// worth querying.
 	telemetry.SetAttributes(ctx, attribute.String("placement.cpu_model_pinned", cpuRequirement.PinnedModel))
 
+	hostIsolation := o.resolveHostIsolation(ctx, sandboxID, team, sbxData)
+
 	var node *nodemanager.Node
 
 	if isResume && sbxData.NodeID != nil {
@@ -377,10 +379,30 @@ func (o *Orchestrator) CreateSandbox(
 		if node != nil && !node.CanAcceptNewRequests() {
 			node = nil
 		}
+		// Snapshot affinity skips the candidate filter below, and the origin node
+		// can drift off the snapshot's own side of the partition when a timed-out
+		// resume remaps it. Vetted here so it cannot outrank the partition.
+		if node != nil && !hostIsolation.Allows(node) {
+			node = nil
+		}
 	}
 
 	nodeClusterID := clusters.WithClusterFallback(team.ClusterID)
 	clusterNodes := o.GetClusterNodes(nodeClusterID)
+
+	if hostIsolation.Enabled() {
+		isolatedCandidates := hostIsolation.FilterNodes(clusterNodes)
+		// Recorded because the partition starving placement surfaces as an
+		// ordinary "no nodes available", which alone does not say the fence
+		// caused it.
+		telemetry.SetAttributes(ctx,
+			attribute.Bool("placement.host_isolation.isolated_origin", hostIsolation.IsolatedOrigin()),
+			attribute.Int("placement.host_isolation.nodes_before", len(clusterNodes)),
+			attribute.Int("placement.host_isolation.nodes_after", len(isolatedCandidates)),
+		)
+
+		clusterNodes = isolatedCandidates
+	}
 
 	allLabels, labelFilteringEnabled := o.generateRequiredNodeLabels(ctx, sandboxID, team, sbxData)
 
@@ -606,6 +628,22 @@ func (o *Orchestrator) resolveCPURequirement(ctx context.Context, sandboxID stri
 	)
 
 	return requirement
+}
+
+// resolveHostIsolation builds the host-partition constraint placement filters
+// candidates with. The origin is the build's cluster host: the node a template
+// build ran on, or — because a pause copies its origin node into the snapshot's
+// build row — the node a snapshot was taken on. A build with no recorded host
+// lands on the non-isolated side.
+func (o *Orchestrator) resolveHostIsolation(ctx context.Context, sandboxID string, team *teamtypes.Team, sbxData SandboxMetadata) placement.HostIsolation {
+	return placement.HostIsolation{
+		Hosts: featureflags.GetIsolatedSchedulingHosts(ctx, o.featureFlagsClient,
+			featureflags.TeamContext(team.ID.String()),
+			featureflags.SandboxContext(sandboxID),
+			featureflags.ClusterContext(clusters.WithClusterFallback(team.ClusterID)),
+		),
+		OriginHost: ut.FromPtr(sbxData.Build.ClusterNodeID),
+	}
 }
 
 func (o *Orchestrator) generateRequiredNodeLabels(ctx context.Context, sandboxID string, team *teamtypes.Team, sbxData SandboxMetadata) ([]string, bool) {
