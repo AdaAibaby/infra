@@ -363,6 +363,14 @@ planes today.
 | **ClickHouse** | `packages/clickhouse` | Time-series/analytics: `metrics_gauge`/`metrics_sum` (written by the OTel collector), `sandbox_events`, `sandbox_host_stats` (written by orchestrator), team metrics, and optionally `sandbox_logs` during the log migration. Read by API and dashboard-api |
 | **Object storage** (GCS/S3/local, `packages/shared/pkg/storage`) | orchestrator, template-manager | Template & snapshot artifacts, keyed by build ID: `{buildID}/memfile`, `{buildID}/rootfs.ext4`, `{buildID}/snapfile`, `{buildID}/metadata.json` + `.header` index files |
 
+The API and dashboard-api share `packages/db/migrations`, tracked in PostgreSQL's
+`_migrations` table. This includes `env_defaults`, which migration `20260915204740`
+creates on fresh databases and adopts where it already exists, preserving its data.
+Any existing `_dashboard_migrations` table is retained as historical bookkeeping and
+requires no updates. Run the db-migrator before deploying updated services to a
+database that lacks the table; no separate dashboard migration runner is needed.
+Rolling back this migration retains the table and its data.
+
 A template and a paused-sandbox snapshot have the **same artifact shape** — a snapshot is just a
 new build whose memfile/rootfs are stored as diffs against the template it came from (diff chains
 are resolved through the `.header` files).
