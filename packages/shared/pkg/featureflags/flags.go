@@ -83,8 +83,16 @@ var CleanNFSCache = NewJSONFlag("clean-nfs-cache", ldvalue.Null())
 //	  "/sandboxes/:sandboxID/pause": {"rate": 10, "burst": 20}
 //	}
 //
-// When non-null, values override the code defaults. Target specific teams in LaunchDarkly.
+// Entries set per-team route limits; routes absent from the flag remain unlimited.
 var RateLimitConfigFlag = NewJSONFlag("rate-limit-config", ldvalue.Null())
+
+const (
+	APIGroupRateLimitDisabled = "disabled"
+	APIGroupRateLimitShadow   = "shadow"
+	APIGroupRateLimitEnabled  = "enabled"
+)
+
+var RateLimitV2Mode = NewStringFlag("rate-limit-v2-mode", APIGroupRateLimitDisabled)
 
 type BoolFlag struct {
 	name     string

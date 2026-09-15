@@ -107,6 +107,26 @@ The control-plane entry point (Gin, OpenAPI-generated from `spec/openapi.yml`, p
 - **Auth** (via `packages/auth`): team API keys (`X-API-Key`, `e2b_` prefix), auth-provider JWTs
   (OIDC), and either an admin token or a service JWT verified from the configured admin JWKS.
   Backed by an auth DB (Postgres) with a Redis team cache.
+- **API-group rate limits**: operations declare a group through the `x-api-group` OpenAPI
+  extension. After authentication succeeds, its callback wrapper reads the validator's
+  already-matched operation and stores the API group directly in Gin's context. The rate limiter
+  reads that group and maps it to a field in the authenticated team's limits. Grouped operations
+  require team-identifying authentication; public operations do not populate an API group.
+  Group rates are stored in regional PostgreSQL tier and addon records; the `team_limits` view
+  combines the tier allowance with active addons, and authentication caches the resolved limits.
+  API-group rates are resolved regionally, independently of the `project_limits` push contract
+  for sandbox resource limits.
+  A positive rate sets both requests per second and burst capacity. Redis enforces a separate
+  budget for each team, HTTP method, and route template across API replicas: groups select
+  rates, but routes do not share a budget. Exhausted budgets return HTTP 429 with rate-limit
+  and `Retry-After` headers. Ungrouped operations and unconfigured rates bypass group limiting;
+  Redis failures are logged and counted while requests proceed.
+  V1 route limits from `rate-limit-config` are always enforced first. For requests that pass V1,
+  the LaunchDarkly `rate-limit-v2-mode` flag controls the additional group-limit check:
+  `disabled` (the default) and unknown modes skip V2, `shadow` observes V2 decisions while
+  preserving V1 headers, and `enabled` also enforces V2. Ungrouped operations, unconfigured V2
+  rates, and V2 Redis errors retain V1 enforcement. A rejection reports the rejecting limiter's
+  headers; when both checks allow a request in enabled mode, V2 supplies the rate-limit headers.
 - **Workload identity**: sandbox create accepts an optional `iam.tokens` map of caller-named
   workload-token definitions (each an exact `audience` and `tokenType`). A non-empty, validated
   map enables workload identity, whose identity the orchestrator derives from the sandbox's

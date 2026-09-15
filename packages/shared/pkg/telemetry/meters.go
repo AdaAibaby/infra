@@ -19,6 +19,7 @@ type (
 )
 
 const (
+	ApiRateLimitRequests                 CounterType = "api.rate_limit.requests"
 	ApiOrchestratorCreatedSandboxes      CounterType = "api.orchestrator.created_sandboxes"
 	ApiOrchestratorResumeOriginNodeRemap CounterType = "api.orchestrator.resume_origin_node_remapped"
 	// ApiOrchestratorPauseRefusalRestore counts what became of a pause the
@@ -544,6 +545,7 @@ const (
 )
 
 var counterDesc = map[CounterType]string{
+	ApiRateLimitRequests:                         "Number of API group rate-limit checks, by team, group, mode, and decision",
 	SandboxCreateMeterName:                       "Number of currently waiting requests to create a new sandbox",
 	ApiOrchestratorCreatedSandboxes:              "Number of successfully created sandboxes",
 	ApiEvictorFsOnlyAutoPause:                    "Timeout auto-pauses with a filesystem-only policy.",
@@ -604,6 +606,7 @@ var counterDesc = map[CounterType]string{
 }
 
 var counterUnits = map[CounterType]string{
+	ApiRateLimitRequests:                         "{request}",
 	SandboxCreateMeterName:                       "{sandbox}",
 	ApiOrchestratorCreatedSandboxes:              "{sandbox}",
 	ApiEvictorFsOnlyAutoPause:                    "{pause}",

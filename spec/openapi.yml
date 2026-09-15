@@ -2751,6 +2751,7 @@ paths:
   /sandboxes:
     get:
       summary: List running sandboxes
+      x-api-group: list
       description: List all running sandboxes. Use GET /v2/sandboxes instead.
       deprecated: true
       tags: [sandboxes]
@@ -2827,6 +2828,7 @@ paths:
   /v2/sandboxes:
     get:
       summary: List sandboxes (v2)
+      x-api-group: list
       description: List all sandboxes
       tags: [sandboxes]
       security:
@@ -2901,6 +2903,7 @@ paths:
   /sandboxes/metrics:
     get:
       summary: List sandbox metrics
+      x-api-group: list
       description: List metrics for given sandboxes
       tags: [sandboxes]
       security:
@@ -3482,6 +3485,7 @@ paths:
   /snapshots:
     get:
       summary: List snapshots
+      x-api-group: list
       description: List all snapshots for the team
       tags: [snapshots]
       security:
@@ -3569,6 +3573,7 @@ paths:
   /v2/templates:
     get:
       summary: List templates (v2)
+      x-api-group: list
       description: List all templates
       tags: [templates]
       security:
@@ -3654,6 +3659,7 @@ paths:
   /templates:
     get:
       summary: List templates
+      x-api-group: list
       description: List all templates
       deprecated: true
       tags: [templates]
@@ -3691,6 +3697,7 @@ paths:
   /templates/{templateID}:
     get:
       summary: List template builds
+      x-api-group: list
       description: List all builds for a template
       tags: [templates]
       security:
@@ -4033,6 +4040,7 @@ paths:
   /templates/{templateID}/tags:
     get:
       summary: List template tags
+      x-api-group: list
       description: List all tags for a template
       tags: [tags]
       security:
@@ -4359,6 +4367,7 @@ paths:
   /api-keys:
     get:
       summary: List team API keys
+      x-api-group: list
       description: List all team API keys
       tags: [api-keys]
       security:
@@ -4469,6 +4478,7 @@ paths:
   /volumes:
     get:
       summary: List team volumes
+      x-api-group: list
       description: List all team volumes
       tags: [volumes]
       security:
@@ -4589,6 +4599,7 @@ paths:
   /secrets:
     get:
       summary: List project secrets
+      x-api-group: list
       description: List the project's secrets. No response carries a secret value.
       tags: [secrets]
       security:

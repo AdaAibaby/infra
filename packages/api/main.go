@@ -205,7 +205,7 @@ func NewGinServer(ctx context.Context, config cfg.Config, tel *telemetry.Client,
 				},
 				MultiErrorHandler: utils.MultiErrorHandler,
 				Options: openapi3filter.Options{
-					AuthenticationFunc: AuthenticationFunc,
+					AuthenticationFunc: customMiddleware.WithAPIGroup(AuthenticationFunc),
 					// Handle multiple errors as MultiError type
 					MultiError: true,
 				},
@@ -214,10 +214,12 @@ func NewGinServer(ctx context.Context, config cfg.Config, tel *telemetry.Client,
 
 	r.Use(customMiddleware.InitLaunchDarklyContext)
 
-	// Per-team rate limiting (after auth + LD context, before handlers).
-	// Only applied to connect and resume endpoints. Gated by feature flag.
 	limiter := ratelimit.NewLimiter(redisClient)
-	r.Use(ratelimit.Middleware(limiter, ratelimit.Config{FailOpen: true}, ff)) //nolint:contextcheck // Gin middleware sets context via c.Request.WithContext
+	rateLimitMiddleware, err := ratelimit.Middleware(limiter, ratelimit.Config{FailOpen: true}, ff, tel.MeterProvider, l) //nolint:contextcheck // Gin middleware gets context from the request.
+	if err != nil {
+		l.Fatal(ctx, "failed to create rate limit middleware", zap.Error(err))
+	}
+	r.Use(rateLimitMiddleware)
 
 	// Deny blocked teams on every mutating route unless allowlisted in
 	// EnforceBlockedTeam. Must run after auth (which populates team info on
