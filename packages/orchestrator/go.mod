@@ -7,7 +7,7 @@ replace (
 	github.com/e2b-dev/infra/packages/shared v0.0.0 => ../shared
 )
 
-replace github.com/willscott/go-nfs v0.0.3 => github.com/e2b-dev/go-nfs v0.0.0-20260318224420-f59b77ca8555 // from the `add-context` branch
+replace github.com/willscott/go-nfs v0.0.3 => github.com/e2b-dev/go-nfs v0.0.0-20260911175922-399c077f71ed
 
 tool github.com/oapi-codegen/oapi-codegen/v2/cmd/oapi-codegen
 
