@@ -69,7 +69,12 @@ generate:
 .PHONY: build
 build:
 	$(eval COMMIT_SHA := $(shell git rev-parse --short HEAD))
-	@docker build --platform $(BUILD_PLATFORM) --output=bin --build-arg COMMIT_SHA="$(COMMIT_SHA)" --build-arg VERSION="$(VERSION)" -f ./Dockerfile ..
+	@docker build --platform $(BUILD_PLATFORM) --target artifacts --output=bin --build-arg COMMIT_SHA="$(COMMIT_SHA)" --build-arg VERSION="$(VERSION)" -f ./Dockerfile ..
+
+.PHONY: build-image
+build-image:
+	$(eval COMMIT_SHA := $(shell git rev-parse --short HEAD))
+	docker build --platform $(BUILD_PLATFORM) --build-arg COMMIT_SHA="$(COMMIT_SHA)" --build-arg VERSION="$(VERSION)" -t orchestrator:local -f ./Dockerfile ..
 
 # Download busybox from GCS public builds bucket.
 # Skips if binary exists and version/arch match the stamp file.
@@ -217,6 +222,30 @@ build-and-upload/template-manager: $(BIN_SOURCE) upload/template-manager
 .PHONY: test
 test:
 	go test -race -v ./...
+
+.PHONY: test-image test-orchestrator-image
+test-image:
+	$(eval COMMIT_SHA := $(shell git rev-parse --short HEAD))
+	@set -eu; \
+	image="orchestrator:test-$(COMMIT_SHA)-$$$$"; \
+	trap 'docker image rm --force "$$image" >/dev/null 2>&1 || true' EXIT; \
+	docker build --load --platform $(BUILD_PLATFORM) --tag "$$image" --build-arg COMMIT_SHA="$(COMMIT_SHA)" --build-arg VERSION="$(VERSION)" -f ./Dockerfile ..; \
+		docker run --rm --entrypoint /bin/bash "$$image" -eu -c '\
+		test -s /etc/ssl/certs/ca-certificates.crt && \
+		ldd_output="$$(ldd /usr/local/bin/orchestrator 2>&1)" && \
+		printf "%s\n" "$$ldd_output" | grep -q "libc.so.6 =>" && \
+		! printf "%s\n" "$$ldd_output" | grep -Eq "not found|version .* not found" && \
+		command -v bash >/dev/null && \
+		command -v nsenter >/dev/null && \
+		command -v systemd-run >/dev/null && \
+		command -v systemctl >/dev/null && \
+		command -v ip >/dev/null && \
+		command -v iptables >/dev/null && \
+		command -v rsync >/dev/null && \
+		command -v mkfs.ext4 >/dev/null && \
+		test -x /usr/local/bin/orchestrator'
+
+test-orchestrator-image: test-image
 
 .PHONY: test-clean-nfs-cache-image
 test-clean-nfs-cache-image: build
