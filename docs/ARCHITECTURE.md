@@ -137,11 +137,12 @@ The control-plane entry point (Gin, OpenAPI-generated from `spec/openapi.yml`, p
   orchestrator re-sync; a fork starts a new workload and does not inherit them.
 - **Placement**: keeps a live map of orchestrator nodes (discovered via Nomad, Kubernetes, or a
   static list). Chooses a node per sandbox with a **best-of-K** algorithm
-  (`internal/orchestrator/placement/`): sample K ready nodes, score by CPU
-  commitment/usage, pick the lowest; retry on exhausted nodes. With
-  `best-of-k-hugepage-memory` on, each node's score is the higher of its CPU
-  load and its hugepage-pool load. A node that reports no pool scores 0.5.
-  Tunable live via feature flags.
+  (`internal/orchestrator/placement/`): sample K ready nodes, score by the
+  higher of CPU load and hugepage-pool load, pick the lowest; retry on
+  exhausted nodes. A node that reports no pool scores 0.5. Hugepage scoring
+  is on by default (`BEST_OF_K_HUGEPAGE_MEMORY`); set it false to rank on
+  CPU alone. K, overcommit ratio, and alpha are tunable live via feature
+  flags.
 - **State**: writes sandbox records to Redis (source of truth for *running* sandboxes) and the
   sandbox→node **routing catalog** (`sandbox:catalog:{id}`) in Redis that client-proxy reads. This
   API-written record is the default routing source; the orchestrator-written

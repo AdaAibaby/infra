@@ -26,9 +26,10 @@ type BestOfKConfig struct {
 // DefaultBestOfKConfig returns the default placement configuration
 func DefaultBestOfKConfig() BestOfKConfig {
 	return BestOfKConfig{
-		R:     4,
-		K:     3,
-		Alpha: 0.5,
+		R:              4,
+		K:              3,
+		Alpha:          0.5,
+		ScoreHugepages: true,
 	}
 }
 

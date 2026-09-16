@@ -87,6 +87,7 @@ type Orchestrator struct {
 	outstandingWork atomic.Int64
 	drainMu         sync.RWMutex
 	draining        bool
+	scoreHugepages  bool
 
 	// localClusterOwnsOrchestrators makes connectToClusterNode register
 	// local-cluster instances that report the Orchestrator role as nodes.
@@ -163,7 +164,7 @@ func New(
 		Timeout: nodeHealthCheckTimeout,
 	}
 
-	bestOfKAlgorithm := placement.NewBestOfK(getBestOfKConfig(ctx, featureFlags)).(*placement.BestOfK)
+	bestOfKAlgorithm := placement.NewBestOfK(getBestOfKConfig(ctx, featureFlags, config.BestOfKHugepageMemory)).(*placement.BestOfK)
 
 	redisStorage, err := redisbackend.NewStorage(redisClient, tel.MeterProvider, featureFlags)
 	if err != nil {
@@ -186,6 +187,7 @@ func New(
 		nodeDiscovery:        nodeDiscovery,
 		nodes:                smap.New[*nodemanager.Node](),
 		placementAlgorithm:   bestOfKAlgorithm,
+		scoreHugepages:       config.BestOfKHugepageMemory,
 		featureFlagsClient:   featureFlags,
 		accessTokenGenerator: accessTokenGenerator,
 		routingCatalog:       routingCatalog,
@@ -395,7 +397,7 @@ func (o *Orchestrator) updateBestOfKConfig(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			config := getBestOfKConfig(ctx, o.featureFlagsClient)
+			config := getBestOfKConfig(ctx, o.featureFlagsClient, o.scoreHugepages)
 
 			// Update the config
 			o.placementAlgorithm.UpdateConfig(config)
@@ -403,7 +405,7 @@ func (o *Orchestrator) updateBestOfKConfig(ctx context.Context) {
 	}
 }
 
-func getBestOfKConfig(ctx context.Context, featureFlagsClient *featureflags.Client) placement.BestOfKConfig {
+func getBestOfKConfig(ctx context.Context, featureFlagsClient *featureflags.Client, scoreHugepages bool) placement.BestOfKConfig {
 	k := featureFlagsClient.IntFlag(ctx, featureflags.BestOfKSampleSize)
 
 	maxOvercommitPercent := featureFlagsClient.IntFlag(ctx, featureflags.BestOfKMaxOvercommit)
@@ -418,6 +420,6 @@ func getBestOfKConfig(ctx context.Context, featureFlagsClient *featureflags.Clie
 		R:              maxOvercommit,
 		K:              k,
 		Alpha:          alpha,
-		ScoreHugepages: featureFlagsClient.BoolFlag(ctx, featureflags.BestOfKHugepageMemory),
+		ScoreHugepages: scoreHugepages,
 	}
 }

@@ -151,6 +151,11 @@ type Config struct {
 	DefaultPersistentVolumeTypeByRegion map[string]string `env:"DEFAULT_PERSISTENT_VOLUME_TYPE_BY_REGION"`
 
 	DomainName string `env:"DOMAIN_NAME" envDefault:""`
+
+	// BestOfKHugepageMemory includes hugepage-pool load in best-of-K
+	// placement (max of CPU and pool). A node that reports no pool scores
+	// 0.5, so clusters without a pool should set this false and rank on CPU.
+	BestOfKHugepageMemory bool `env:"BEST_OF_K_HUGEPAGE_MEMORY" envDefault:"true"`
 }
 
 type FailureCondition string
