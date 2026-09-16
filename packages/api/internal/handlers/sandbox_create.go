@@ -66,15 +66,6 @@ const (
 func (a *APIStore) PostSandboxes(c *gin.Context) {
 	ctx := c.Request.Context()
 
-	// Get team from context, use TeamContextKey
-	teamInfo := auth.MustGetTeamInfo(c)
-
-	c.Set("teamID", teamInfo.Team.ID.String())
-
-	span := trace.SpanFromContext(ctx)
-	traceID := span.SpanContext().TraceID().String()
-	c.Set("traceID", traceID)
-
 	body, err := ginutils.ParseBody[api.PostSandboxesJSONRequestBody](ctx, c)
 	if err != nil {
 		a.sendAPIStoreError(c, http.StatusBadRequest, fmt.Sprintf("Error when parsing request: %s", err))
@@ -83,6 +74,58 @@ func (a *APIStore) PostSandboxes(c *gin.Context) {
 
 		return
 	}
+
+	a.createSandbox(c, body, sandbox.SandboxTimeoutDefault)
+}
+
+// PostV2Sandboxes creates a sandbox with secured envd access; the request has no secure field to opt out.
+func (a *APIStore) PostV2Sandboxes(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	body, err := ginutils.ParseBody[api.PostV2SandboxesJSONRequestBody](ctx, c)
+	if err != nil {
+		a.sendAPIStoreError(c, http.StatusBadRequest, fmt.Sprintf("Error when parsing request: %s", err))
+
+		telemetry.ReportCriticalError(ctx, "error when parsing request", err)
+
+		return
+	}
+
+	a.createSandbox(c, newSandboxFromV2(body), sandbox.SandboxTimeoutDefaultV2)
+}
+
+func newSandboxFromV2(body api.NewSandboxV2) api.NewSandbox {
+	secure := true
+
+	return api.NewSandbox{
+		TemplateID:          body.TemplateID,
+		Timeout:             body.Timeout,
+		AutoPause:           body.AutoPause,
+		AutoPauseMemory:     body.AutoPauseMemory,
+		AutoResume:          body.AutoResume,
+		Secure:              &secure,
+		AllowInternetAccess: body.AllowInternetAccess,
+		Network:             body.Network,
+		Metadata:            body.Metadata,
+		EnvVars:             body.EnvVars,
+		Mcp:                 body.Mcp,
+		Iam:                 body.Iam,
+		VolumeMounts:        body.VolumeMounts,
+	}
+}
+
+// createSandbox runs the shared create flow; defaultTimeout applies when the body omits timeout.
+func (a *APIStore) createSandbox(c *gin.Context, body api.NewSandbox, defaultTimeout time.Duration) {
+	ctx := c.Request.Context()
+
+	// Get team from context, use TeamContextKey
+	teamInfo := auth.MustGetTeamInfo(c)
+
+	c.Set("teamID", teamInfo.Team.ID.String())
+
+	span := trace.SpanFromContext(ctx)
+	traceID := span.SpanContext().TraceID().String()
+	c.Set("traceID", traceID)
 
 	telemetry.ReportEvent(ctx, "Parsed body")
 
@@ -157,7 +200,7 @@ func (a *APIStore) PostSandboxes(c *gin.Context) {
 	metadata := sharedUtils.DerefOrDefault(body.Metadata, nil)
 	apiVolumeMounts := sharedUtils.DerefOrDefault(body.VolumeMounts, nil)
 
-	timeout, apiErr := validateAndParseTimeout(body.Timeout, teamInfo.Limits.MaxLengthHours)
+	timeout, apiErr := validateAndParseTimeoutWithDefault(body.Timeout, teamInfo.Limits.MaxLengthHours, defaultTimeout)
 	if apiErr != nil {
 		a.sendAPIStoreError(c, apiErr.Code, apiErr.ClientMsg)
 
