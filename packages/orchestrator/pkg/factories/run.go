@@ -515,6 +515,7 @@ func run(config cfg.Config, opts Options) (success bool) {
 		zap.String("version", version),
 		zap.String("commit", commitSHA),
 		zap.Strings("labels", config.NodeLabels),
+		zap.String("host_kernel", telemetry.HostKernelVersion()),
 		logger.WithServiceInstanceID(serviceInstanceID),
 	)
 
