@@ -162,10 +162,10 @@ PY
 # in-page anchors are somebody else's business; every other target has to
 # exist on disk, relative to the README that names it. Fenced code blocks are
 # dropped first: a `](` inside one is not a link.
-@test "every relative Markdown link in the four READMEs resolves" {
+@test "every relative Markdown link in the four READMEs and the reference resolves" {
   local checked=0 readme dir target
   for readme in README.md compose/README.md terraform/gcp/README.md \
-                kubernetes/README.md; do
+                kubernetes/README.md docs/REFERENCE.md; do
     [ -f "$readme" ] || { echo "$readme is missing" >&2; return 1; }
     dir="$(dirname "$readme")"
     while IFS= read -r target; do

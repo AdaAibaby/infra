@@ -178,7 +178,7 @@ install does not ship one. It cannot override a key already set in the api
 
 ### What runs where
 
-The hub's [What runs where](../README.md#what-runs-where) has the services.
+The reference's [What runs where](../docs/REFERENCE.md#what-runs-where) has the services.
 This is what they do to the host, which is why it should be a dedicated host
 or VM: on every `up`, `host-setup`
 
@@ -282,8 +282,8 @@ The api's own two secrets, `ADMIN_TOKEN` and
 `seed-state` volume as `/run/e2b/api.env`, a file only root can read, as
 `GEN_ADMIN_TOKEN` and `GEN_SANDBOX_ACCESS_TOKEN_HASH_SEED`; a later run finds
 them again and the api's entrypoint reads them; nothing prints them, and
-`down -v` drops them with the databases. The hub's
-[Secrets](../README.md#secrets) says what the two are for.
+`down -v` drops them with the databases. The reference's
+[Secrets](../docs/REFERENCE.md#secrets) says what the two are for.
 
 To choose your own instead, put them in `.env` before the first `up`. A value
 there wins over the generated one, one variable at a time, and the install is
@@ -429,7 +429,7 @@ Changing an E2B component pin means editing `.env` and, for a binary, the
 checksums in [`scripts/fetch-artifacts.sh`](scripts/fetch-artifacts.sh); then
 `make images` builds the three stack images locally under their pinned tags,
 and `docker compose up -d --wait` **without** `--pull always` uses the images
-just built rather than the published ones. The hub's
-[Developing](../README.md#developing) covers `make lint`, `make test`,
+just built rather than the published ones. The reference's
+[Developing](../docs/REFERENCE.md#developing) covers `make lint`, `make test`,
 `make sync-configs` and `make stores-check`, all of which run from the package
 root.
