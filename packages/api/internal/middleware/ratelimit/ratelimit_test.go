@@ -243,7 +243,12 @@ func TestIntegration_Refill(t *testing.T) {
 
 	redisClient := redis_utils.SetupInstance(t)
 	limiter := redis_rate.NewLimiter(redisClient)
-	ff := newTestFF(t, routeConfig(10, 2))
+	// One token every 2s: slow enough that a loaded runner cannot refill a
+	// token mid-drain (a 100ms refill raced the three requests below and the
+	// deny assertion saw 200), fast enough for the refill poll to finish.
+	ff := newTestFF(t, map[string]map[string]int{
+		testRoute: {"rate": 1, "burst": 2, "period_s": 2},
+	})
 
 	r := newRouterWithTeam(t, limiter, Config{FailOpen: true}, ff, uuid.New())
 
@@ -255,11 +260,11 @@ func TestIntegration_Refill(t *testing.T) {
 	w := doRequest(t, r)
 	assert.Equal(t, http.StatusTooManyRequests, w.Code)
 
-	// Wait for refill (rate=10/s → one token every 100ms).
-	time.Sleep(200 * time.Millisecond)
-
-	w = doRequest(t, r)
-	assert.Equal(t, http.StatusOK, w.Code)
+	// A denied request consumes no token, so poll until one refills instead
+	// of sleeping through a fixed window.
+	require.Eventually(t, func() bool {
+		return doRequest(t, r).Code == http.StatusOK
+	}, 10*time.Second, 50*time.Millisecond, "no token was refilled")
 }
 
 func TestIntegration_IndependentTeams(t *testing.T) {
