@@ -579,7 +579,9 @@ func (f *Factory) offlineSwap() func(ctx context.Context, rootfsPath, srcPath st
 		return f.swapEnvdBinary
 	}
 
-	return rootfs.SwapEnvdBinary
+	return func(ctx context.Context, rootfsPath, srcPath string) (rootfs.SwapResult, error) {
+		return rootfs.SwapEnvdBinary(ctx, rootfsPath, srcPath, f.config.OrchestratorBaseDir)
+	}
 }
 
 // NewFactory builds the sandbox factory. It takes a context because it does

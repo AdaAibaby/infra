@@ -51,6 +51,12 @@ VERSION_LDFLAGS :=
 ifneq ($(strip $(VERSION)),)
 VERSION_LDFLAGS := -X=github.com/e2b-dev/infra/packages/orchestrator/pkg/version.Version=$(VERSION)
 endif
+BUILD_TAGS :=
+STATIC_LDFLAGS :=
+ifeq ($(STATIC),1)
+BUILD_TAGS := -tags netgo,osusergo
+STATIC_LDFLAGS := -linkmode external -extldflags -static
+endif
 
 .PHONY: init
 init:
@@ -75,8 +81,8 @@ fetch-busybox:
 build-local:
 	# Allow for passing commit sha directly for docker builds
 	$(eval COMMIT_SHA ?= $(shell git rev-parse --short HEAD))
-	CGO_ENABLED=1 GOOS=linux GOARCH=$(BUILD_ARCH) go build -o bin/orchestrator -ldflags "-X=main.commitSHA=$(COMMIT_SHA) $(VERSION_LDFLAGS)" .
-	CGO_ENABLED=1 GOOS=linux GOARCH=$(BUILD_ARCH) go build -o bin/clean-nfs-cache -ldflags "-X=main.commitSHA=$(COMMIT_SHA) $(VERSION_LDFLAGS)" ./cmd/clean-nfs-cache
+	CGO_ENABLED=1 GOOS=linux GOARCH=$(BUILD_ARCH) go build $(BUILD_TAGS) -o bin/orchestrator -ldflags "-X=main.commitSHA=$(COMMIT_SHA) $(VERSION_LDFLAGS) $(STATIC_LDFLAGS)" .
+	CGO_ENABLED=1 GOOS=linux GOARCH=$(BUILD_ARCH) go build $(BUILD_TAGS) -o bin/clean-nfs-cache -ldflags "-X=main.commitSHA=$(COMMIT_SHA) $(VERSION_LDFLAGS) $(STATIC_LDFLAGS)" ./cmd/clean-nfs-cache
 
 # Compiler flags for debug builds. The default disables optimizations and
 # inlining so binaries are debugger-friendly. CI overrides this with an empty

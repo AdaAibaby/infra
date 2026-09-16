@@ -213,7 +213,8 @@ func ExtractToExt4(ctx context.Context, l logger.Logger, img containerregistry.I
 	ctx, childSpan := tracer.Start(ctx, "extract-to-ext4")
 	defer childSpan.End()
 
-	tmpMount, err := os.MkdirTemp("", "ext4-mount")
+	tempRoot := filepath.Dir(rootfsPath)
+	tmpMount, err := os.MkdirTemp(tempRoot, ".ext4-mount-")
 	if err != nil {
 		return fmt.Errorf("error creating temporary mount point: %w", err)
 	}
@@ -238,7 +239,7 @@ func ExtractToExt4(ctx context.Context, l logger.Logger, img containerregistry.I
 		zap.String("tmp_mount", tmpMount),
 	)
 
-	err = unpackRootfs(ctx, l, img, tmpMount, maxSize)
+	err = unpackRootfs(ctx, l, img, tmpMount, tempRoot, maxSize)
 	if err != nil {
 		return fmt.Errorf("error extracting tar to directory: %w", err)
 	}
@@ -266,16 +267,18 @@ func ParseEnvs(envs []string) map[string]string {
 	return envMap
 }
 
-func unpackRootfs(ctx context.Context, l logger.Logger, srcImage containerregistry.Image, destDir string, maxSize int64) (err error) {
+func unpackRootfs(ctx context.Context, l logger.Logger, srcImage containerregistry.Image, destDir string, tempRoot string, maxSize int64) (err error) {
 	ctx, childSpan := tracer.Start(ctx, "unpack-rootfs")
 	defer childSpan.End()
 
-	ociPath, err := os.MkdirTemp("", "oci-image")
+	ociPath, err := os.MkdirTemp(tempRoot, ".oci-image-")
 	if err != nil {
 		return fmt.Errorf("while creating temporary file for squashed image: %w", err)
 	}
 	defer func() {
-		go os.RemoveAll(ociPath)
+		if removeErr := os.RemoveAll(ociPath); removeErr != nil {
+			logger.L().Error(ctx, "error removing temporary OCI image", zap.Error(removeErr))
+		}
 	}()
 
 	// Create export of layers in the temporary directory
@@ -285,12 +288,14 @@ func unpackRootfs(ctx context.Context, l logger.Logger, srcImage containerregist
 	}
 
 	// Mount the overlay filesystem with the extracted layers
-	mountPath, err := os.MkdirTemp("", "overlayfs-mount")
+	mountPath, err := os.MkdirTemp(tempRoot, ".overlayfs-mount-")
 	if err != nil {
 		return fmt.Errorf("while creating temporary file for squashed image: %w", err)
 	}
 	defer func() {
-		go os.RemoveAll(mountPath)
+		if removeErr := os.RemoveAll(mountPath); removeErr != nil {
+			logger.L().Error(ctx, "error removing temporary overlayfs mount point", zap.Error(removeErr))
+		}
 	}()
 
 	err = filesystem.MountOverlayFS(ctx, layers, mountPath)
