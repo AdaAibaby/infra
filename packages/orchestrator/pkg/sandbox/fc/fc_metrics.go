@@ -59,6 +59,11 @@ var (
 	fcBlockFails         = utils.Must(telemetry.GetCounter(fcMeter, telemetry.SandboxFCBlockFails))
 	fcBlockNoAvailBuffer = utils.Must(telemetry.GetCounter(fcMeter, telemetry.SandboxFCBlockNoAvailBuffer))
 
+	// Refused snapshot loads, by reason. Recorded from the API error rather
+	// than from the metrics FIFO: a refused load stops the Firecracker process
+	// before it flushes, so its own metrics never carry the failure.
+	fcSnapshotLoadFailures = utils.Must(telemetry.GetCounter(fcMeter, telemetry.SandboxFCSnapshotLoadFailures))
+
 	// Block histograms.
 	fcBlockBytes                 = utils.Must(telemetry.GetHistogram(fcMeter, telemetry.SandboxFCBlockBytes))
 	fcBlockCount                 = utils.Must(telemetry.GetHistogram(fcMeter, telemetry.SandboxFCBlockCount))

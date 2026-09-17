@@ -12,6 +12,8 @@ import (
 	"github.com/firecracker-microvm/firecracker-go-sdk"
 	openapiruntime "github.com/go-openapi/runtime"
 	"github.com/go-openapi/strfmt"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/template"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/uffd/memory"
@@ -80,6 +82,10 @@ func (c *apiClient) loadSnapshot(
 
 	_, err := c.client.Operations.LoadSnapshot(&snapshotConfig)
 	if err != nil {
+		reason := classifySnapshotLoadFailure(err)
+		fcSnapshotLoadFailures.Add(ctx, 1, metric.WithAttributes(attribute.String("reason", string(reason))))
+		span.SetAttributes(attribute.String("snapshot_load.failure_reason", string(reason)))
+
 		return fmt.Errorf("error loading snapshot: %w", err)
 	}
 

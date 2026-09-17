@@ -476,6 +476,36 @@ const (
 	// Carry a direction=read/write attribute where applicable.
 	SandboxFCBlockFails         CounterType = "orchestrator.sandbox.fc.block.fails"
 	SandboxFCBlockNoAvailBuffer CounterType = "orchestrator.sandbox.fc.block.no_avail_buffer"
+
+	// SandboxFCSnapshotLoadFailures counts snapshot loads Firecracker refused,
+	// by reason. A refused load makes its template unusable rather than slow:
+	// the sandbox cannot start on any host that reads the same snapshot, so
+	// every attempt fails and the caller sees an error. Until this counter,
+	// such a failure was visible only as success=false on
+	// orchestrator.sandbox.create.duration, indistinguishable from an envd
+	// timeout, and otherwise only in the Firecracker log line.
+	//
+	// reason is bounded and never carries the fault text itself, which is
+	// influenced by snapshot contents:
+	//   vcpu_msr        the snapshot carries an MSR the reading host's kernel
+	//                   will not accept — a kernel difference, not a CPU one.
+	//   vcpu_other      vCPU restore failed for any other reason.
+	//   bad_request     every other refusal, and where an unclassified fault
+	//                   lands: memory backend, snapshot version, unreadable
+	//                   snapshot file, or a fault a later Firecracker words
+	//                   differently.
+	//   unavailable     the API answered a non-400 status, so the load never
+	//                   reached the snapshot.
+	//   transport       the API socket could not be reached or replied
+	//                   unintelligibly; says nothing about the snapshot.
+	//   timeout         no answer before the request deadline; the load
+	//                   overran and the sandbox never resumed, so it counts.
+	//   canceled        the caller went away mid-load; not a broken snapshot.
+	//
+	// Alert on the total excluding canceled rather than on one reason: a
+	// failure mode we have not seen still counts, under bad_request, and the
+	// breakdown is for reading afterwards.
+	SandboxFCSnapshotLoadFailures CounterType = "orchestrator.sandbox.fc.snapshot_load.failures"
 )
 
 const (
@@ -597,6 +627,8 @@ var counterDesc = map[CounterType]string{
 	SandboxFCBlockFails:         "Total Firecracker VMM block device execution/event failures",
 	SandboxFCBlockNoAvailBuffer: "Total Firecracker VMM block events where no virtqueue buffer was available",
 
+	SandboxFCSnapshotLoadFailures: "Total snapshot loads refused by Firecracker (reason=vcpu_msr|vcpu_other|bad_request|unavailable|transport|timeout|canceled)",
+
 	ApiRedisStoragePublisherPublished: "Total Redis PUBLISH calls completed by the storage publisher (result=success|failure)",
 	ApiRedisStoragePublisherDropped:   "Total storage notifications dropped before reaching Redis (reason=queue_full|closed)",
 
@@ -657,6 +689,8 @@ var counterUnits = map[CounterType]string{
 
 	SandboxFCBlockFails:         "{error}",
 	SandboxFCBlockNoAvailBuffer: "{event}",
+
+	SandboxFCSnapshotLoadFailures: "{failure}",
 
 	ApiRedisStoragePublisherPublished: "{notification}",
 	ApiRedisStoragePublisherDropped:   "{notification}",
