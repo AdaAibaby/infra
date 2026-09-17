@@ -8,10 +8,11 @@ guides cover what differs per shape.
 ## What runs where
 
 The 4 stores run in containers on a bridge network with their ports on
-`127.0.0.1`. api, client-proxy and the released orchestrator run on the
-machine's own network. The orchestrator is a host process, launched through
-`nsenter` by a privileged container, the same pattern E2B's own Kubernetes
-deployment uses. Its launcher ends every sandbox when it stops.
+`127.0.0.1`. api, client-proxy, dashboard-api, the dashboard and the released
+orchestrator run on the machine's own network. The orchestrator is a host
+process, launched through `nsenter` by a privileged container, the same
+pattern E2B's own Kubernetes deployment uses. Its launcher ends every sandbox
+when it stops.
 
 8 one-shots run before the stack is usable, in this order:
 
@@ -30,6 +31,10 @@ instead. `ready` is the marker that everything above worked. It is a
 long-running container, not a one-shot, and its readiness is the whole
 stack's.
 
+dashboard-api starts once `db-migrator` and `api-secrets` are done and reaches
+the same stores as the api; the dashboard starts once api and dashboard-api
+are healthy.
+
 ### Ports on loopback
 
 Everything outside the hub's ports table stays on loopback. Postgres is on
@@ -39,7 +44,7 @@ and its interserver port, since the pod shares the node's network. Vector's
 log listener is on 30006 (20006 on Kubernetes, for the reason that guide
 gives) and its API on 44313, on Kubernetes only. The 2 pprof endpoints are
 6060 for api and 6061 for the orchestrator. `sudo ss -ltnp` on the machine
-confirms the split: the 11 ports in the hub's table show a `*:` address,
+confirms the split: the 13 ports in the hub's table show a `*:` address,
 everything here shows `127.0.0.1:`.
 
 Port 5008 creates and kills sandboxes and starts template builds. Nothing
@@ -65,9 +70,16 @@ no Loki in this stack, and the api needs no `LOKI_URL`.
 The team API key is per install. The seed generates it on the first start and
 keeps it beside the databases, so a shape never has a key without its
 database or a database without its key. Every shape prints it with the 2 SDK
-URLs. Each guide's Secrets section says where its copy lives and how to pin
-or rotate it. A rotation revokes the old key, which keeps working for up to
-5 minutes: the api caches team lookups in Redis for that long.
+URLs and the dashboard URL. Each guide's Secrets section says where its copy
+lives and how to pin or rotate it. A rotation revokes the old key, which keeps
+working for up to 5 minutes: the api caches team lookups in Redis for that
+long.
+
+The dashboard takes that same key in its key form and keeps it in an httpOnly
+browser cookie for a year; sign-out clears it, and rotating the key signs
+every browser out. Embed serves the dashboard over plain http, so the cookie
+is not marked Secure (`DASHBOARD_COOKIE_SECURE=false`); a browser on a
+plain-http address would otherwise drop it and the key form would loop.
 
 `ADMIN_TOKEN` and `SANDBOX_ACCESS_TOKEN_HASH_SEED` are the api's own 2, and
 every shape generates them per install too. Compose writes them on the first
@@ -75,7 +87,9 @@ start into the volume that holds the team key (`/run/e2b/api.env` in
 `seed-state`). Terraform writes generated ones into the instance's `.env` at
 first boot. Kubernetes reads the Secret the install creates. On Compose,
 setting either one in `.env` pins it and leaves the other generated; each
-guide's Secrets section says how to rotate what its shape holds.
+guide's Secrets section says how to rotate what its shape holds. dashboard-api
+reads the admin token the same way on each shape, so rotating it means
+recreating dashboard-api as well as the api.
 
 Both are worth guarding. The admin token is admin over the seeded team on
 port 3000 without the team API key, including minting and revoking API keys;
@@ -85,33 +99,38 @@ reaches 3002.
 
 ## Images and pins
 
-[`compose/.env`](../compose/.env) is the source of truth for every version
-the stack uses: the 4 released E2B service images (api, db-migrator,
-client-proxy, clickhouse-migrator), the 3 stack images Embed builds itself,
-and the 5 Firecracker binaries. The stack images carry everything that is not
+[`compose/.env`](../compose/.env) is the source of truth for every E2B
+version the stack uses: the 5 released E2B service images (api, db-migrator,
+dashboard-api, client-proxy, clickhouse-migrator), the dashboard image, the 3
+stack images Embed builds itself, and the 5 Firecracker binaries. The 4 store
+images are pinned inline in [`compose/compose.yaml`](../compose/compose.yaml)
+and repeated in the StatefulSet. The stack images carry everything that is not
 a released E2B service: the host scripts, the SDK scripts and the database
-seeder. Terraform ships that file to the instance, and Kubernetes repeats its
+seeder. Terraform ships the `.env` to the instance, and Kubernetes repeats its
 pins in [`kubernetes/kustomization.yaml`](../kubernetes/kustomization.yaml).
 The 3 stack images live in the `embed` repository of the `e2b-artifacts`
 registry.
 
 Embed is released together with the platform at one version. That release
-moves every platform pin in both files to it: api, db-migrator, client-proxy,
-clickhouse-migrator, the orchestrator and the 3 stack images, the lines
-carrying a release marker. A checkout at a release therefore names one
-version everywhere and pulls exactly what that release published; see
-[RELEASING.md](../../docs/RELEASING.md). envd has its own release line, and
-the kernel, Firecracker and BusyBox are not released here, so those 4 are
-pinned by hand. A bump adds the binary's checksum to
+moves every platform pin in both files to it: api, db-migrator,
+dashboard-api, client-proxy, clickhouse-migrator, the orchestrator and the 3
+stack images, the lines carrying a release marker. A checkout at a release
+therefore names one version everywhere and pulls exactly what that release
+published; see [RELEASING.md](../../docs/RELEASING.md). envd has its own
+release line, and the kernel, Firecracker and BusyBox are not released here,
+so those 4 are pinned by hand. A bump adds the binary's checksum to
 [`compose/scripts/fetch-artifacts.sh`](../compose/scripts/fetch-artifacts.sh)
 first. The orchestrator needs no row: each release writes a `.sha256` beside
-the binary it publishes, and `fetch-artifacts` verifies against it. All of it
-is public and pulled anonymously; the stores come from Docker Hub.
+the binary it publishes, and `fetch-artifacts` verifies against it. The
+dashboard image is released from its own repository
+(github.com/e2b-dev/dashboard, tags `vX.Y.Z`) and is pinned by hand too; its
+line carries no release marker. All of it is public and pulled anonymously;
+the stores come from Docker Hub.
 
-The 7 pinned images are published for both architectures. `fetch-artifacts`
+The 9 pinned images are published for both architectures; `fetch-artifacts`
 verifies the arm64 orchestrator and envd against the `.sha256` their release
-writes beside the object; a pin with no such object stops with a `FIX:` line
-naming it.
+writes beside the object; a pin with no such
+object stops with a `FIX:` line naming it.
 
 To pin an install, pin the commit. The Compose files come from raw URLs, so
 put the commit in place of `main` in their path. The Terraform `source` and
@@ -121,7 +140,7 @@ URLs the guides use give the newest.
 ![Layer map: source files, build definitions, images, services](layer-map.svg)
 
 Top to bottom: the source files, the Dockerfiles that copy them, the images
-(3 built here, 8 pulled ready-made) and the compose services. Arrows in the
+(3 built here, 10 pulled ready-made) and the compose services. Arrows in the
 last band are `depends_on` gates, in start order. The stripe on each service
 says which image it runs. 2 things the picture leaves out: the ClickHouse and
 Vector configs are inlined into [`compose/compose.yaml`](../compose/compose.yaml)
@@ -154,6 +173,15 @@ instead:
 curl -H "E2b-Sandbox-Id: $SANDBOX_ID" -H "E2b-Sandbox-Port: 8080" http://localhost:3002/
 ```
 
+The dashboard at `http://localhost:3001`, the `E2B_DASHBOARD_URL` that
+`ready` prints, shows the same sandboxes and templates: paste `$E2B_API_KEY`
+into its key form. Its terminal and filesystem inspector reach a sandbox
+through the same header routing, at the address in `E2B_DASHBOARD_HOST`
+(default `localhost`). Terraform writes it into the instance's `.env`, and
+the Kubernetes manifest sets the same address from the node's IP; on Compose
+set it in `.env` when a browser on another machine opens the dashboard
+without a tunnel.
+
 ## Developing
 
 `make` is a developer convenience; the operator path is only `docker compose`,
@@ -185,9 +213,9 @@ log lines in `tests/fixtures/vector/` through the shipped Vector config with
 that image, with `compose/scripts/dev/vector-testconfig.py` swapping only the
 source for stdin and the sink for a JSON console, and asserts the
 `sandbox_logs` row each becomes or that it is dropped. It needs Docker,
-python3 and `jq` as well. `tests/pins.bats` keeps the 3 pins, their
-Kubernetes counterparts and the registry the images are built into in step
-with each other.
+python3 and `jq` as well. `tests/pins.bats` keeps the 3 pins, the 2 dashboard
+pins, their Kubernetes counterparts and the registry the images are built
+into in step with each other.
 
 ### Inline configs
 

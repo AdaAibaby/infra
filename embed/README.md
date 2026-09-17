@@ -37,8 +37,8 @@ deployment see [e2b.dev/enterprise](https://e2b.dev/enterprise).
   there: the databases, the templates you build and the logs all live on its
   disk.
 - **A team API key per install.** The first start generates it and prints it
-  with the 2 SDK URLs. Each guide's Secrets section says where its copy lives
-  and how to rotate it.
+  with the 2 SDK URLs and the dashboard URL. Each guide's Secrets section says
+  where its copy lives and how to rotate it.
 - **Your own templates.** `Template.build` builds through the same API on any
   shape. The build runs inside a Firecracker VM on the machine; no Docker
   daemon is involved.
@@ -50,6 +50,12 @@ deployment see [e2b.dev/enterprise](https://e2b.dev/enterprise).
   curl -H "E2b-Sandbox-Id: $SANDBOX_ID" -H "E2b-Sandbox-Port: 8080" http://localhost:3002/
   ```
 
+- **A dashboard in the browser.** Port 3001 serves the open-source E2B
+  dashboard: paste the team API key into its key form to see the sandboxes
+  and templates the SDK sees, with a terminal and a filesystem inspector on
+  each one. Those reach the sandbox through the header routing above, at
+  the address in `E2B_DASHBOARD_HOST` (default `localhost`); set it when a
+  browser on another machine opens the dashboard without a tunnel.
 - **One version everywhere.** Embed is released with the platform at one
   version, and that release moves every platform pin in
   [`compose/.env`](compose/.env) and the kustomization. To pin an install, pin
@@ -61,16 +67,19 @@ deployment see [e2b.dev/enterprise](https://e2b.dev/enterprise).
 
 ## Ports
 
-11 ports listen on every interface of the machine. The SDK needs 3000 and
-3002. The other 9 must not be reachable on any address the machine holds: give
-it no public address of its own, or firewall those 9 ports for that address as
-well, not only at the network edge.
+13 ports listen on every interface of the machine. The SDK needs 3000 and
+3002; a browser needs 3001 for the dashboard. The other 10 must not be
+reachable on any address the machine holds: give it no public address of its
+own, or firewall those 10 ports for that address as well, not only at the
+network edge.
 
 | Port | Service | Reachable from | Purpose |
 |------|---------|----------------|---------|
 | 3000 | api | trusted clients | the REST API the SDK calls |
+| 3001 | dashboard | trusted clients | the web dashboard, for a browser |
 | 3002 | client-proxy | trusted clients | sandbox traffic (header routing) |
 | 3003 | client-proxy | the machine only | health |
+| 3010 | dashboard-api | the machine only | the dashboard's backend |
 | 5007 | orchestrator | the machine only | sandbox proxy |
 | 5008 | orchestrator | the machine only | **unauthenticated** gRPC control API |
 | 5009 | api | the machine only | internal gRPC |
@@ -94,7 +103,6 @@ lists them.
   Compose guide's Requirements say why.
 - **Container-Optimized OS.** The machine needs apt, a writable `/etc` and
   glibc 2.34 or newer.
-- **No dashboard.** Only the SDK and API paths are covered.
 - **No wildcard DNS and no TLS.**
 
 ## Developing
