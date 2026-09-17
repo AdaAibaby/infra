@@ -56,8 +56,8 @@ deployment see [e2b.dev/enterprise](https://e2b.dev/enterprise).
   each one. Those reach the sandbox through the header routing above, at
   the address in `E2B_DASHBOARD_HOST` (default `localhost`); set it when a
   browser on another machine opens the dashboard without a tunnel.
-- **One version everywhere.** Embed is released with the platform at one
-  version, and that release moves every platform pin in
+- **One version everywhere.** Embed is released at the platform version once
+  that release is tagged, and that release moves every platform pin in
   [`compose/.env`](compose/.env) and the kustomization. To pin an install, pin
   the commit: put it in place of `main` in the raw URLs, or add
   `?ref=<commit>` to the git URLs.

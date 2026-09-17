@@ -29,12 +29,14 @@ Two identities:
    the patch. The timestamp sits in the patch slot, so these tags sort
    above every `MAJOR.MINOR.x` release — pin exact tags, not "highest".
 2. Conventional commits (`feat:`, `fix:`) accumulate into a release PR.
-   api, client-proxy, clickhouse-migrator, dashboard-api, embed,
+   api, client-proxy, clickhouse-migrator, dashboard-api,
    nomad-nodepool-apm and orchestrator share one coordinated SemVer with
    the rest of the platform: merging that PR tags each of them
-   `<component>-vX.Y.Z` at the same number, with changelog. envd is
-   versioned on its own and has its own release PR. (The same commits
-   arrive here through the copybara export.)
+   `<component>-vX.Y.Z` at the same number, with changelog. embed has
+   its own release PR, opened once the platform release is tagged, at
+   that same number. envd is versioned on its own and has its own
+   release PR. (The same commits arrive here through the copybara
+   export.)
 3. Either tag is a git tag only — no GitHub Release. The tag push
    publishes to `e2b-artifacts` — images as `:v<version>`, binaries as
    versioned objects in the public `e2b-artifact-binaries` bucket at

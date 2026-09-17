@@ -111,8 +111,8 @@ pins in [`kubernetes/kustomization.yaml`](../kubernetes/kustomization.yaml).
 The 3 stack images live in the `embed` repository of the `e2b-artifacts`
 registry.
 
-Embed is released together with the platform at one version. That release
-moves every platform pin in both files to it: api, db-migrator,
+Embed is released at the platform version once that release is tagged.
+That release moves every platform pin in both files to it: api, db-migrator,
 dashboard-api, client-proxy, clickhouse-migrator, the orchestrator and the 3
 stack images, the lines carrying a release marker. A checkout at a release
 therefore names one version everywhere and pulls exactly what that release
