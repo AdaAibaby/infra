@@ -217,12 +217,12 @@ server shutdown with a separate deadline, then forces server closure if needed. 
 closure recovers graceful deadline expiry; other server errors still propagate. Pprof stays
 available through service teardown; its final shutdown also has a deadline and forced-close fallback.
 
-`InfoService.ServiceInfo` reports optional `outstanding_work` for sandbox, template-builder, and
+`InfoService.ServiceInfo` reports `outstanding_work` for sandbox, template-builder, and
 mixed-role nodes. It counts overlapping work holds, not distinct sandboxes or builds, and includes
-tracked background persistence and cleanup. Reporting nodes send an explicit zero when idle;
-an absent field means unknown. The API caches this report and exposes it as optional top-level
-`outstandingWork` in admin node list and detail responses, preserving explicit zero and omitting
-unknown counts. This observational count does not authorize node deletion.
+tracked background persistence and cleanup. The producer reports zero when idle. The API caches
+this report and exposes it as required top-level `outstandingWork` in admin node list and detail
+responses, where zero also covers a node that has not reported. This observational count does not
+by itself authorize node deletion.
 
 Key mechanisms (all under `pkg/sandbox/`):
 

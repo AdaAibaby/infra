@@ -1,6 +1,7 @@
 package nodemanager
 
 import (
+	"math"
 	"sync"
 	"testing"
 
@@ -13,7 +14,7 @@ func TestMetricsOutstandingWork(t *testing.T) {
 	t.Parallel()
 
 	n := &Node{}
-	for _, work := range []*uint64{nil, new(uint64(0)), new(uint64(7)), nil} {
+	for _, work := range []uint64{0, 7, math.MaxUint64, 0} {
 		n.UpdateMetricsFromServiceInfoResponse(&orchestratorinfo.ServiceInfoResponse{OutstandingWork: work})
 		require.Equal(t, work, n.Metrics().OutstandingWork)
 	}
@@ -46,46 +47,42 @@ func TestMetricsOutstandingWorkSnapshotIsolation(t *testing.T) {
 	t.Parallel()
 
 	n := &Node{}
-	info := &orchestratorinfo.ServiceInfoResponse{OutstandingWork: new(uint64(7))}
+	info := &orchestratorinfo.ServiceInfoResponse{OutstandingWork: 7}
 	n.UpdateMetricsFromServiceInfoResponse(info)
-	*info.OutstandingWork = 8
-	require.Equal(t, new(uint64(7)), n.Metrics().OutstandingWork)
+	info.OutstandingWork = 8
+	require.Equal(t, uint64(7), n.Metrics().OutstandingWork)
 
 	snapshot := n.Metrics()
-	*snapshot.OutstandingWork = 9
-	require.Equal(t, new(uint64(7)), n.Metrics().OutstandingWork)
-
-	snapshot = n.Metrics()
 	n.UpdateMetricsFromServiceInfoResponse(info)
-	require.Equal(t, new(uint64(7)), snapshot.OutstandingWork)
-	require.Equal(t, new(uint64(8)), n.Metrics().OutstandingWork)
+	require.Equal(t, uint64(7), snapshot.OutstandingWork)
+	require.Equal(t, uint64(8), n.Metrics().OutstandingWork)
 
 	n.UpdateMetricsFromServiceInfoResponse(&orchestratorinfo.ServiceInfoResponse{})
-	require.Nil(t, n.Metrics().OutstandingWork)
-	require.Equal(t, new(uint64(7)), snapshot.OutstandingWork)
+	require.Zero(t, n.Metrics().OutstandingWork)
+	require.Equal(t, uint64(7), snapshot.OutstandingWork)
 }
 
-func TestMetricsOutstandingWorkConcurrentSnapshots(t *testing.T) {
+func TestMetricsOutstandingWorkConcurrentAccess(t *testing.T) {
 	t.Parallel()
 
 	n := &Node{}
-	work := new(uint64(7))
-	info := &orchestratorinfo.ServiceInfoResponse{OutstandingWork: work}
-	n.UpdateMetricsFromServiceInfoResponse(info)
-	snapshot := n.Metrics()
-	require.NotNil(t, snapshot.OutstandingWork)
+	n.UpdateMetricsFromServiceInfoResponse(&orchestratorinfo.ServiceInfoResponse{OutstandingWork: 7})
 
 	var wg sync.WaitGroup
 	wg.Go(func() {
-		for range 100 {
-			*work++
-			*snapshot.OutstandingWork++
+		for work := range uint64(100) {
+			n.UpdateMetricsFromServiceInfoResponse(&orchestratorinfo.ServiceInfoResponse{OutstandingWork: 1000 + work})
 		}
 	})
 	defer wg.Wait()
 
+	// The written counts sit in a band disjoint from the seed, so a torn read
+	// lands outside both. The race detector covers unsynchronized access.
 	for range 100 {
-		require.Equal(t, new(uint64(7)), n.Metrics().OutstandingWork)
-		n.UpdateMetricsFromServiceInfoResponse(&orchestratorinfo.ServiceInfoResponse{OutstandingWork: new(uint64(7))})
+		work := n.Metrics().OutstandingWork
+		if work != 7 {
+			require.GreaterOrEqual(t, work, uint64(1000))
+			require.Less(t, work, uint64(1100))
+		}
 	}
 }

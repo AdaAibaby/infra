@@ -30,7 +30,6 @@ message DiskMetrics {
   uint64 total_bytes = 5;
 }
 
-
 message MachineInfo {
   string cpu_architecture = 1;
   string cpu_family = 2;
@@ -52,8 +51,8 @@ message ServiceInfoResponse {
   repeated string labels = 55;
   google.protobuf.Timestamp service_status_changed_at = 56;
 
-  // Missing means unknown, not idle.
-  optional uint64 outstanding_work = 58;
+  // Overlapping work holds, not distinct sandboxes or builds. Zero is idle.
+  uint64 outstanding_work = 58;
 
   // Node-scoped sandbox admission limit; absent when unsupported or not an orchestrator.
   optional int64 max_sandboxes = 59;

@@ -82,7 +82,7 @@ func (s *Server) ServiceInfo(ctx context.Context, _ *emptypb.Empty) (*orchestrat
 		ServiceId:              info.ServiceId,
 		ServiceStatus:          serviceStatus.Status,
 		ServiceStatusChangedAt: timestamppb.New(serviceStatus.ChangedAt),
-		OutstandingWork:        &outstandingWork,
+		OutstandingWork:        outstandingWork,
 		MaxSandboxes:           maxSandboxes,
 
 		ServiceVersion: info.SourceVersion,

@@ -88,9 +88,6 @@ func TestServiceInfoReportsOutstandingWork(t *testing.T) {
 
 				response, err := client.ServiceInfo(t.Context(), &emptypb.Empty{})
 				require.NoError(t, err)
-				require.NotNil(t, response.OutstandingWork)
-				message := response.ProtoReflect()
-				require.True(t, message.Has(message.Descriptor().Fields().ByName("outstanding_work")))
 				require.Equal(t, want, response.GetOutstandingWork())
 				require.Zero(t, response.GetMetricSandboxesRunning())
 			}

@@ -23,7 +23,7 @@ func TestAdminNodesOutstandingWork(t *testing.T) {
 	o := &Orchestrator{nodes: smap.New[*nodemanager.Node]()}
 	o.nodes.Insert(o.scopedNodeID(n.ClusterID, n.ID), n)
 
-	for _, work := range []*uint64{nil, new(uint64(0)), new(uint64(7)), new(uint64(math.MaxUint64)), nil} {
+	for _, work := range []uint64{0, 7, math.MaxUint64, 0} {
 		n.UpdateMetricsFromServiceInfoResponse(&orchestratorinfo.ServiceInfoResponse{OutstandingWork: work})
 		nodes, err := o.AdminNodes(n.ClusterID)
 		require.NoError(t, err)
@@ -42,18 +42,7 @@ func TestAdminNodesOutstandingWork(t *testing.T) {
 		var detailJSON map[string]json.RawMessage
 		require.NoError(t, json.Unmarshal(data, &detailJSON))
 		for _, response := range []map[string]json.RawMessage{listJSON[0], detailJSON} {
-			if work == nil {
-				require.NotContains(t, response, "outstandingWork")
-			} else {
-				require.Equal(t, strconv.FormatUint(*work, 10), string(response["outstandingWork"]))
-			}
-		}
-
-		if work != nil {
-			*nodes[0].OutstandingWork = 11
-			require.Equal(t, work, detail.OutstandingWork)
-			*detail.OutstandingWork = 12
-			require.Equal(t, work, n.Metrics().OutstandingWork)
+			require.Equal(t, strconv.FormatUint(work, 10), string(response["outstandingWork"]))
 		}
 	}
 }
@@ -68,7 +57,7 @@ func TestAdminNodeOutstandingWorkSchema(t *testing.T) {
 			t.Parallel()
 
 			node := spec.Components.Schemas[name].Value
-			require.NotContains(t, node.Required, "outstandingWork")
+			require.Contains(t, node.Required, "outstandingWork")
 			work := node.Properties["outstandingWork"].Value
 			require.True(t, work.Type.Is("integer"))
 			require.Equal(t, "uint64", work.Format)

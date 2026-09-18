@@ -1904,6 +1904,7 @@ components:
         - status
         - statusChangedAt
         - sandboxCount
+        - outstandingWork
         - metrics
         - createSuccesses
         - createFails
@@ -1947,7 +1948,7 @@ components:
           type: integer
           format: uint64
           minimum: 0
-          description: Observed work holds on the node. Omitted when unknown; zero does not authorize deletion.
+          description: Cached count of work holds on the node. Zero means idle or not yet reported; it does not by itself authorize deletion.
         metrics:
           $ref: "#/components/schemas/NodeMetrics"
         createSuccesses:
@@ -1971,6 +1972,7 @@ components:
         - status
         - statusChangedAt
         - sandboxCount
+        - outstandingWork
         - createSuccesses
         - createFails
         - version
@@ -2013,7 +2015,7 @@ components:
           type: integer
           format: uint64
           minimum: 0
-          description: Observed work holds on the node. Omitted when unknown; zero does not authorize deletion.
+          description: Cached count of work holds on the node. Zero means idle or not yet reported; it does not by itself authorize deletion.
         metrics:
           $ref: "#/components/schemas/NodeMetrics"
         createSuccesses:
