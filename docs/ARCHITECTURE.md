@@ -246,6 +246,9 @@ Key mechanisms (all under `pkg/sandbox/`):
 - **Sandbox proxy** (:5007, `pkg/proxy/`): reverse-proxies incoming traffic from client-proxy to
   the sandbox's slot IP and requested port over HTTP or configured HTTPS, enforcing per-sandbox
   traffic access tokens. HTTPS backends may use self-signed certificates.
+  Shared proxy shutdown waits for H2C and upgraded connections to close and includes them in
+  forced connection cleanup. Failed H2C handshakes release their hijacked connections when the
+  handshake handler returns.
 - Writes sandbox lifecycle **events** and cgroup **host stats** to ClickHouse; exports metrics via
   OTel. Sandbox and template-build log writes go through a flag-resolved HTTP route: the legacy
   collector remains the fallback primary destination, and configured shadow destinations can mirror
