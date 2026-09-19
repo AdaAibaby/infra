@@ -14,15 +14,15 @@ ARG TARGETARCH
 # Cached golang dependencies
 WORKDIR /build/shared
 COPY ./shared/go.mod ./shared/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 WORKDIR /build/clickhouse
 COPY ./clickhouse/go.mod ./clickhouse/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 WORKDIR /build/orchestrator
 COPY ./orchestrator/go.mod ./orchestrator/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 # Copy source code
 WORKDIR /build
@@ -40,7 +40,7 @@ WORKDIR /build/orchestrator
 ARG COMMIT_SHA
 ARG VERSION
 # Use Docker's TARGETARCH (set by --platform) so GOARCH matches the container platform.
-RUN --mount=type=cache,target=/root/.cache/go-build make build-local COMMIT_SHA=${COMMIT_SHA} VERSION=${VERSION} BUILD_ARCH=${TARGETARCH}
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg/mod make build-local COMMIT_SHA=${COMMIT_SHA} VERSION=${VERSION} BUILD_ARCH=${TARGETARCH}
 
 FROM scratch AS artifacts
 

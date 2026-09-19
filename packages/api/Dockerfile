@@ -15,7 +15,7 @@ COPY ./auth/go.mod ./auth/go.sum ./auth/
 COPY ./api/go.mod ./api/go.sum ./api/
 
 # Download all module dependencies
-RUN cd /build/shared && go mod download && \
+RUN --mount=type=cache,target=/go/pkg/mod cd /build/shared && go mod download && \
     cd /build/clickhouse && go mod download && \
     cd /build/db && go mod download && \
     cd /build/auth && go mod download && \
@@ -40,7 +40,7 @@ WORKDIR /build/api
 ARG COMMIT_SHA
 ARG VERSION
 ARG EXPECTED_MIGRATION_TIMESTAMP
-RUN --mount=type=cache,target=/root/.cache/go-build GOARCH=${TARGETARCH} make build COMMIT_SHA=${COMMIT_SHA} VERSION=${VERSION} EXPECTED_MIGRATION_TIMESTAMP=${EXPECTED_MIGRATION_TIMESTAMP}
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg/mod GOARCH=${TARGETARCH} make build COMMIT_SHA=${COMMIT_SHA} VERSION=${VERSION} EXPECTED_MIGRATION_TIMESTAMP=${EXPECTED_MIGRATION_TIMESTAMP}
 
 RUN chmod +x /build/api/bin/api
 

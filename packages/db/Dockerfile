@@ -8,11 +8,11 @@ ARG TARGETARCH
 # Cached golang dependencies
 WORKDIR /build/shared
 COPY ./shared/go.mod ./shared/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 WORKDIR /build/db
 COPY ./db/go.mod ./db/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 # Copy source code
 WORKDIR /build
@@ -24,7 +24,7 @@ COPY ./db/migrations/ ./db/migrations
 
 WORKDIR /build/db
 
-RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=0 GOARCH=${TARGETARCH} go build -o ./bin/migrator ./scripts/migrator.go
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg/mod CGO_ENABLED=0 GOARCH=${TARGETARCH} go build -o ./bin/migrator ./scripts/migrator.go
 RUN chmod +x ./bin/migrator
 
 FROM alpine:${ALPINE_VERSION}

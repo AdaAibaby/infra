@@ -11,23 +11,23 @@ RUN apk add --no-cache make
 # Cached golang dependencies
 WORKDIR /build/shared
 COPY ./shared/go.mod ./shared/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 WORKDIR /build/clickhouse
 COPY ./clickhouse/go.mod ./clickhouse/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 WORKDIR /build/db
 COPY ./db/go.mod ./db/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 WORKDIR /build/auth
 COPY ./auth/go.mod ./auth/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 WORKDIR /build/dashboard-api
 COPY ./dashboard-api/go.mod ./dashboard-api/go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod go mod download
 
 # Copy source code
 WORKDIR /build
@@ -48,7 +48,7 @@ WORKDIR /build/dashboard-api
 ARG COMMIT_SHA
 ARG VERSION
 ARG EXPECTED_MIGRATION_TIMESTAMP
-RUN --mount=type=cache,target=/root/.cache/go-build GOARCH=${TARGETARCH} make build COMMIT_SHA=${COMMIT_SHA} VERSION=${VERSION} EXPECTED_MIGRATION_TIMESTAMP=${EXPECTED_MIGRATION_TIMESTAMP}
+RUN --mount=type=cache,target=/root/.cache/go-build --mount=type=cache,target=/go/pkg/mod GOARCH=${TARGETARCH} make build COMMIT_SHA=${COMMIT_SHA} VERSION=${VERSION} EXPECTED_MIGRATION_TIMESTAMP=${EXPECTED_MIGRATION_TIMESTAMP}
 RUN chmod +x /build/dashboard-api/bin/dashboard-api
 
 FROM alpine:${ALPINE_VERSION}
