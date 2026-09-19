@@ -57,7 +57,7 @@ func TestConnectChecksAndConfiguresPool(t *testing.T) {
 		WithRuntimeParam("search_path", "public"),
 	)
 	require.NoError(t, err)
-	t.Cleanup(client.Close)
+	t.Cleanup(func() { closeBounded(t, client) })
 
 	assert.EqualValues(t, 2, client.Pool().Config().MaxConns)
 	assert.Equal(t, pgx.QueryExecModeExec, client.Pool().Config().ConnConfig.DefaultQueryExecMode)
@@ -87,14 +87,23 @@ func TestAdvisoryLockSerializesOneKeyAndReleases(t *testing.T) {
 
 	// Try is non-blocking, so only a busy result is acceptable; a deadline
 	// here would turn a slow round-trip on a loaded runner into a failure.
-	_, err = client.TryAcquireAdvisoryLock(t.Context(), "held")
+	// An unexpected success must release before the assertion fails the
+	// test: the leaked lock connection would otherwise keep pgxpool's Close
+	// waiting for the rest of the go test timeout.
+	stolen, err := client.TryAcquireAdvisoryLock(t.Context(), "held")
+	if stolen != nil {
+		_ = stolen.Release(context.WithoutCancel(t.Context()))
+	}
 	require.ErrorIs(t, err, ErrAdvisoryLockBusy)
 	assert.EqualValues(t, 1, client.Pool().Stat().AcquiredConns())
 
 	// The blocking form would wait for the lock; the deadline is what ends it.
 	contended, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
-	_, err = client.AcquireAdvisoryLock(contended, "held")
+	reacquired, err := client.AcquireAdvisoryLock(contended, "held")
+	if reacquired != nil {
+		_ = reacquired.Release(context.WithoutCancel(t.Context()))
+	}
 	require.Error(t, err, "the same key acquired twice")
 
 	other, err := client.TryAcquireAdvisoryLock(t.Context(), "other")
@@ -294,9 +303,28 @@ func testClient(t *testing.T) *Client {
 		WithMaxConnections(4),
 	)
 	require.NoError(t, err)
-	t.Cleanup(client.Close)
+	t.Cleanup(func() { closeBounded(t, client) })
 
 	return client
+}
+
+// closeBounded fails instead of hanging: pgxpool's Close blocks until every
+// checked-out connection returns, so a test that leaks a session-lock
+// connection would otherwise sit in cleanup until the go test timeout.
+func closeBounded(t *testing.T, client *Client) {
+	t.Helper()
+
+	done := make(chan struct{})
+	go func() {
+		client.Close()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(30 * time.Second):
+		t.Error("client.Close did not return within 30s; a lock connection leaked")
+	}
 }
 
 func testDatabaseURL(t *testing.T) string {
