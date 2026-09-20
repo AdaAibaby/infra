@@ -155,35 +155,21 @@ func setupOverlay(t *testing.T, size int64) *block.Overlay {
 func setupNBDMount(t *testing.T, featureFlags *featureflags.Client, backend block.Device, mountOpts ...MountOption) (*DirectPathMount, string) {
 	t.Helper()
 
-	devicePool, err := NewDevicePool(64)
-	require.NoError(t, err, "failed to create device pool")
-
-	poolCtx, poolCancel := context.WithCancel(t.Context())
-	poolClosed := make(chan struct{})
-
-	go func() {
-		devicePool.Populate(poolCtx)
-		close(poolClosed)
-	}()
+	devicePool := newPartitionedPool(t)
 
 	mnt := NewDirectPathMount(backend, devicePool, featureFlags, mountOpts...)
 
 	deviceIndex, err := mnt.Open(t.Context())
 	require.NoError(t, err, "failed to open nbd mount")
 
+	// Registered after newPartitionedPool's cleanup, so the mount closes
+	// before the pool does.
 	t.Cleanup(func() {
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(t.Context()), 30*time.Second)
 		defer cancel()
 
 		if err := mnt.Close(ctx); err != nil {
 			t.Logf("failed to close nbd mount: %v", err)
-		}
-
-		poolCancel()
-		<-poolClosed
-
-		if err := devicePool.Close(ctx); err != nil {
-			t.Logf("failed to close device pool: %v", err)
 		}
 	})
 

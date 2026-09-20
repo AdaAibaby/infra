@@ -88,6 +88,12 @@ func TestPathDirect_OpenCancelledAfterConnect(t *testing.T) {
 	pool, err := NewDevicePool(1)
 	require.NoError(t, err, "failed to create device pool")
 
+	// Confine the pool to its own slot window: contention with parallel
+	// tests' pools otherwise burns the feeder's attempts on devices another
+	// pool connects first, and an exhausted feeder surfaces as ErrClosed in
+	// place of the cancellation under test.
+	claimSlotWindow(t, pool)
+
 	stop := make(chan struct{})
 	stopFeeder := sync.OnceFunc(func() { close(stop) })
 	t.Cleanup(stopFeeder)

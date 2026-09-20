@@ -268,11 +268,7 @@ func setupNBDDevice(t *testing.T, featureFlags *featureflags.Client, size int64,
 		overlay.Close()
 	})
 
-	devicePath, deviceCleanup, err := GetNBDDevice(t.Context(), overlay, featureFlags)
-	t.Cleanup(func() {
-		deviceCleanup.Run(t.Context(), 30*time.Second)
-	})
-	require.NoError(t, err, "failed to get nbd device")
+	_, devicePath := setupNBDMount(t, featureFlags, overlay)
 
 	t.Logf("NBD device path: %s", devicePath)
 

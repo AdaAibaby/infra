@@ -60,20 +60,7 @@ func TestCloseClosesTheDescriptorBeforeTheHandlerTeardown(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = featureFlags.Close(context.WithoutCancel(t.Context())) })
 
-	pool, err := NewDevicePool(16)
-	require.NoError(t, err)
-
-	poolCtx, poolCancel := context.WithCancel(t.Context())
-	poolDone := make(chan struct{})
-	go func() {
-		pool.Populate(poolCtx)
-		close(poolDone)
-	}()
-	t.Cleanup(func() {
-		poolCancel()
-		<-poolDone
-		_ = pool.Close(context.WithoutCancel(t.Context()))
-	})
+	pool := newPartitionedPool(t)
 
 	mnt := NewDirectPathMount(overlay, pool, featureFlags)
 
