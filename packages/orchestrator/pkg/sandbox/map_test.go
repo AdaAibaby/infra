@@ -506,6 +506,77 @@ func TestMapConcurrentMarkStoppingAndStoppedDoesNotResurrectLifecycle(t *testing
 	}
 }
 
+func TestMapMarkRunningRefusesCollidingLifecycle(t *testing.T) {
+	t.Parallel()
+
+	sandboxes := NewSandboxesMap()
+	oldSbx := testMapSandbox(t, "lifecycle-old")
+	newSbx := testMapSandbox(t, "lifecycle-new")
+
+	require.NoError(t, sandboxes.MarkRunning(t.Context(), oldSbx))
+
+	// The old lifecycle is still live (e.g. it crashed and nothing removed it
+	// yet): the new lifecycle must be refused, not silently dropped — a silent
+	// drop leaves its FC process running with no id-based way to reach it.
+	require.ErrorIs(t, sandboxes.MarkRunning(t.Context(), newSbx), ErrSandboxAlreadyRunning)
+
+	live, ok := sandboxes.Get(oldSbx.Runtime.SandboxID)
+	require.True(t, ok)
+	require.Same(t, oldSbx, live)
+	require.Len(t, sandboxes.LifecycleItems(), 1)
+}
+
+func TestMapMarkRunningIdempotentForSameLifecycle(t *testing.T) {
+	t.Parallel()
+
+	sandboxes := NewSandboxesMap()
+	sbx := testMapSandbox(t, "lifecycle-1")
+
+	require.NoError(t, sandboxes.MarkRunning(t.Context(), sbx))
+	require.NoError(t, sandboxes.MarkRunning(t.Context(), sbx))
+	require.Len(t, sandboxes.Items(), 1)
+	require.Len(t, sandboxes.LifecycleItems(), 1)
+}
+
+func TestSandboxCloseClearsLiveEntryWithoutMarkStopping(t *testing.T) {
+	t.Parallel()
+
+	sandboxes := NewSandboxesMap()
+	sbx := testMapSandbox(t, "lifecycle-1")
+	sbx.cleanup = NewCleanup()
+	sbx.sandboxes = sandboxes
+
+	sandboxes.MarkRunning(t.Context(), sbx)
+
+	// A crash ends the lifecycle without any explicit MarkStopping. Close must
+	// clear the live entry too, or the next resume of the same sandbox id will
+	// lose its registration against this dead entry.
+	require.NoError(t, sbx.Close(t.Context()))
+	require.Empty(t, sandboxes.Items())
+	require.Empty(t, sandboxes.LifecycleItems())
+}
+
+func TestSandboxCloseDoesNotRemoveNewerLiveLifecycle(t *testing.T) {
+	t.Parallel()
+
+	sandboxes := NewSandboxesMap()
+	oldSbx := testMapSandbox(t, "lifecycle-old")
+	oldSbx.cleanup = NewCleanup()
+	oldSbx.sandboxes = sandboxes
+	newSbx := testMapSandbox(t, "lifecycle-new")
+
+	sandboxes.MarkRunning(t.Context(), oldSbx)
+	require.True(t, sandboxes.MarkStopping(t.Context(), oldSbx.Runtime.SandboxID, oldSbx.LifecycleID))
+	require.NoError(t, sandboxes.MarkRunning(t.Context(), newSbx))
+
+	// The old lifecycle's Close must not evict the newer live lifecycle.
+	require.NoError(t, oldSbx.Close(t.Context()))
+
+	live, ok := sandboxes.Get(newSbx.Runtime.SandboxID)
+	require.True(t, ok)
+	require.Same(t, newSbx, live)
+}
+
 func testMapSandbox(t *testing.T, lifecycleID string) *Sandbox {
 	t.Helper()
 

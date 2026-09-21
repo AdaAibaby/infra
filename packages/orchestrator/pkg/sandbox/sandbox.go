@@ -216,9 +216,10 @@ type StopReason string
 const (
 	// StopReasonKilled covers Delete and the teardowns the orchestrator does
 	// itself after an operation leaves the sandbox unusable.
-	StopReasonKilled        StopReason = "killed"
-	StopReasonPaused        StopReason = "paused"
-	StopReasonCheckpointing StopReason = "checkpointing"
+	StopReasonKilled             StopReason = "killed"
+	StopReasonPaused             StopReason = "paused"
+	StopReasonCheckpointing      StopReason = "checkpointing"
+	StopReasonRegistrationFailed StopReason = "registration_failed"
 	// StopReasonCrashed is the absence of a recorded reason: nothing asked the
 	// sandbox to stop and it went down anyway.
 	StopReasonCrashed StopReason = "crashed"
@@ -1748,6 +1749,8 @@ func (s *Sandbox) Wait(ctx context.Context) error {
 func (s *Sandbox) Close(ctx context.Context) error {
 	err := s.cleanup.Run(ctx)
 	if s.sandboxes != nil {
+		// A guest exit can reach Close without an explicit MarkStopping.
+		s.sandboxes.MarkStopping(context.WithoutCancel(ctx), s.Runtime.SandboxID, s.LifecycleID)
 		s.sandboxes.MarkStopped(context.WithoutCancel(ctx), s)
 	}
 
