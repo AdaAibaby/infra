@@ -152,7 +152,12 @@ func (d *DirectPathMount) Open(ctx context.Context) (retDeviceIndex uint32, err 
 	// otherwise invisible; both add up when this is opened once per measure/resize.
 	ctx, span := tracer.Start(ctx, "direct-path-mount-open")
 
-	ctx, d.cancelfn = context.WithCancel(ctx)
+	// The dispatchers take a context only Close cancels: they serve the
+	// writeback flush Close runs before that cancel, and a dispatcher bound
+	// to the caller's context returns at its next request - that flush's
+	// write - leaving the flush to the kernel's connection timeouts and EIO.
+	handlerCtx, cancelHandlers := context.WithCancel(context.WithoutCancel(ctx))
+	d.cancelfn = cancelHandlers
 
 	defer func() {
 		// Set the device index to the one returned, correctly capture error values
@@ -223,9 +228,9 @@ func (d *DirectPathMount) Open(ctx context.Context) (retDeviceIndex uint32, err 
 			devIdx := deviceIndex
 			// Start reading commands on the socket and dispatching them to our provider
 			d.handlersWg.Go(func() {
-				handleErr := dispatch.Handle(ctx)
+				handleErr := dispatch.Handle(handlerCtx)
 				// The error is expected to happen if the nbd (socket connection) is closed
-				logger.L().Info(ctx, "closing handler for NBD commands",
+				logger.L().Info(handlerCtx, "closing handler for NBD commands",
 					zap.Error(handleErr),
 					zap.Uint32("device_index", devIdx),
 					zap.Int("socket_index", i),
@@ -333,9 +338,10 @@ func (d *DirectPathMount) Open(ctx context.Context) (retDeviceIndex uint32, err 
 // cancels the handlers and drains the dispatchers before disconnecting, and
 // releases the slot with infinite retry. Close reads the index off the mount,
 // and Open's deferred assignment has not run yet, so set it first. The context
-// Close is given has to be detached, because Close cancels Open's partway
-// through its teardown - and Close's opening flush-and-release of the
-// descriptor can block on the backend, canceled context or not.
+// Close is given has to be detached: the wait_connected caller reaches here
+// only after Open's context ended, and on that context Close's disconnect
+// wait and slot release return at once, with the device still connected and
+// the slot still taken.
 func (d *DirectPathMount) closeConnected(ctx context.Context, deviceIndex uint32, stage string) error {
 	nbdUnwoundCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("stage", stage)))
 
