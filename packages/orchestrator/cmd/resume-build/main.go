@@ -1149,6 +1149,9 @@ func (r *runner) benchmark(ctx context.Context, n int) error {
 	return lastErr
 }
 
+// placeholderEnvdVersion is not the guest's real version — see the envd version caveat in the README.
+const placeholderEnvdVersion = "1.0.0"
+
 func run(ctx context.Context, buildID string, iterations int, coldStart, noPrefetch, noEgress, verbose, shell, reboot, forceReboot bool, pauseOpts pauseOptions, runOpts runOptions, fphBenchOpts fphBenchOptions, gdbOpts gdbOptions) error {
 	// Silence other loggers unless verbose mode
 	var l logger.Logger
@@ -1341,7 +1344,7 @@ func run(ctx context.Context, buildID string, iterations int, coldStart, noPrefe
 		Vcpu:              1,
 		RamMB:             512,
 		FreePageReporting: fphBenchOpts.enabled,
-		Envd:              sandbox.EnvdMetadata{Vars: map[string]string{}, AccessToken: &token, Version: "1.0.0"},
+		Envd:              sandbox.EnvdMetadata{Vars: map[string]string{}, AccessToken: &token, Version: placeholderEnvdVersion},
 		FirecrackerConfig: fc.Config{
 			KernelVersion:      meta.Template.KernelVersion,
 			FirecrackerVersion: fcVersion,

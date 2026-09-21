@@ -85,6 +85,15 @@ Flags:
 - `-cmd-pause <cmd>` - Execute command in sandbox, then pause on success
 - `-cmd-signal-pause <cmd>` - Execute command in sandbox, then wait for `SIGUSR1` before pause
 
+**envd version caveat:**
+
+`resume-build` has no database and the snapshot metadata does not record the build's envd
+version (only the kernel and Firecracker ones), so the tool reports a fixed placeholder
+(`1.0.0`). Every `envd.version` field in its output and logs is that placeholder, **not**
+the guest's version — don't reason from it. To read the real one, mount the build's rootfs
+(`mount-build-rootfs`) and run its `/usr/bin/envd -version`, or read `X-Envd-Version`,
+which a running envd reports on `/init`.
+
 **Pause mode example:**
 
 ```bash
