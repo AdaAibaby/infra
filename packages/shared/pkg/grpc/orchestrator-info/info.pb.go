@@ -294,8 +294,8 @@ type ServiceInfoResponse struct {
 	ServiceStatusChangedAt *timestamppb.Timestamp `protobuf:"bytes,56,opt,name=service_status_changed_at,json=serviceStatusChangedAt,proto3" json:"service_status_changed_at,omitempty"`
 	// Overlapping work holds, not distinct sandboxes or builds. Zero is idle.
 	OutstandingWork uint64 `protobuf:"varint,58,opt,name=outstanding_work,json=outstandingWork,proto3" json:"outstanding_work,omitempty"`
-	// Node-scoped sandbox admission limit; absent when unsupported or not an orchestrator.
-	MaxSandboxes *int64 `protobuf:"varint,59,opt,name=max_sandboxes,json=maxSandboxes,proto3,oneof" json:"max_sandboxes,omitempty"`
+	// Nonpositive values reject sandbox creation.
+	MaxSandboxes int64 `protobuf:"varint,59,opt,name=max_sandboxes,json=maxSandboxes,proto3" json:"max_sandboxes,omitempty"`
 	// Deprecated: Marked as deprecated in info.proto.
 	MetricVcpuUsed int64 `protobuf:"varint,101,opt,name=metric_vcpu_used,json=metricVcpuUsed,proto3" json:"metric_vcpu_used,omitempty"`
 	// Deprecated: Marked as deprecated in info.proto.
@@ -432,8 +432,8 @@ func (x *ServiceInfoResponse) GetOutstandingWork() uint64 {
 }
 
 func (x *ServiceInfoResponse) GetMaxSandboxes() int64 {
-	if x != nil && x.MaxSandboxes != nil {
-		return *x.MaxSandboxes
+	if x != nil {
+		return x.MaxSandboxes
 	}
 	return 0
 }
@@ -618,7 +618,7 @@ const file_info_proto_rawDesc = "" +
 	"cpu_family\x18\x02 \x01(\tR\tcpuFamily\x12\x1b\n" +
 	"\tcpu_model\x18\x03 \x01(\tR\bcpuModel\x12$\n" +
 	"\x0ecpu_model_name\x18\x04 \x01(\tR\fcpuModelName\x12\x1b\n" +
-	"\tcpu_flags\x18\x05 \x03(\tR\bcpuFlags\"\xb8\v\n" +
+	"\tcpu_flags\x18\x05 \x03(\tR\bcpuFlags\"\xa1\v\n" +
 	"\x13ServiceInfoResponse\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\tR\x06nodeId\x12\x1d\n" +
 	"\n" +
@@ -631,8 +631,8 @@ const file_info_proto_rawDesc = "" +
 	"\fmachine_info\x186 \x01(\v2\f.MachineInfoR\vmachineInfo\x12\x16\n" +
 	"\x06labels\x187 \x03(\tR\x06labels\x12U\n" +
 	"\x19service_status_changed_at\x188 \x01(\v2\x1a.google.protobuf.TimestampR\x16serviceStatusChangedAt\x12)\n" +
-	"\x10outstanding_work\x18: \x01(\x04R\x0foutstandingWork\x12(\n" +
-	"\rmax_sandboxes\x18; \x01(\x03H\x00R\fmaxSandboxes\x88\x01\x01\x12,\n" +
+	"\x10outstanding_work\x18: \x01(\x04R\x0foutstandingWork\x12#\n" +
+	"\rmax_sandboxes\x18; \x01(\x03R\fmaxSandboxes\x12,\n" +
 	"\x10metric_vcpu_used\x18e \x01(\x03B\x02\x18\x01R\x0emetricVcpuUsed\x125\n" +
 	"\x15metric_memory_used_mb\x18f \x01(\x03B\x02\x18\x01R\x12metricMemoryUsedMb\x12(\n" +
 	"\x0emetric_disk_mb\x18g \x01(\x03B\x02\x18\x01R\fmetricDiskMb\x128\n" +
@@ -648,8 +648,7 @@ const file_info_proto_rawDesc = "" +
 	"\x16metric_hugepages_total\x18r \x01(\x04R\x14metricHugepagesTotal\x122\n" +
 	"\x15metric_hugepages_used\x18s \x01(\x04R\x13metricHugepagesUsed\x12:\n" +
 	"\x19metric_hugepages_reserved\x18t \x01(\x04R\x17metricHugepagesReserved\x12;\n" +
-	"\x1ametric_hugepage_size_bytes\x18u \x01(\x04R\x17metricHugepageSizeBytesB\x10\n" +
-	"\x0e_max_sandboxes\"W\n" +
+	"\x1ametric_hugepage_size_bytes\x18u \x01(\x04R\x17metricHugepageSizeBytes\"W\n" +
 	"\x1aServiceStatusChangeRequest\x129\n" +
 	"\x0eservice_status\x18\x02 \x01(\x0e2\x12.ServiceInfoStatusR\rserviceStatus*\\\n" +
 	"\x11ServiceInfoStatus\x12\v\n" +
@@ -713,7 +712,6 @@ func file_info_proto_init() {
 	if File_info_proto != nil {
 		return
 	}
-	file_info_proto_msgTypes[2].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{

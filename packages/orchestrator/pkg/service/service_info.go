@@ -4,7 +4,6 @@ package service
 
 import (
 	"context"
-	"slices"
 
 	"go.uber.org/zap"
 	"google.golang.org/grpc/codes"
@@ -37,10 +36,6 @@ func NewInfoService(info *ServiceInfo, sandboxes *sandbox.Map, hostMetrics *metr
 
 func (s *Server) ServiceInfo(ctx context.Context, _ *emptypb.Empty) (*orchestratorinfo.ServiceInfoResponse, error) {
 	info := s.info
-	var maxSandboxes *int64
-	if slices.Contains(info.Roles, orchestratorinfo.ServiceInfoRole_Orchestrator) {
-		maxSandboxes = new(info.MaxSandboxes.Load())
-	}
 
 	// Get host metrics for the orchestrator
 	cpuMetrics, err := s.hostMetrics.GetCPUMetrics()
@@ -83,7 +78,7 @@ func (s *Server) ServiceInfo(ctx context.Context, _ *emptypb.Empty) (*orchestrat
 		ServiceStatus:          serviceStatus.Status,
 		ServiceStatusChangedAt: timestamppb.New(serviceStatus.ChangedAt),
 		OutstandingWork:        outstandingWork,
-		MaxSandboxes:           maxSandboxes,
+		MaxSandboxes:           info.MaxSandboxes.Load(),
 
 		ServiceVersion: info.SourceVersion,
 		ServiceCommit:  info.SourceCommit,

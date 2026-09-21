@@ -54,8 +54,8 @@ message ServiceInfoResponse {
   // Overlapping work holds, not distinct sandboxes or builds. Zero is idle.
   uint64 outstanding_work = 58;
 
-  // Node-scoped sandbox admission limit; absent when unsupported or not an orchestrator.
-  optional int64 max_sandboxes = 59;
+  // Nonpositive values reject sandbox creation.
+  int64 max_sandboxes = 59;
 
   int64 metric_vcpu_used = 101 [deprecated = true];
   int64 metric_memory_used_mb = 102 [deprecated = true];

@@ -1905,6 +1905,7 @@ components:
         - statusChangedAt
         - sandboxCount
         - outstandingWork
+        - maxSandboxes
         - metrics
         - createSuccesses
         - createFails
@@ -1943,7 +1944,7 @@ components:
         maxSandboxes:
           type: integer
           format: int64
-          description: Node-scoped configured sandbox admission limit. Nonpositive values reject creation. Omitted when unknown or not an orchestrator.
+          description: Cached node-scoped sandbox admission limit. Nonpositive values reject creation.
         outstandingWork:
           type: integer
           format: uint64
@@ -1973,6 +1974,7 @@ components:
         - statusChangedAt
         - sandboxCount
         - outstandingWork
+        - maxSandboxes
         - createSuccesses
         - createFails
         - version
@@ -2010,7 +2012,7 @@ components:
         maxSandboxes:
           type: integer
           format: int64
-          description: Node-scoped configured sandbox admission limit. Nonpositive values reject creation. Omitted when unknown or not an orchestrator.
+          description: Cached node-scoped sandbox admission limit. Nonpositive values reject creation.
         outstandingWork:
           type: integer
           format: uint64

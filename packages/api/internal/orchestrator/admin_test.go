@@ -77,7 +77,7 @@ func TestAdminNodesMaxSandboxes(t *testing.T) {
 	o := &Orchestrator{nodes: smap.New[*nodemanager.Node]()}
 	o.nodes.Insert(o.scopedNodeID(n.ClusterID, n.ID), n)
 
-	for _, limit := range []*int64{nil, new(int64(200)), new(int64(320)), new(int64(0)), new(int64(-1)), nil} {
+	for _, limit := range []int64{0, 200, 320, 0, -1, 0} {
 		n.UpdateMetricsFromServiceInfoResponse(&orchestratorinfo.ServiceInfoResponse{MaxSandboxes: limit})
 		nodes, err := o.AdminNodes(n.ClusterID)
 		require.NoError(t, err)
@@ -90,11 +90,7 @@ func TestAdminNodesMaxSandboxes(t *testing.T) {
 			require.NoError(t, err)
 			var fields map[string]json.RawMessage
 			require.NoError(t, json.Unmarshal(data, &fields))
-			if limit == nil {
-				require.NotContains(t, fields, "maxSandboxes")
-			} else {
-				require.Equal(t, strconv.FormatInt(*limit, 10), string(fields["maxSandboxes"]))
-			}
+			require.Equal(t, strconv.FormatInt(limit, 10), string(fields["maxSandboxes"]))
 		}
 	}
 }
@@ -109,7 +105,7 @@ func TestAdminNodeMaxSandboxesSchema(t *testing.T) {
 			t.Parallel()
 
 			node := spec.Components.Schemas[name].Value
-			require.NotContains(t, node.Required, "maxSandboxes")
+			require.Contains(t, node.Required, "maxSandboxes")
 			limit := node.Properties["maxSandboxes"].Value
 			require.True(t, limit.Type.Is("integer"))
 			require.Equal(t, "int64", limit.Format)

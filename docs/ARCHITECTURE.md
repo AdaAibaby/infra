@@ -224,6 +224,10 @@ this report and exposes it as required top-level `outstandingWork` in admin node
 responses, where zero also covers a node that has not reported. This observational count does not
 by itself authorize node deletion.
 
+`InfoService.ServiceInfo.max_sandboxes` reports the cached node limit for every service role.
+Admin `/nodes` and `/nodes/{nodeID}` return required `maxSandboxes`, including zero. Admission,
+metrics, and node info share the value refreshed from node-scoped flags every 30 seconds.
+
 Key mechanisms (all under `pkg/sandbox/`):
 
 - **Firecracker** (`fc/`): each sandbox is one Firecracker process in its own cgroup and network
