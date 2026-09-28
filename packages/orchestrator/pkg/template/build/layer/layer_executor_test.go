@@ -17,7 +17,8 @@ import (
 
 // A build layer's upload returns its pin either way. A failed one is
 // abandoned, since its build fails and nothing will read it, so it does not
-// count among the pause layers that did not land.
+// count among the pause layers that did not land. Either way its waiters wake
+// with the upload's error.
 func TestEndLayerUpload(t *testing.T) {
 	t.Parallel()
 
@@ -32,14 +33,18 @@ func TestEndLayerUpload(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
+			uploads := sandbox.NewUploads(nil, nil, nil, nil, nil)
+			t.Cleanup(uploads.Stop)
+
 			var got []template.UploadOutcome
 			snap := &sandbox.Snapshot{BuildID: uuid.New(), FilesystemSnapshot: true, RootfsBlockSize: 4096}
-			upload, err := sandbox.NewUpload(t.Context(), nil, snap, nil, storage.CompressConfig{}, nil, storage.UseCaseBuild, nil,
+			upload, err := sandbox.NewUpload(t.Context(), uploads, snap, nil, storage.CompressConfig{}, nil, storage.UseCaseBuild, nil,
 				func(o template.UploadOutcome) { got = append(got, o) })
 			require.NoError(t, err)
 
 			endLayerUpload(t.Context(), upload, tc.uploadErr)
 			assert.Equal(t, []template.UploadOutcome{tc.want}, got)
+			assert.ErrorIs(t, upload.Wait(t.Context()), tc.uploadErr, "a waiter wakes with the upload's outcome")
 		})
 	}
 }
