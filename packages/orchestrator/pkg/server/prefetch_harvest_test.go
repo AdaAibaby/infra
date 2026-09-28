@@ -100,7 +100,7 @@ func (f *fakeHarvestTemplates) GetTemplatePinned(context.Context, string, bool, 
 	return nil, func() { f.releases++ }, nil
 }
 
-func (f *fakeHarvestTemplates) UpdateMetadata(_ string, meta metadata.Template) error {
+func (f *fakeHarvestTemplates) UpdateMetadata(_ context.Context, _ string, meta metadata.Template) error {
 	f.updated = true
 	f.updatedMeta = meta
 

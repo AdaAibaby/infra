@@ -238,7 +238,18 @@ Key mechanisms (all under `pkg/sandbox/`):
   an in-process userspace NBD server. On pause, the dirty blocks are exported as a diff.
 - **Template cache** (`template/`): templates are fetched lazily from object storage and cached
   on local disk (and optionally on a shared NFS chunk cache, or fetched peer-to-peer from other
-  nodes before upload completes).
+  nodes before upload completes). Every reader of a cached template holds a pin on it — a
+  running sandbox, a build, a peer stream, an ancestor lookup — and eviction never closes a
+  pinned template. A snapshot's own upload holds a pin while it runs and records on the entry
+  whether the snapshot landed in storage; a layer that did not land is never released, so a
+  failed upload's local copy stays until its TTL expires. When a pause, or a
+  checkpoint that resumes a fresh sandbox, publishes a new layer, the layer its sandbox ran
+  from is marked superseded if this node inserted it for an earlier pause, because no resume
+  can ask for it again. With `snapshot-cache-release-superseded` and
+  `snapshot-cache-ancestor-storage-fallback` both on, a superseded layer is released once no
+  pin holds it, its devices have resolved and its upload has landed, instead of staying until
+  its TTL expires. A descendant's upload then heals that ancestor's build data from storage,
+  and writes the same header bytes it would have written with the ancestor still cached.
 - **Networking** (`network/`): each sandbox gets a slot — a network namespace with a veth pair
   and a tap device, unique host-side IP (from a /16), NAT, and per-slot nftables egress firewall
   (with SNI/Host-inspecting TCP firewall for domain allow/deny lists). Slots are pooled and

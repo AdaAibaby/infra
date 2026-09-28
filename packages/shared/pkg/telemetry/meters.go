@@ -548,10 +548,13 @@ const (
 	//   vcpu_msr        the snapshot carries an MSR the reading host's kernel
 	//                   will not accept — a kernel difference, not a CPU one.
 	//   vcpu_other      vCPU restore failed for any other reason.
+	//   missing_file    a file the load opens does not exist (ENOENT): the
+	//                   snapshot file removed under a starting sandbox, or a
+	//                   memory backing file.
 	//   bad_request     every other refusal, and where an unclassified fault
-	//                   lands: memory backend, snapshot version, unreadable
-	//                   snapshot file, or a fault a later Firecracker words
-	//                   differently.
+	//                   lands: memory backend, snapshot version, a snapshot
+	//                   file that exists but cannot be read, or a fault a
+	//                   later Firecracker words differently.
 	//   unavailable     the API answered a non-400 status, so the load never
 	//                   reached the snapshot.
 	//   transport       the API socket could not be reached or replied
@@ -564,6 +567,14 @@ const (
 	// failure mode we have not seen still counts, under bad_request, and the
 	// breakdown is for reading afterwards.
 	SandboxFCSnapshotLoadFailures CounterType = "orchestrator.sandbox.fc.snapshot_load.failures"
+
+	// SandboxTemplateLegFaults counts a running sandbox's reads and writes that
+	// its template's backing device failed, by leg (memfile|rootfs): the
+	// memfile's page-fault data fetch, and the rootfs's NBD read, write and
+	// punch. Both legs are served for the sandbox's whole life, so a device
+	// closed under a live sandbox surfaces here rather than at snapshot load.
+	// A failure while the serving context is already done is not counted.
+	SandboxTemplateLegFaults CounterType = "orchestrator.sandbox.template_leg_faults"
 )
 
 const (
@@ -631,12 +642,15 @@ const (
 	// Header's compact Mapping is the largest long-lived allocation the
 	// orchestrator holds, and entry count alone hides its growth because
 	// headers differ in size by orders of magnitude.
-	OrchestratorTemplateCacheEntriesGaugeName        GaugeIntType = "orchestrator.templates.cache.entries"
-	OrchestratorTemplateCachePinnedGaugeName         GaugeIntType = "orchestrator.templates.cache.pinned"
-	OrchestratorTemplateCacheMappingEntriesGaugeName GaugeIntType = "orchestrator.templates.cache.mapping_entries"
-	OrchestratorTemplateCacheMappingBytesGaugeName   GaugeIntType = "orchestrator.templates.cache.mapping_bytes"
-	OrchestratorTemplateCachePinnedRefsGaugeName     GaugeIntType = "orchestrator.templates.cache.pinned_refs"
-	OrchestratorTemplateCacheOldestPinAgeGaugeName   GaugeIntType = "orchestrator.templates.cache.pinned_oldest_age"
+	OrchestratorTemplateCacheEntriesGaugeName           GaugeIntType = "orchestrator.templates.cache.entries"
+	OrchestratorTemplateCachePinnedGaugeName            GaugeIntType = "orchestrator.templates.cache.pinned"
+	OrchestratorTemplateCacheMappingEntriesGaugeName    GaugeIntType = "orchestrator.templates.cache.mapping_entries"
+	OrchestratorTemplateCacheMappingBytesGaugeName      GaugeIntType = "orchestrator.templates.cache.mapping_bytes"
+	OrchestratorTemplateCachePinnedRefsGaugeName        GaugeIntType = "orchestrator.templates.cache.pinned_refs"
+	OrchestratorTemplateCacheOldestPinAgeGaugeName      GaugeIntType = "orchestrator.templates.cache.pinned_oldest_age"
+	OrchestratorTemplateCacheLayerEntriesGaugeName      GaugeIntType = "orchestrator.templates.cache.layer_entries"
+	OrchestratorTemplateCacheLayerMappingBytesGaugeName GaugeIntType = "orchestrator.templates.cache.layer_mapping_bytes"
+	OrchestratorTemplateCacheLayersUnlandedGaugeName    GaugeIntType = "orchestrator.templates.cache.snapshot_layers_unlanded"
 
 	// Team metrics
 	TeamSandboxRunningGaugeName GaugeIntType = "e2b.team.sandbox.running"
@@ -710,7 +724,8 @@ var counterDesc = map[CounterType]string{
 	SandboxFCBlockFails:         "Total Firecracker VMM block device execution/event failures",
 	SandboxFCBlockNoAvailBuffer: "Total Firecracker VMM block events where no virtqueue buffer was available",
 
-	SandboxFCSnapshotLoadFailures: "Total snapshot loads refused by Firecracker (reason=vcpu_msr|vcpu_other|bad_request|unavailable|transport|timeout|canceled)",
+	SandboxFCSnapshotLoadFailures: "Total snapshot loads refused by Firecracker (reason=vcpu_msr|vcpu_other|missing_file|bad_request|unavailable|transport|timeout|canceled)",
+	SandboxTemplateLegFaults:      "Sandbox reads and writes its template's backing device failed (leg=memfile|rootfs)",
 
 	ApiRedisStoragePublisherPublished: "Total Redis PUBLISH calls completed by the storage publisher (result=success|failure)",
 	ApiRedisStoragePublisherDropped:   "Total storage notifications dropped before reaching Redis (reason=queue_full|closed)",
@@ -784,6 +799,7 @@ var counterUnits = map[CounterType]string{
 	SandboxFCBlockNoAvailBuffer: "{event}",
 
 	SandboxFCSnapshotLoadFailures: "{failure}",
+	SandboxTemplateLegFaults:      "{fault}",
 
 	ApiRedisStoragePublisherPublished: "{notification}",
 	ApiRedisStoragePublisherDropped:   "{notification}",
@@ -866,12 +882,15 @@ var gaugeIntDesc = map[GaugeIntType]string{
 	TeamSandboxRunningGaugeName:          "The number of sandboxes running for the team in the interval.",
 	SandboxCountGaugeName:                "Number of running sandbox instances per team.",
 
-	OrchestratorTemplateCacheEntriesGaugeName:        "Templates currently resident in the orchestrator's template cache.",
-	OrchestratorTemplateCachePinnedGaugeName:         "Resident templates pinned by at least one live sandbox, and so exempt from eviction.",
-	OrchestratorTemplateCacheMappingEntriesGaugeName: "Total header mapping entries held by resident templates.",
-	OrchestratorTemplateCacheMappingBytesGaugeName:   "Approximate heap bytes held by resident templates' header mappings.",
-	OrchestratorTemplateCachePinnedRefsGaugeName:     "Outstanding template pins, one per holder, so shared builds and leak magnitude are visible.",
-	OrchestratorTemplateCacheOldestPinAgeGaugeName:   "Age of the oldest outstanding template pin. A pin never ages out on its own.",
+	OrchestratorTemplateCacheEntriesGaugeName:           "Templates currently resident in the orchestrator's template cache.",
+	OrchestratorTemplateCachePinnedGaugeName:            "Resident templates pinned by at least one live sandbox, and so exempt from eviction.",
+	OrchestratorTemplateCacheMappingEntriesGaugeName:    "Total header mapping entries held by resident templates.",
+	OrchestratorTemplateCacheMappingBytesGaugeName:      "Approximate heap bytes held by resident templates' header mappings.",
+	OrchestratorTemplateCachePinnedRefsGaugeName:        "Outstanding template pins, one per holder, so shared builds and leak magnitude are visible.",
+	OrchestratorTemplateCacheOldestPinAgeGaugeName:      "Age of the oldest outstanding template pin. A pin never ages out on its own.",
+	OrchestratorTemplateCacheLayerEntriesGaugeName:      "Templates resident in the template cache, by how they were inserted (kind). Sums to entries.",
+	OrchestratorTemplateCacheLayerMappingBytesGaugeName: "Approximate heap bytes held by resident templates' header mappings, by kind and chain generation band. Sums to mapping_bytes.",
+	OrchestratorTemplateCacheLayersUnlandedGaugeName:    "Resident pause layers whose own upload failed for good, so this node holds the only copy. Read against orchestrator.snapshot.upload.failed.",
 }
 
 var gaugeIntUnits = map[GaugeIntType]string{
@@ -897,12 +916,15 @@ var gaugeIntUnits = map[GaugeIntType]string{
 	TeamSandboxRunningGaugeName:          "{sandbox}",
 	SandboxCountGaugeName:                "{sandbox}",
 
-	OrchestratorTemplateCacheEntriesGaugeName:        "{template}",
-	OrchestratorTemplateCachePinnedGaugeName:         "{template}",
-	OrchestratorTemplateCacheMappingEntriesGaugeName: "{entry}",
-	OrchestratorTemplateCacheMappingBytesGaugeName:   "{By}",
-	OrchestratorTemplateCachePinnedRefsGaugeName:     "{pin}",
-	OrchestratorTemplateCacheOldestPinAgeGaugeName:   "s",
+	OrchestratorTemplateCacheEntriesGaugeName:           "{template}",
+	OrchestratorTemplateCachePinnedGaugeName:            "{template}",
+	OrchestratorTemplateCacheMappingEntriesGaugeName:    "{entry}",
+	OrchestratorTemplateCacheMappingBytesGaugeName:      "{By}",
+	OrchestratorTemplateCachePinnedRefsGaugeName:        "{pin}",
+	OrchestratorTemplateCacheOldestPinAgeGaugeName:      "s",
+	OrchestratorTemplateCacheLayerEntriesGaugeName:      "{template}",
+	OrchestratorTemplateCacheLayerMappingBytesGaugeName: "{By}",
+	OrchestratorTemplateCacheLayersUnlandedGaugeName:    "{layer}",
 }
 
 func GetCounter(meter metric.Meter, name CounterType) (metric.Int64Counter, error) {

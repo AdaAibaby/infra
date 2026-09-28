@@ -462,9 +462,10 @@ func runBuild(
 }
 
 func templateSchedulingMetadata(ctx context.Context, cache *sbxtemplate.Cache, buildID string) *orchestratorgrpc.SchedulingMetadata {
-	// Use GetTemplate (not GetCachedTemplate): the optimize phase invalidates
-	// the final build from the cache, so re-fetch to resolve its headers.
-	t, err := cache.GetTemplate(ctx, buildID, false, false)
+	// A lookup that fetches on a miss: the optimize phase invalidates the final
+	// build from the cache, so re-fetch to resolve its headers.
+	t, release, err := cache.GetTemplatePinned(ctx, buildID, false, false)
+	defer release()
 	if err != nil {
 		return nil
 	}

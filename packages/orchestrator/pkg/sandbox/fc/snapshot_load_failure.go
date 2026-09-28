@@ -26,10 +26,16 @@ const (
 	snapshotLoadVcpuMSR snapshotLoadFailureReason = "vcpu_msr"
 	// snapshotLoadVcpuOther is any other vCPU restore failure.
 	snapshotLoadVcpuOther snapshotLoadFailureReason = "vcpu_other"
+	// snapshotLoadMissingFile is a file the load had to open not existing:
+	// the snapshot file, or a memory backing file. The orchestrator hands
+	// Firecracker the path and Firecracker opens it, so a snapshot file removed
+	// under a starting sandbox surfaces here and nowhere else.
+	snapshotLoadMissingFile snapshotLoadFailureReason = "missing_file"
 	// snapshotLoadBadRequest is every other refusal, and the bucket a fault we
 	// have not classified lands in: Firecracker answered 400 and did not name
-	// the vCPUs. Memory backend, snapshot version and unreadable snapshot file
-	// all arrive here, as does a reworded fault from a future version.
+	// the vCPUs. Memory backend, snapshot version and a snapshot file that
+	// exists but cannot be read all arrive here, as does a reworded fault from
+	// a future version.
 	snapshotLoadBadRequest snapshotLoadFailureReason = "bad_request"
 	// snapshotLoadUnavailable is a non-400 answer: the load never reached the
 	// snapshot.
@@ -83,6 +89,14 @@ func classifySnapshotLoadFailure(err error) snapshotLoadFailureReason {
 func classifySnapshotLoadFault(payload *models.Error) snapshotLoadFailureReason {
 	if payload == nil {
 		return snapshotLoadBadRequest
+	}
+
+	// Rust renders ENOENT as "No such file or directory (os error 2)" inside
+	// the open failure ("Failed to open snapshot file: ..."). The wrapper alone
+	// is not enough: it also carries a permission or I/O error on a file that
+	// exists.
+	if strings.Contains(payload.FaultMessage, "No such file or directory (os error 2)") {
+		return snapshotLoadMissingFile
 	}
 
 	// Firecracker nests the cause: "Failed to restore from snapshot: Failed to

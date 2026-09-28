@@ -45,13 +45,16 @@ const (
 	unpinnedGraceTTL = time.Minute
 )
 
+// ttlcacheNoTouch reads an entry without extending its TTL.
+var ttlcacheNoTouch = ttlcache.WithDisableTouchOnHit[string, Template]()
+
 var (
 	tracer     = otel.Tracer("github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/template")
 	meter      = otel.Meter("github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/template")
 	hitsMetric = utils.Must(meter.Int64Counter("orchestrator.templates.cache.hits",
 		metric.WithDescription("Requests for templates that were already cached")))
 	missesMetric = utils.Must(meter.Int64Counter("orchestrator.templates.cache.misses",
-		metric.WithDescription("Requests for templates that were not cached")))
+		metric.WithDescription("Requests for templates that were not cached (reason=insert|cold|released_layer)")))
 	memfileDedupDuration = utils.Must(telemetry.GetHistogram(meter, telemetry.OrchestratorSandboxMemfileDedupDurationName))
 
 	deadStructureOutcomeMetric = utils.Must(telemetry.GetCounter(meter, telemetry.OrchestratorDeadStructureOutcomeCounterName))
@@ -77,6 +80,16 @@ var (
 	cacheMappingBytesGauge = utils.Must(telemetry.GetGaugeInt(meter, telemetry.OrchestratorTemplateCacheMappingBytesGaugeName))
 	cachePinnedRefsGauge   = utils.Must(telemetry.GetGaugeInt(meter, telemetry.OrchestratorTemplateCachePinnedRefsGaugeName))
 	cacheOldestPinGauge    = utils.Must(telemetry.GetGaugeInt(meter, telemetry.OrchestratorTemplateCacheOldestPinAgeGaugeName))
+
+	// The same walk cut by how each entry was inserted and by its chain
+	// generation, on names of their own so the unlabelled series above keep
+	// one value per node.
+	cacheLayerEntriesGauge      = utils.Must(telemetry.GetGaugeInt(meter, telemetry.OrchestratorTemplateCacheLayerEntriesGaugeName))
+	cacheLayerMappingBytesGauge = utils.Must(telemetry.GetGaugeInt(meter, telemetry.OrchestratorTemplateCacheLayerMappingBytesGaugeName))
+
+	// Resident pause layers whose own upload failed for good. Unlabelled and
+	// apart from layer_entries, whose kinds must keep summing to entries.
+	cacheLayersUnlandedGauge = utils.Must(telemetry.GetGaugeInt(meter, telemetry.OrchestratorTemplateCacheLayersUnlandedGaugeName))
 )
 
 // Outcomes of the eviction callback, as the `reason` attribute on
@@ -136,6 +149,14 @@ type Cache struct {
 	pinMu   sync.Mutex
 	pinned  map[string]*pinnedEntry
 	retired map[*pinnedEntry]struct{}
+
+	// released remembers the builds released here for as long as their entry
+	// would have lived: set with the entry's TTL and refreshed by WasReleased
+	// where a lookup would have refreshed the entry. A later miss on one is
+	// labelled as the cost of the release rather than as a cold load, and a
+	// descendant's upload heals one as it would have healed the resident
+	// entry.
+	released *ttlcache.Cache[string, struct{}]
 }
 
 // pinnedEntry is a pinned template plus its outstanding acquisitions. Releases
@@ -193,8 +214,9 @@ func NewCache(
 	)
 
 	c := &Cache{
-		pinned:  make(map[string]*pinnedEntry),
-		retired: make(map[*pinnedEntry]struct{}),
+		pinned:   make(map[string]*pinnedEntry),
+		retired:  make(map[*pinnedEntry]struct{}),
+		released: ttlcache.New(ttlcache.WithTTL[string, struct{}](templateExpiration), ttlcache.WithDisableTouchOnHit[string, struct{}]()),
 	}
 
 	cache.OnEviction(func(ctx context.Context, _ ttlcache.EvictionReason, item *ttlcache.Item[string, Template]) {
@@ -262,6 +284,14 @@ func (c *Cache) onEvicted(ctx context.Context, item *ttlcache.Item[string, Templ
 	// themselves.
 	c.extendMu.Lock()
 
+	// The release is closing this instance itself and has counted its
+	// outcome; the callback records nothing for it.
+	if m, ok := evicted.(markable); ok && m.mark().closedDirectly {
+		c.extendMu.Unlock()
+
+		return
+	}
+
 	cached := c.cache.Get(key, ttlcache.WithDisableTouchOnHit[string, Template]())
 
 	// Reachable again as this same instance, by either route: a pin still holds
@@ -298,6 +328,8 @@ func (c *Cache) onEvicted(ctx context.Context, item *ttlcache.Item[string, Templ
 		purge(key)
 	}
 
+	noteClosedLocked(ctx, item)
+
 	c.extendMu.Unlock()
 
 	// Closed outside the lock on purpose. closeTemplate waits on the template's
@@ -322,11 +354,13 @@ func (c *Cache) Start(ctx context.Context) {
 	c.buildStore.Start(ctx)
 
 	go c.cache.Start()
+	go c.released.Start()
 }
 
 func (c *Cache) Stop() {
 	c.buildStore.Close()
 	c.cache.Stop()
+	c.released.Stop()
 	c.peers.Close()
 }
 
@@ -430,6 +464,15 @@ func (c *Cache) release(ctx context.Context, e *pinnedEntry, tok uint64) {
 	c.pinMu.Unlock()
 
 	if !retired {
+		// The last pin on a superseded layer is the edge that usually frees it:
+		// no resume can ask for it again, so neither a grace re-admit nor the
+		// rest of its TTL would serve anyone.
+		if c.releaseSupersededLocked(ctx, e.tmpl) {
+			c.extendMu.Unlock()
+
+			return
+		}
+
 		// Re-admit only if it is genuinely absent: a live entry under this key
 		// must not be replaced, or the template it holds would be dropped without
 		// Close. Checked without touching, so probing here cannot extend a live
@@ -450,6 +493,7 @@ func (c *Cache) release(ctx context.Context, e *pinnedEntry, tok uint64) {
 		return
 	}
 
+	noteGoneLocked(e.tmpl)
 	c.extendMu.Unlock()
 
 	// Off this goroutine: closeTemplate waits on the template's futures with no
@@ -586,11 +630,24 @@ func (c *Cache) registerGauges() error {
 			o.ObserveInt64(cacheOldestPinGauge, f.oldestPinAgeSeconds)
 			o.ObserveInt64(cacheMappingEntryGauge, f.mappingEntries)
 			o.ObserveInt64(cacheMappingBytesGauge, f.mappingBytes)
+			o.ObserveInt64(cacheLayersUnlandedGauge, f.unlandedLayers)
+
+			for _, kind := range layerKinds {
+				o.ObserveInt64(cacheLayerEntriesGauge, f.layerEntries[kind], metric.WithAttributes(attribute.String("kind", string(kind))))
+
+				for _, band := range generationBands {
+					o.ObserveInt64(cacheLayerMappingBytesGauge, f.layerMappingBytes[layerBand{kind, band}], metric.WithAttributes(
+						attribute.String("kind", string(kind)),
+						attribute.String("generation_band", string(band)),
+					))
+				}
+			}
 
 			return nil
 		},
 		cacheEntriesGauge, cachePinnedGauge, cachePinnedRefsGauge, cacheOldestPinGauge,
 		cacheMappingEntryGauge, cacheMappingBytesGauge,
+		cacheLayerEntriesGauge, cacheLayerMappingBytesGauge, cacheLayersUnlandedGauge,
 	)
 
 	return err
@@ -612,13 +669,25 @@ type cacheFootprint struct {
 	oldestPinAgeSeconds int64
 	mappingEntries      int64
 	mappingBytes        int64
+
+	// layerEntries and layerMappingBytes cut entries and mappingBytes; summed
+	// over their keys they equal those two.
+	layerEntries      map[layerKind]int64
+	layerMappingBytes map[layerBand]int64
+
+	// unlandedLayers counts pause layers whose upload finished with an error.
+	// An abandoned upload is not counted: nothing will read that snapshot.
+	unlandedLayers int64
 }
 
 // footprint walks the resident templates and sums what their headers hold.
 // Templates whose devices have not resolved yet contribute nothing rather than
 // blocking the collection goroutine on an in-flight fetch.
 func (c *Cache) footprint() cacheFootprint {
-	var f cacheFootprint
+	f := cacheFootprint{
+		layerEntries:      make(map[layerKind]int64, len(layerKinds)),
+		layerMappingBytes: make(map[layerBand]int64, len(layerKinds)*len(generationBands)),
+	}
 
 	seen := make(map[Template]struct{})
 
@@ -634,12 +703,19 @@ func (c *Cache) footprint() cacheFootprint {
 
 		st, ok := t.(*storageTemplate)
 		if !ok {
+			f.layerEntries[layerKindFetched]++
+
 			return
+		}
+		f.layerEntries[st.kind]++
+		if st.kind == layerKindPause && UploadOutcome(st.layerMark.upload.Load()) == UploadFailed {
+			f.unlandedLayers++
 		}
 
 		e, b := st.headerFootprint()
 		f.mappingEntries += int64(e)
 		f.mappingBytes += int64(b)
+		f.layerMappingBytes[layerBand{st.kind, generationBandOf(st.generation())}] += int64(b)
 	}
 
 	for _, item := range c.cache.Items() {
@@ -711,7 +787,7 @@ func (c *Cache) Invalidate(buildID string) {
 
 	// A pinned instance survives that Delete — the eviction callback leaves it
 	// alone — and lookups consult the pins ahead of the cache, so without this
-	// the next GetTemplate would hand back exactly the template Invalidate was
+	// the next lookup would hand back exactly the template Invalidate was
 	// called to discard, on a fresh TTL. Retire it instead: its holders keep
 	// running on the instance they started on, the next lookup builds and fetches
 	// a new one, and the last release Closes the stale instance.
@@ -738,7 +814,7 @@ func (c *Cache) InvalidateAll() {
 	c.buildStore.RemoveCache()
 }
 
-// GetTemplateOpts configures optional behavior for GetTemplate.
+// GetTemplateOpts configures optional behavior for GetTemplatePinned.
 type GetTemplateOpts struct {
 	MaxSandboxLengthHours int64
 }
@@ -793,38 +869,15 @@ func (c *Cache) getTemplateForBuild(
 	return tmpl, nil
 }
 
-// GetTemplate returns the cached template for buildID, fetching it if absent.
-// Callers holding the template for a sandbox's lifetime must use
-// GetTemplatePinned instead.
-func (c *Cache) GetTemplate(
-	ctx context.Context,
-	buildID string,
-	isSnapshot bool,
-	isBuilding bool,
-	opts ...GetTemplateOpts,
-) (Template, error) {
-	tmpl, err := c.getTemplateForBuild(ctx, buildID, isSnapshot, isBuilding)
-	if err != nil {
-		return nil, err
-	}
-
-	var maxLen int64
-	if len(opts) > 0 {
-		maxLen = opts[0].MaxSandboxLengthHours
-	}
-
-	t, _ := c.getTemplateWithFetch(ctx, tmpl, maxLen, false)
-
-	return t, nil
-}
-
-// GetTemplatePinned is GetTemplate plus a pin held for the caller, taken
-// atomically with the cache lookup. Callers that keep a template alive across a
-// sandbox's lifetime must use this rather than looking up and pinning
-// separately: eviction Closes a template, which deletes its snapfile from disk,
-// and a pin taken after the lookup can land after that decision has been made.
+// GetTemplatePinned returns the template for buildID, fetching it if absent,
+// with a pin held for the caller, taken atomically with the cache lookup. It is
+// the cache's only acquisition: eviction Closes a template, which deletes its
+// snapfile from disk, so every caller that reads a template holds a pin for as
+// long as it does, and a pin taken after the lookup could land after that
+// decision has been made.
 //
-// The returned release is idempotent and must be called on every exit path.
+// The returned release is idempotent and must be called on every exit path,
+// including when an error is returned.
 func (c *Cache) GetTemplatePinned(
 	ctx context.Context,
 	buildID string,
@@ -842,9 +895,9 @@ func (c *Cache) GetTemplatePinned(
 		maxLen = opts[0].MaxSandboxLengthHours
 	}
 
-	t, release := c.getTemplateWithFetch(ctx, tmpl, maxLen, true)
+	t, releases := c.getTemplateWithFetch(ctx, tmpl, maxLen, 1, "")
 
-	return t, release, nil
+	return t, releases[0], nil
 }
 
 func resolvedHeader(h *header.Header) *utils.SetOnce[*header.Header] {
@@ -854,9 +907,25 @@ func resolvedHeader(h *header.Header) *utils.SetOnce[*header.Header] {
 	return s
 }
 
+// UploadOutcome is how a snapshot's own upload ended, reported with the return
+// of the template cache pin AddSnapshot took for it.
+type UploadOutcome uint32
+
+const (
+	// UploadLanded: the snapshot is in storage.
+	UploadLanded UploadOutcome = iota + 1
+	// UploadFailed: an upload the API already relies on failed for good, so
+	// the local entry is the only copy of the snapshot.
+	UploadFailed
+	// UploadAbandoned: the upload never ran, or failed where nothing will read
+	// the snapshot.
+	UploadAbandoned
+)
+
 func (c *Cache) AddSnapshot(
 	ctx context.Context,
 	buildId string,
+	lineage SnapshotLineage,
 	memfileHeader *utils.SetOnce[*header.Header],
 	rootfsHeader *utils.SetOnce[*header.Header],
 	localSnapfile File,
@@ -879,7 +948,7 @@ func (c *Cache) AddSnapshot(
 	// been swapped in; it lets the dedup goroutine release the memfd the
 	// provisional source was serving from.
 	provisionalSwapDone func(),
-) error {
+) (finishUpload func(UploadOutcome), err error) {
 	switch memfileDiff.(type) {
 	case *build.NoDiff:
 	default:
@@ -952,12 +1021,13 @@ func (c *Cache) AddSnapshot(
 			provisionalSwapDone()
 		}
 
-		return fmt.Errorf("failed to create template cache from storage: %w", err)
+		return func(UploadOutcome) {}, fmt.Errorf("failed to create template cache from storage: %w", err)
 	}
 	if provisionalMemfileHeader != nil {
 		// Read once, here: Fetch, which acts on it, starts right after.
 		storageTemplate.dropProvisionalHeader = c.flags != nil && c.flags.BoolFlag(ctx, featureflags.SnapshotCacheDropProvisionalHeaderFlag)
 	}
+	storageTemplate.kind = lineage.kind()
 
 	// Use the template that is actually resident in the cache, not the local
 	// storageTemplate: on a cache hit getTemplateWithFetch discards the local one
@@ -965,7 +1035,32 @@ func (c *Cache) AddSnapshot(
 	// pre-existing entry. The swap goroutine below must call Memfile on the
 	// resident template — calling it on the discarded local instance would block
 	// forever under swapCtx (no deadline), leaking the goroutine and its pins.
-	cachedTemplate, _ := c.getTemplateWithFetch(ctx, storageTemplate, 0, false)
+	//
+	// Pinned in the same hold as the lookup, once for the snapshot's upload and,
+	// when the swap goroutine below will run, once for that goroutine, which
+	// keeps reading the template after AddSnapshot returns. The upload's pin is
+	// handed to the caller as finishUpload, which the upload calls once, when
+	// it stops reading the entry, with how it ended: the outcome is recorded on
+	// the entry before the pin is returned, and a layer that did not land is
+	// never released, so the entry that is the only copy stays on its TTL.
+	//
+	// The predecessor this snapshot abandons is marked superseded in the same
+	// hold, after this snapshot is published, so a failure inside AddSnapshot
+	// leaves it unmarked and resumable. A failure after AddSnapshot returns,
+	// such as NewUpload refusing or a fresh checkpoint failing to resume,
+	// leaves it marked; that costs at most a refetch, since a marked entry is
+	// released only once nothing, its own upload included, holds a pin on it.
+	swaps := provisionalMemfileHeader != nil
+	pins := 1
+	if swaps {
+		pins = 2
+	}
+	cachedTemplate, releases := c.getTemplateWithFetch(ctx, storageTemplate, 0, pins, lineage.supersedes())
+	finishUpload = c.uploadFinisher(cachedTemplate, releases[0])
+	var releaseSwap func()
+	if swaps {
+		releaseSwap = releases[1]
+	}
 
 	// Swap the provisional header for the deduped one once dedup finishes, so
 	// subsequent reads route dirty pages to the (compacted) deduped diff and the
@@ -973,7 +1068,7 @@ func (c *Cache) AddSnapshot(
 	// wired in at construction above. On a cache hit the resident template was
 	// built from its own header (not our provisional one), so SwapHeaderIfCurrent
 	// below is a safe no-op there.
-	if provisionalMemfileHeader != nil {
+	if swaps {
 		// Pin both the main memfile diff and the provisional diff for the window.
 		// They share a DedupedMemfdCache/memfd, but resume reads refresh only the
 		// provisional entry, so disk-pressure eviction of either would break the
@@ -998,6 +1093,7 @@ func (c *Cache) AddSnapshot(
 
 		swapCtx := context.WithoutCancel(ctx)
 		go func() {
+			defer releaseSwap()
 			// Signal the dedup goroutine on every exit (success or the error
 			// returns below) so it releases the memfd promptly. On an error the
 			// swap can't happen and the resume is already broken, so nothing needs
@@ -1059,31 +1155,42 @@ func (c *Cache) AddSnapshot(
 		}()
 	}
 
-	return nil
+	return finishUpload, nil
 }
 
-// GetCachedTemplate returns the template for buildID if it is currently in the cache.
-func (c *Cache) GetCachedTemplate(buildID string) (Template, bool) {
+// LookupPinned returns the template for buildID if it is currently cached,
+// with a pin held for the caller, taken in the same extendMu hold as the
+// lookup, exactly as GetTemplatePinned takes it. It never admits or fetches:
+// ok is false, and release a no-op, when nothing is cached for buildID.
+//
+// The returned release is idempotent and must be called once the caller stops
+// reading the template, including a template handed on to work that outlives
+// the call.
+func (c *Cache) LookupPinned(ctx context.Context, buildID string) (t Template, release func(), ok bool) {
+	c.extendMu.Lock()
+	defer c.extendMu.Unlock()
+
 	// Pinned first: a pinned template that was evicted from the TTL cache is
 	// still the one live instance for this key.
-	if t, ok := c.pinnedTemplate(buildID); ok {
-		return t, true
+	t, ok = c.pinnedTemplate(buildID)
+	if !ok {
+		item := c.cache.Get(buildID)
+		if item == nil {
+			return nil, func() {}, false
+		}
+		t = item.Value()
 	}
 
-	item := c.cache.Get(buildID)
-	if item == nil {
-		return nil, false
-	}
-
-	return item.Value(), true
+	return t, c.pinLocked(ctx, t), true
 }
 
 // UpdateMetadata overwrites the local metadata file for a cached template so that
 // subsequent calls to Template.Metadata() on this node return the updated data
 // (e.g. with freshly computed prefetch mappings) without requiring a cache
-// invalidation or GCS round-trip.
-func (c *Cache) UpdateMetadata(buildID string, meta metadata.Template) error {
-	t, ok := c.GetCachedTemplate(buildID)
+// invalidation or GCS round-trip. The template is pinned for the write.
+func (c *Cache) UpdateMetadata(ctx context.Context, buildID string, meta metadata.Template) error {
+	t, release, ok := c.LookupPinned(ctx, buildID)
+	defer release()
 	if !ok {
 		return fmt.Errorf("template %q not in cache", buildID)
 	}
@@ -1133,21 +1240,31 @@ func cleanDir(path string) error {
 	return nil
 }
 
-func (c *Cache) getTemplateWithFetch(ctx context.Context, tmpl *storageTemplate, maxSandboxLengthHours int64, pin bool) (Template, func()) {
+// getTemplateWithFetch resolves tmpl's build to its live template, admitting and
+// fetching tmpl on a miss, and takes pins pins on the result in the same hold.
+// It returns exactly pins releases. A non-empty supersedes is marked superseded
+// in that hold, after the result is published.
+func (c *Cache) getTemplateWithFetch(ctx context.Context, tmpl *storageTemplate, maxSandboxLengthHours int64, pins int, supersedes string) (Template, []func()) {
 	ttl := templateExpiration
 	if maxSandboxLengthHours > 0 {
 		ttl = max(ttl, time.Duration(maxSandboxLengthHours)*time.Hour+templateExpirationBuffer)
 	}
 
-	t, found, release := c.lookupOrAdmit(ctx, tmpl.Files().CacheKey(), tmpl, ttl, pin)
+	t, found, releases := c.lookupOrAdmitPins(ctx, tmpl.Files().CacheKey(), tmpl, ttl, pins, supersedes)
 
 	if !found {
-		missesMetric.Add(ctx, 1)
+		missesMetric.Add(ctx, 1, metric.WithAttributes(c.missReason(tmpl)))
 		// We don't want to cancel the request if the request was canceled, because it can be used by other templates
 		// It's a little bit problematic, because shutdown won't cancel the fetch
 		go tmpl.Fetch(context.WithoutCancel(ctx), c.buildStore)
 
-		return t, release
+		// Only a pause layer can be superseded, so only its fetch completion is
+		// an edge worth watching.
+		if tmpl.kind == layerKindPause {
+			go c.watchFetch(context.WithoutCancel(ctx), tmpl)
+		}
+
+		return t, releases
 	}
 
 	hitsMetric.Add(ctx, 1)
@@ -1170,7 +1287,7 @@ func (c *Cache) getTemplateWithFetch(ctx context.Context, tmpl *storageTemplate,
 		}
 	}
 
-	return t, release
+	return t, releases
 }
 
 // lookupOrAdmit resolves key to the one live template for that build — the
@@ -1186,10 +1303,31 @@ func (c *Cache) getTemplateWithFetch(ctx context.Context, tmpl *storageTemplate,
 // template the eviction decision may already have been taken, and it pins a
 // corpse whose snapfile is gone.
 func (c *Cache) lookupOrAdmit(ctx context.Context, key string, candidate Template, ttl time.Duration, pin bool) (Template, bool, func()) {
-	release := func() {}
+	pins := 0
+	if pin {
+		pins = 1
+	}
 
+	t, found, releases := c.lookupOrAdmitPins(ctx, key, candidate, ttl, pins, "")
+	if !pin {
+		return t, found, func() {}
+	}
+
+	return t, found, releases[0]
+}
+
+// lookupOrAdmitPins is lookupOrAdmit taking pins pins, each with its own
+// release, all in the one hold. It returns exactly pins releases. A non-empty
+// supersedes is marked superseded in the same hold, once key resolves to a live
+// template.
+func (c *Cache) lookupOrAdmitPins(ctx context.Context, key string, candidate Template, ttl time.Duration, pins int, supersedes string) (Template, bool, []func()) {
 	c.extendMu.Lock()
 	defer c.extendMu.Unlock()
+
+	// Deferred so it runs after the admission below, still under the lock.
+	if supersedes != "" && supersedes != key {
+		defer c.markSupersededLocked(ctx, supersedes)
+	}
 
 	// A pinned template is authoritative even if it has left the TTL cache.
 	// Without this, an eviction while pinned would let the admission below insert
@@ -1200,11 +1338,7 @@ func (c *Cache) lookupOrAdmit(ctx context.Context, key string, candidate Templat
 		// never displace a different live entry that took this key meanwhile.
 		c.getOrAdmitLocked(key, pinnedTmpl, ttl)
 
-		if pin {
-			release = c.pinLocked(ctx, pinnedTmpl)
-		}
-
-		return pinnedTmpl, true, release
+		return pinnedTmpl, true, c.pinNLocked(ctx, pinnedTmpl, pins)
 	}
 
 	item, found := c.getOrAdmitLocked(key, candidate, ttl)
@@ -1214,9 +1348,15 @@ func (c *Cache) lookupOrAdmit(ctx context.Context, key string, candidate Templat
 		c.cache.Set(key, item.Value(), ttl)
 	}
 
-	if pin {
-		release = c.pinLocked(ctx, item.Value())
+	return item.Value(), found, c.pinNLocked(ctx, item.Value(), pins)
+}
+
+// pinNLocked takes n pins on t. The caller must hold extendMu.
+func (c *Cache) pinNLocked(ctx context.Context, t Template, n int) []func() {
+	releases := make([]func(), n)
+	for i := range releases {
+		releases[i] = c.pinLocked(ctx, t)
 	}
 
-	return item.Value(), found, release
+	return releases
 }

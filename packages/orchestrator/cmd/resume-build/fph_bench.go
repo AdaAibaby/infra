@@ -159,7 +159,7 @@ func (r *runner) fphBenchOnce(ctx context.Context, opts fphBenchOptions, withFph
 
 	balloon, _ := sbx.FlushAndReadBalloonMetrics(ctx)
 
-	upload, err := sandbox.NewUpload(ctx, nil, snapshot, r.storage, storage.CompressConfig{}, nil, "", nil)
+	upload, err := sandbox.NewUpload(ctx, nil, snapshot, r.storage, storage.CompressConfig{}, nil, "", nil, nil)
 	if err != nil {
 		return fphBenchSample{pause: pauseDur, err: fmt.Errorf("upload prepare: %w", err)}
 	}

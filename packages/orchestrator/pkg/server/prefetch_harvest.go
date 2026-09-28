@@ -109,7 +109,7 @@ type harvestInstance interface {
 // harvestTemplates is the subset of the template cache the harvest uses.
 type harvestTemplates interface {
 	GetTemplatePinned(ctx context.Context, buildID string, isSnapshot, isBuilding bool, opts ...sbxtemplate.GetTemplateOpts) (sbxtemplate.Template, func(), error)
-	UpdateMetadata(buildID string, meta metadata.Template) error
+	UpdateMetadata(ctx context.Context, buildID string, meta metadata.Template) error
 }
 
 // harvestUpload is the subset of the in-flight snapshot upload the harvest waits on.
@@ -352,7 +352,7 @@ func (h *prefetchHarvester) run(
 	// remote upload succeeded.
 	meta = meta.WithPrefetch(&metadata.Prefetch{Memory: mapping})
 	var localUpdateErr error
-	if err := h.templates.UpdateMetadata(buildID, meta); err != nil {
+	if err := h.templates.UpdateMetadata(persistCtx, buildID, meta); err != nil {
 		localUpdateErr = fmt.Errorf("update local metadata: %w", err)
 		if !errors.Is(err, metadata.ErrReplaceCommitted) {
 			return result, localUpdateErr

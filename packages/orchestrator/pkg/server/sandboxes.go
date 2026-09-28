@@ -1202,13 +1202,15 @@ func (s *Server) runCheckpointUpload(ctx context.Context, sbx *sandbox.Sandbox, 
 		cancelWait()
 		if sealErr != nil {
 			// The same shape as the sync path failing fast (Run's first act
-			// is waiting this promise): finish the registered upload with
-			// the error — freeing the build's upload future — and surface
-			// it under the caller's failure code (FailedPrecondition for
+			// is waiting this promise): end the registered upload with the
+			// error — freeing the build's upload future — and surface it
+			// under the caller's failure code (FailedPrecondition for
 			// in-place: the sandbox is alive, the API restores it to
-			// Running).
+			// Running). The memfile diff is unusable, so the upload is
+			// abandoned rather than finished: nothing will read the
+			// snapshot.
 			telemetry.ReportCriticalError(ctx, "deferred memory seal failed before checkpoint upload", sealErr, telemetry.WithSandboxID(in.GetSandboxId()))
-			res.completeUpload(ctx, sealErr)
+			res.abandonUpload(ctx, sealErr)
 			if onUploadFailure != nil {
 				onUploadFailure()
 			}
@@ -1229,7 +1231,19 @@ func (s *Server) runCheckpointUpload(ctx context.Context, sbx *sandbox.Sandbox, 
 	defer cancel()
 
 	err := res.upload.Run(uploadCtx)
-	defer res.completeUpload(uploadCtx, err)
+	// A checkpoint whose upload failed is discarded — the API keeps an
+	// in-place sandbox running, and onUploadFailure kills a resume-fresh one —
+	// so its upload is abandoned rather than finished: nothing will read the
+	// snapshot.
+	uploadErr := err
+	defer func() {
+		if uploadErr != nil {
+			res.abandonUpload(uploadCtx, uploadErr)
+
+			return
+		}
+		res.completeUpload(uploadCtx, nil)
+	}()
 
 	if err != nil {
 		telemetry.ReportCriticalError(ctx, "error uploading snapshot for checkpoint", err, telemetry.WithSandboxID(in.GetSandboxId()))
@@ -1375,6 +1389,12 @@ func (s *Server) checkpointResumeFresh(ctx context.Context, sbx *sandbox.Sandbox
 		return nil, status.Errorf(codes.Internal, "error snapshotting sandbox '%s': %s", in.GetSandboxId(), err)
 	}
 
+	// Every return before runCheckpointUpload leaves the registered upload
+	// unrun. Abandon it there, so its waiters fail instead of hanging and its
+	// template cache pin is returned.
+	handoff := checkpointHandoff{res: res}
+	defer func() { handoff.settle(context.WithoutCancel(ctx), checkpointErr) }()
+
 	// Get the template for resume
 	// Pinned for the resumed sandbox's lifetime; see the Create path for why.
 	template, releaseTemplate, err := s.templateCache.GetTemplatePinned(ctx, in.GetBuildId(), true, false,
@@ -1456,7 +1476,7 @@ func (s *Server) checkpointResumeFresh(ctx context.Context, sbx *sandbox.Sandbox
 				Memory: prefetchMapping,
 			})
 
-			if err := s.templateCache.UpdateMetadata(in.GetBuildId(), res.meta); err != nil {
+			if err := s.templateCache.UpdateMetadata(ctx, in.GetBuildId(), res.meta); err != nil {
 				sbxlogger.I(resumedSbx).Warn(ctx, "failed to update local metadata with prefetch", zap.Error(err))
 			}
 		}
@@ -1464,6 +1484,7 @@ func (s *Server) checkpointResumeFresh(ctx context.Context, sbx *sandbox.Sandbox
 
 	// On upload failure, tear down the resumed sandbox — without a persisted
 	// snapshot it cannot be paused or resumed later.
+	handoff.handOff()
 	if err := s.runCheckpointUpload(ctx, resumedSbx, res, in, codes.Internal, func() {
 		resumedSbx.SetStopReason(sandbox.StopReasonKilled)
 		s.sandboxFactory.Sandboxes.MarkStopping(ctx, resumedSbx.Runtime.SandboxID, resumedSbx.LifecycleID)
@@ -1513,13 +1534,43 @@ func (s *Server) getSandboxExecutionData(sbx *sandbox.Sandbox) map[string]any {
 	}
 }
 
+// checkpointHandoff owns a checkpoint's registered upload until it is handed
+// to runCheckpointUpload, and abandons it if the checkpoint returns first.
+type checkpointHandoff struct {
+	res    *snapshotResult
+	handed bool
+}
+
+// handOff passes the upload on; settle leaves it alone from then on.
+func (h *checkpointHandoff) handOff() { h.handed = true }
+
+// settle abandons the upload unless it was handed off, failing its waiters
+// with cause, the error the checkpoint returns.
+func (h *checkpointHandoff) settle(ctx context.Context, cause error) {
+	if h.handed {
+		return
+	}
+	if cause == nil {
+		cause = errors.New("no error returned")
+	}
+
+	h.res.abandonUpload(ctx, fmt.Errorf("checkpoint abandoned before its upload started: %w", cause))
+}
+
 // snapshotResult holds the data produced by snapshotAndCacheSandbox that
 // callers need to start the background remote storage upload.
 type snapshotResult struct {
 	meta               metadata.Template
 	schedulingMetadata *orchestrator.SchedulingMetadata
 	upload             *sandbox.Upload
-	completeUpload     func(ctx context.Context, uploadErr error)
+	// completeUpload finishes the upload, reporting it landed or failed, and
+	// only uploadSnapshotAsync, whose pause or checkpoint the API already
+	// relies on, calls it with an error. abandonUpload ends an upload whose
+	// snapshot nothing will read — one that will never run, or a checkpoint's
+	// that failed: it fails the upload's waiters with the error and reports it
+	// abandoned. Both return the template cache pin.
+	completeUpload func(ctx context.Context, uploadErr error)
+	abandonUpload  func(ctx context.Context, err error)
 	// rootfsDiff is the snapshot's rootfs diff. With deferred export it is a
 	// promise-backed diff that resolves only once the background seal finishes,
 	// so the prefetch harvest waits on its CachePath before its throwaway resume
@@ -1580,9 +1631,10 @@ func (s *Server) snapshotAndCacheSandbox(
 		return nil, fmt.Errorf("error snapshotting sandbox: %w", err)
 	}
 
-	err = s.templateCache.AddSnapshot(
+	finishUpload, err := s.templateCache.AddSnapshot(
 		ctx,
 		meta.Template.BuildID,
+		snapshotLineage(buildOrigin, sbx.Template, maintainSandbox),
 		snapshot.MemorySnapshot.DiffHeader,
 		snapshot.RootfsDiffHeader,
 		snapshot.Snapfile,
@@ -1607,7 +1659,7 @@ func (s *Server) snapshotAndCacheSandbox(
 
 	// Register the upload only after the snapshot is in the local cache, so a
 	// failed AddSnapshot doesn't leave an orphan future blocking re-registration.
-	upload, err := sandbox.NewUpload(ctx, s.uploads, snapshot, s.persistence, s.config.StorageConfig.CompressConfig, s.featureFlags, storage.UseCasePause, objectMetadata)
+	upload, err := sandbox.NewUpload(ctx, s.uploads, snapshot, s.persistence, s.config.StorageConfig.CompressConfig, s.featureFlags, storage.UseCasePause, objectMetadata, finishUpload)
 	if err != nil {
 		return nil, fmt.Errorf("register upload: %w", err)
 	}
@@ -1618,9 +1670,7 @@ func (s *Server) snapshotAndCacheSandbox(
 	// completeUpload don't drift if the flag flips mid-upload.
 	peerEnabled := s.featureFlags.BoolFlag(ctx, featureflags.PeerToPeerChunkTransferFlag)
 
-	completeUpload := func(ctx context.Context, uploadErr error) {
-		upload.Finish(ctx, uploadErr)
-
+	finishPeer := func(ctx context.Context, landed bool) {
 		if !peerEnabled {
 			return
 		}
@@ -1628,13 +1678,23 @@ func (s *Server) snapshotAndCacheSandbox(
 		// Only advertise the build as fully uploaded when it actually landed.
 		// On abandon/failure the bytes are not in storage, so marking it would
 		// make chunk-serving falsely report "already uploaded".
-		if uploadErr == nil {
+		if landed {
 			s.uploadedBuilds.Set(meta.Template.BuildID, struct{}{}, ttlcache.DefaultTTL)
 		}
 
 		if err := s.peerRegistry.Unregister(ctx, meta.Template.BuildID); err != nil {
 			logger.L().Warn(ctx, "failed to unregister peer address from routing", zap.String("build_id", meta.Template.BuildID), zap.Error(err))
 		}
+	}
+
+	completeUpload := func(ctx context.Context, uploadErr error) {
+		upload.Finish(ctx, uploadErr)
+		finishPeer(ctx, uploadErr == nil)
+	}
+
+	abandonUpload := func(ctx context.Context, err error) {
+		upload.Abandon(ctx, err)
+		finishPeer(ctx, false)
 	}
 
 	if peerEnabled {
@@ -1648,12 +1708,24 @@ func (s *Server) snapshotAndCacheSandbox(
 		schedulingMetadata:   snapshot.SchedulingMetadata,
 		upload:               upload,
 		completeUpload:       completeUpload,
+		abandonUpload:        abandonUpload,
 		objectMetadata:       objectMetadata,
 		filesystemOnly:       filesystemOnly,
 		rootfsDiff:           snapshot.RootfsDiff,
 		memoryExportDeferred: snapshot.MemoryExportDeferred,
 		waitMemorySealed:     snapshot.WaitMemorySealed,
 	}, nil
+}
+
+// snapshotLineage describes the snapshot of a sandbox running on predecessor.
+// The operation leaves predecessor behind unless it maintains the sandbox, as
+// an in-place checkpoint does.
+func snapshotLineage(origin storage.ObjectOrigin, predecessor sbxtemplate.Template, maintainSandbox bool) sbxtemplate.SnapshotLineage {
+	return sbxtemplate.SnapshotLineage{
+		Origin:              origin,
+		Predecessor:         predecessor.Files().CacheKey(),
+		AbandonsPredecessor: !maintainSandbox,
+	}
 }
 
 // uploadSnapshotAsync uploads snapshot files to remote storage in the

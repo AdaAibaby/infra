@@ -29,18 +29,54 @@ import (
 type fakeCache struct {
 	mu sync.Mutex
 	m  map[string]template.Template
+
+	// pins counts the pins LookupPinned handed out and nobody has returned.
+	pins atomic.Int64
+	// released is the builds WasReleased reports as released here.
+	released map[string]bool
+	// asks counts WasReleased calls per build: each is a touch of the real
+	// cache's release record.
+	asks map[string]int
 }
 
 func newFakeCache() *fakeCache {
-	return &fakeCache{m: make(map[string]template.Template)}
+	return &fakeCache{m: make(map[string]template.Template), released: make(map[string]bool), asks: make(map[string]int)}
 }
 
-func (f *fakeCache) GetCachedTemplate(buildID string) (template.Template, bool) {
+func (f *fakeCache) LookupPinned(_ context.Context, buildID string) (template.Template, func(), bool) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	t, ok := f.m[buildID]
+	if !ok {
+		return nil, func() {}, false
+	}
 
-	return t, ok
+	f.pins.Add(1)
+
+	return t, sync.OnceFunc(func() { f.pins.Add(-1) }), true
+}
+
+func (f *fakeCache) WasReleased(buildID string) bool {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	f.asks[buildID]++
+
+	return f.released[buildID]
+}
+
+func (f *fakeCache) askCount(buildID string) int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	return f.asks[buildID]
+}
+
+func (f *fakeCache) release(buildID string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.m, buildID)
+	f.released[buildID] = true
 }
 
 func (f *fakeCache) put(buildID string, tpl template.Template) {

@@ -108,8 +108,9 @@ func TestSmokeAllFCVersions(t *testing.T) { //nolint:paralleltest // subtests sh
 
 			// Phase 2: resume from the build
 			t.Logf("resuming build %s", buildID)
-			tmpl, err := infra.templateCache.GetTemplate(ctx, buildID, false, false)
+			tmpl, releaseTmpl, err := infra.templateCache.GetTemplatePinned(ctx, buildID, false, false)
 			require.NoError(t, err, "load template for FC %s", fcVersion)
+			t.Cleanup(releaseTmpl)
 
 			meta, err := tmpl.Metadata()
 			require.NoError(t, err)

@@ -355,8 +355,9 @@ func BenchmarkConcurrentResume(b *testing.B) {
 		require.NoError(b, err)
 	}
 
-	tmpl, err := templateCache.GetTemplate(b.Context(), buildID, false, false)
+	tmpl, releaseTmpl, err := templateCache.GetTemplatePinned(b.Context(), buildID, false, false)
 	require.NoError(b, err)
+	b.Cleanup(releaseTmpl)
 
 	// warm-up: create and destroy one sandbox to prime caches
 	b.Log("warming up: creating one sandbox to prime caches...")

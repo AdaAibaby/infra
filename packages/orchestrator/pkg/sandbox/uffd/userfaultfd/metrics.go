@@ -20,6 +20,13 @@ var meter = otel.Meter("github.com/e2b-dev/infra/packages/orchestrator/pkg/sandb
 // bytes / fault count are reported (a TimerFactory triplet).
 const serveMetricName = "orchestrator.sandbox.uffd.serve"
 
+// The UFFD handler serves a template's memfile leg; a data fetch that fails
+// after its retries is a fault on that leg.
+var (
+	memfileLegFaults     = utils.Must(telemetry.GetCounter(meter, telemetry.SandboxTemplateLegFaults))
+	memfileLegFaultAttrs = metric.WithAttributeSet(attribute.NewSet(attribute.String("leg", "memfile")))
+)
+
 // serveTimer records, per served UFFD demand fault, the serve latency (ms
 // histogram), bytes installed into the guest by this serve (counter) and the
 // serve-attempt count (counter) under serveMetricName. It is always on: the
@@ -31,6 +38,7 @@ const serveMetricName = "orchestrator.sandbox.uffd.serve"
 // the install race to a concurrent worker or prefault is recorded as
 // result="present" with zero bytes, so the bytes counter only ever counts
 // pages this serve actually copied.
+
 var serveTimer = utils.Must(telemetry.NewTimerFactory(
 	meter,
 	serveMetricName,

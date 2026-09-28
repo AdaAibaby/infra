@@ -301,7 +301,7 @@ func TestNewUpload_FilesystemSnapshotSkipsMemfileCompressConfig(t *testing.T) {
 			RootfsBlockSize:    4096,
 		}
 
-		u, err := NewUpload(t.Context(), nil, snap, nil, cfg, nil, storage.UseCaseBuild, storage.ObjectMetadata{})
+		u, err := NewUpload(t.Context(), nil, snap, nil, cfg, nil, storage.UseCaseBuild, storage.ObjectMetadata{}, nil)
 		require.NoError(t, err)
 		require.NotNil(t, u)
 	})
@@ -314,7 +314,7 @@ func TestNewUpload_FilesystemSnapshotSkipsMemfileCompressConfig(t *testing.T) {
 			RootfsBlockSize:    4096,
 		}
 
-		_, err := NewUpload(t.Context(), nil, snap, nil, cfg, nil, storage.UseCaseBuild, storage.ObjectMetadata{})
+		_, err := NewUpload(t.Context(), nil, snap, nil, cfg, nil, storage.UseCaseBuild, storage.ObjectMetadata{}, nil)
 		require.Error(t, err)
 	})
 }
@@ -727,7 +727,7 @@ func TestNewUpload_DropsProvisionalHeader(t *testing.T) {
 			for _, o := range []string{"dropped", "flag_off", "none"} {
 				before[o] = deadStructureOutcomeTotal(t, "upload_provisional_header", o)
 			}
-			_, err := NewUpload(t.Context(), nil, snap, nil, storage.CompressConfig{}, tc.ff, storage.UseCasePause, storage.ObjectMetadata{})
+			_, err := NewUpload(t.Context(), nil, snap, nil, storage.CompressConfig{}, tc.ff, storage.UseCasePause, storage.ObjectMetadata{}, nil)
 			require.NoError(t, err)
 
 			if tc.wantCleared {

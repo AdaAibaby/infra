@@ -307,13 +307,14 @@ func BenchmarkBaseImageLaunch(b *testing.B) {
 	}
 
 	// retrieve template
-	tmpl, err := templateCache.GetTemplate(
+	tmpl, releaseTmpl, err := templateCache.GetTemplatePinned(
 		b.Context(),
 		buildID,
 		false,
 		false,
 	)
 	require.NoError(b, err)
+	b.Cleanup(releaseTmpl)
 
 	tc := testContainer{
 		sandboxFactory: sandboxFactory,

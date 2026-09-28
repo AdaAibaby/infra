@@ -17,6 +17,7 @@ import (
 
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/block"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
+	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
 )
 
@@ -32,7 +33,21 @@ var (
 	nbdReadSuccess   = metric.WithAttributeSet(attribute.NewSet(attribute.String("result", "success")))
 	nbdReadFailure   = metric.WithAttributeSet(attribute.NewSet(attribute.String("result", "failure")))
 	nbdReadCancelled = metric.WithAttributeSet(attribute.NewSet(attribute.String("result", "cancelled")))
+
+	// NBD serves a template's rootfs leg.
+	nbdLegFaults     = utils.Must(telemetry.GetCounter(meter, telemetry.SandboxTemplateLegFaults))
+	nbdLegFaultAttrs = metric.WithAttributeSet(attribute.NewSet(attribute.String("leg", "rootfs")))
 )
+
+// recordLegFault counts a backend failure on the rootfs leg, unless the
+// dispatch is already shutting down.
+func recordLegFault(ctx context.Context) {
+	if ctx.Err() != nil {
+		return
+	}
+
+	nbdLegFaults.Add(ctx, 1, nbdLegFaultAttrs)
+}
 
 var ErrShuttingDown = errors.New("shutting down. Cannot serve any new requests")
 
@@ -417,6 +432,7 @@ func (d *Dispatch) cmdRead(ctx context.Context, cmd command) error {
 			// response error byte and keep the dispatch loop alive. Only
 			// writeResponse errors (dead NBD socket) escalate through d.fatal.
 			d.logger.Error(ctx, "nbd backend read failed", append(cmd.fields(), zap.Error(readErr))...)
+			recordLegFault(ctx)
 
 			return d.writeResponse(1, cmd.handle, []byte{})
 		}
@@ -459,6 +475,7 @@ func (d *Dispatch) cmdWrite(ctx context.Context, cmd command, cmdData []byte) er
 
 		if writeErr != nil {
 			d.logger.Error(ctx, "nbd backend write failed", append(cmd.fields(), zap.Error(writeErr))...)
+			recordLegFault(ctx)
 
 			return d.writeResponse(1, cmd.handle, []byte{})
 		}
@@ -509,6 +526,7 @@ func (d *Dispatch) cmdWriteZeroes(ctx context.Context, cmd command) error {
 		if zeroErr != nil {
 			respErr = 1
 			d.logger.Error(ctx, "nbd backend punch failed", append(cmd.fields(), zap.Error(zeroErr))...)
+			recordLegFault(ctx)
 		}
 
 		return d.writeResponse(respErr, cmd.handle, nil)

@@ -16,6 +16,7 @@ import (
 
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/build"
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
+	"github.com/e2b-dev/infra/packages/shared/pkg/storage"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage/header"
 )
 
@@ -185,14 +186,16 @@ func addTestSnapshot(t *testing.T, c *Cache, buildID string, provisionalDiff, pr
 	}
 
 	dir := t.TempDir()
-	require.NoError(t, c.AddSnapshot(t.Context(), buildID,
+	finishUpload, err := c.AddSnapshot(t.Context(), buildID, SnapshotLineage{Origin: storage.ObjectOriginPause},
 		resolvedHeader(deduped), resolvedHeader(mustHeader(t, uuid.New())),
 		&countingFile{path: filepath.Join(dir, "snapfile")}, &countingFile{path: filepath.Join(dir, "metadata.json")},
 		&build.NoDiff{}, &build.NoDiff{},
 		provisionalHdr, diff,
 		time.Time{},
 		onSwap,
-	))
+	)
+	require.NoError(t, err)
+	finishUpload(UploadLanded)
 
 	return deduped, swapDone
 }

@@ -1047,6 +1047,9 @@ func (u *Userfaultfd) faultPage(
 			joinedErr := errors.Join(dataErr, signalErr)
 
 			span.RecordError(joinedErr)
+			if ctx.Err() == nil {
+				memfileLegFaults.Add(ctx, 1, memfileLegFaultAttrs)
+			}
 			u.logger.Error(ctx, "UFFD serve data fetch error after retries",
 				zap.Int("attempts", attempt+1),
 				zap.Error(joinedErr),

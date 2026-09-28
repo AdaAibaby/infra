@@ -413,6 +413,18 @@ var (
 	// off does not rewrite headers written while it was on.
 	SnapshotCacheAncestorStorageFallbackFlag = NewBoolFlag("snapshot-cache-ancestor-storage-fallback", false)
 
+	// SnapshotCacheReleaseSupersededFlag lets the template cache delete a pause
+	// layer as soon as a later pause on the node has superseded it, nothing
+	// holds a pin on it and its devices have resolved, instead of keeping it
+	// to its TTL. It acts only together with
+	// SnapshotCacheAncestorStorageFallbackFlag: a released ancestor's upload
+	// future outlives its entry, and without the fallback a descendant's upload
+	// fails on it. Supersession and pins are recorded whatever the flag says;
+	// it is read wherever the release would act, so a flip takes effect at each
+	// entry's next pin return, supersession or fetch completion. Turning it off
+	// stops further releases and restores nothing already released.
+	SnapshotCacheReleaseSupersededFlag = NewBoolFlag("snapshot-cache-release-superseded", false)
+
 	// ResumeOriginNodeRemapFlag enables repointing a snapshot's origin_node_id to
 	// the fallback node a resume timed out on. The node's local cache is warming
 	// from the in-progress snapshot pull, so pinning the retry to it avoids

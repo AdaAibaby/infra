@@ -159,7 +159,8 @@ func TestPin_SurvivesTTLExpiryAndKeepsSnapfile(t *testing.T) {
 	assert.True(t, tmpl.snapfileExists(), "pinned template's snapfile must still exist on disk")
 
 	// Still reachable, and still the same instance — never a second one.
-	got, ok := c.GetCachedTemplate(tmpl.key)
+	got, releaseGot, ok := c.LookupPinned(t.Context(), tmpl.key)
+	defer releaseGot()
 	require.True(t, ok, "pinned template must remain reachable after eviction")
 	assert.Same(t, tmpl, got)
 }
@@ -881,7 +882,8 @@ func TestInvalidate_PinnedBuildResolvesToAFreshInstance(t *testing.T) {
 	assert.True(t, stale.snapfileExists())
 
 	// A new lookup must not see it.
-	_, cached := c.GetCachedTemplate(stale.key)
+	_, releaseCached, cached := c.LookupPinned(t.Context(), stale.key)
+	releaseCached()
 	assert.False(t, cached, "invalidated template must not be served from the cache")
 
 	replacement := newPinTestTemplate(t, "build-invalidated")
@@ -1191,8 +1193,7 @@ func TestGetTemplate_DiscardedCandidateLeavesNoDirectory(t *testing.T) {
 	candidateDir := filepath.Dir(candidate.Files().CacheSnapfile())
 	require.DirExists(t, candidateDir, "Paths.Cache creates the directory up front")
 
-	got, release := c.getTemplateWithFetch(t.Context(), candidate, 0, false)
-	defer release()
+	got, _ := c.getTemplateWithFetch(t.Context(), candidate, 0, 0, "")
 
 	require.Same(t, resident, got, "the resident template must win the lookup")
 	assert.NoDirExists(t, candidateDir, "the discarded candidate's directory must not be orphaned")

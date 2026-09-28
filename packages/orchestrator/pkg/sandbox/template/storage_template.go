@@ -55,6 +55,11 @@ type storageTemplate struct {
 	metrics     blockmetrics.Metrics
 	persistence storage.StorageProvider
 
+	// kind is set before the template is admitted and never changes after.
+	kind layerKind
+	// layerMark is guarded by the cache's extendMu.
+	layerMark layerMark
+
 	closeOnce sync.Once
 	closeErr  error
 }
@@ -85,6 +90,7 @@ func newTemplateFromStorage(
 		durableMemfileHeader: durableMemfileHeader,
 		metrics:              metrics,
 		persistence:          persistence,
+		kind:                 layerKindFetched,
 		memfile:              utils.NewSetOnce[block.ReadonlyDevice](),
 		rootfs:               utils.NewSetOnce[block.ReadonlyDevice](),
 		snapfile:             utils.NewSetOnce[File](),
@@ -482,6 +488,34 @@ func (t *storageTemplate) headerFootprint() (entries int, bytes int) {
 	}
 
 	return entries, bytes
+}
+
+// generation is the chain generation of the template's headers, read without
+// blocking: from the memfile or rootfs device once resolved, else from the
+// header it was built from, else 0 while none has resolved.
+func (t *storageTemplate) generation() uint64 {
+	var headers []*header.Header
+	for _, s := range []*utils.SetOnce[block.ReadonlyDevice]{t.memfile, t.rootfs} {
+		if dev, err := s.Result(); err == nil && dev != nil {
+			headers = append(headers, dev.Header())
+		}
+	}
+	for _, holder := range []*utils.SetOnce[*header.Header]{t.memfileHeader.Load(), t.rootfsHeader} {
+		if holder == nil {
+			continue
+		}
+		if h, err := holder.Result(); err == nil {
+			headers = append(headers, h)
+		}
+	}
+
+	for _, h := range headers {
+		if h != nil && h.Metadata != nil {
+			return h.Metadata.Generation
+		}
+	}
+
+	return 0
 }
 
 func (t *storageTemplate) Memfile(ctx context.Context) (block.ReadonlyDevice, error) {

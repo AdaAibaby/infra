@@ -155,9 +155,9 @@ const (
 	// resolutionLegacy: the ancestor's header predates the Builds map, so the
 	// empty sentinel entry was written.
 	resolutionLegacy ancestorResolution = "legacy"
-	// resolutionSelfEntryAbsent: a heal on verdictFutureNoEntry found no entry
-	// for the ancestor in its stored header and left the child without one, as
-	// the header the ancestor's upload published does.
+	// resolutionSelfEntryAbsent: a heal that skipped the backfill found no
+	// entry for the ancestor in its stored header and left the child without
+	// one, as the header the ancestor's upload published does.
 	resolutionSelfEntryAbsent ancestorResolution = "self_entry_absent"
 	// resolutionAbsent: the child carries no entry — none was found, or a heal
 	// failed without failing the upload.
@@ -191,10 +191,13 @@ const (
 // (legacy uncompressed) stay absent, resolved by the read path. The heal is
 // best-effort: a failed load leaves the gap rather than failing the upload,
 // unless the context is already done.
-// After verdictFutureNoEntry the heal reads the stored header without the
+// After verdictFutureNoEntry, and on every heal of a build this node's
+// template cache released, the heal reads the stored header without the
 // uncompressed-build backfill, so a V4+ ancestor whose stored header carries
 // no entry for itself stays absent, as the header its upload published
-// leaves it.
+// leaves it. Every other heal keeps LoadHeader's backfill. The heal reads no
+// flag: the release's own record decides, so the bytes do not depend on how the
+// flags read in this upload's context.
 //
 // Every ancestor is counted once per walk on the ancestor-resolutions
 // counter, by verdict and by what landed in dst, including the ancestor
@@ -238,7 +241,7 @@ func (u *Upload) resolveAncestor(
 	buildID uuid.UUID,
 	fileType build.DiffType,
 ) (AncestorVerdict, ancestorResolution, error) {
-	h, verdict, err := u.uploads.Wait(ctx, buildID, fileType)
+	h, verdict, released, err := u.uploads.wait(ctx, buildID, fileType)
 	if err != nil {
 		return verdict, resolutionNone, fmt.Errorf("wait for ancestor %s/%s: %w", buildID, fileType, err)
 	}
@@ -246,12 +249,14 @@ func (u *Upload) resolveAncestor(
 		return verdict, resolutionNone, nil
 	}
 
-	healed := false
+	healed, noBackfill := false, false
 	if h == nil {
 		if _, ok := dst[buildID]; ok {
 			return verdict, resolutionInherited, nil
 		}
-		h, _, err = loadAncestorHeader(ctx, u.store, storage.Paths{BuildID: buildID.String()}.HeaderFile(string(fileType)), verdict)
+		// A build this node released heals as its resident entry would have.
+		noBackfill = released || verdict == verdictFutureNoEntry
+		h, _, err = loadAncestorHeader(ctx, u.store, storage.Paths{BuildID: buildID.String()}.HeaderFile(string(fileType)), noBackfill)
 		if errors.Is(err, storage.ErrObjectNotExist) {
 			return verdict, resolutionAbsent, nil
 		}
@@ -290,23 +295,23 @@ func (u *Upload) resolveAncestor(
 	if _, ok := dst[buildID]; ok {
 		return verdict, resolutionInherited, nil
 	}
-	if healed && verdict == verdictFutureNoEntry {
+	if healed && noBackfill {
 		return verdict, resolutionSelfEntryAbsent, nil
 	}
 
 	return verdict, resolutionAbsent, nil
 }
 
-// loadAncestorHeader loads the header a heal copies from. On
-// verdictFutureNoEntry it skips LoadHeader's uncompressed-build backfill, so
-// the ancestor's entry reaches the child only if the stored header carries it
-// — as the header this node's upload published does, which its entry held
-// unless a later load from storage replaced it. A header older than the
-// Builds map still gives the empty entry, as for any verdict. An absent entry is resolved by the read path;
-// a backfilled one would assert "uncompressed" for a build whose header never
-// said so. Every other verdict keeps LoadHeader's backfill.
-func loadAncestorHeader(ctx context.Context, s storage.StorageProvider, path string, verdict AncestorVerdict) (*headers.Header, int, error) {
-	if verdict == verdictFutureNoEntry {
+// loadAncestorHeader loads the header a heal copies from. With noBackfill it
+// skips LoadHeader's uncompressed-build backfill, so the ancestor's entry
+// reaches the child only if the stored header carries it — as the header this
+// node's upload published does, which its entry held unless a later load from
+// storage replaced it. A header older than the Builds map still gives the
+// empty entry either way. An absent entry is resolved by the read path; a
+// backfilled one would assert "uncompressed" for a build whose header never
+// said so.
+func loadAncestorHeader(ctx context.Context, s storage.StorageProvider, path string, noBackfill bool) (*headers.Header, int, error) {
+	if noBackfill {
 		return headers.LoadStoredHeader(ctx, s, path)
 	}
 

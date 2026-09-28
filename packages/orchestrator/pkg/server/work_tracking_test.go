@@ -118,7 +118,7 @@ func TestUploadSnapshotAsyncTracksWorkThroughCompletion(t *testing.T) {
 					RootfsDiff:       &build.NoDiff{},
 					RootfsDiffHeader: sandbox.NewResolvedDiffHeader(nil),
 					Metafile:         template.NewLocalFileLink(metaPath),
-				}, store, storage.CompressConfig{}, nil, storage.UseCasePause, nil)
+				}, store, storage.CompressConfig{}, nil, storage.UseCasePause, nil, nil)
 				require.NoError(t, err)
 
 				completeStarted := make(chan struct{})

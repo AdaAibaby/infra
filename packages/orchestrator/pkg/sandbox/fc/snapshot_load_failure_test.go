@@ -50,6 +50,25 @@ func TestClassifySnapshotLoadFailure(t *testing.T) {
 			want: snapshotLoadBadRequest,
 		},
 		{
+			// A snapshot file removed under a starting sandbox: Firecracker
+			// opens the path the orchestrator passes, so this is where it shows.
+			name: "snapshot file that does not exist",
+			err:  badRequest("Load snapshot error: Failed to restore from snapshot: Failed to open snapshot file: No such file or directory (os error 2)"),
+			want: snapshotLoadMissingFile,
+		},
+		{
+			name: "memory backing file that does not exist",
+			err:  badRequest("Load snapshot error: Failed to restore from snapshot: Failed to open memory backing file: No such file or directory (os error 2)"),
+			want: snapshotLoadMissingFile,
+		},
+		{
+			// The open-failure wrapper also carries errors on a file that
+			// exists; only ENOENT is a missing file.
+			name: "snapshot file that exists but cannot be opened",
+			err:  badRequest("Load snapshot error: Failed to restore from snapshot: Failed to open snapshot file: Permission denied (os error 13)"),
+			want: snapshotLoadBadRequest,
+		},
+		{
 			// A later Firecracker rewording the fault must still count as a
 			// refusal, so the total stays complete and only the breakdown
 			// loses precision.

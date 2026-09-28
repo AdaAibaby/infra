@@ -413,8 +413,10 @@ func setupEnv(from string, sandboxDir string, storageExplicit bool) error {
 }
 
 type runner struct {
-	factory     *sandbox.Factory
-	tmpl        template.Template
+	factory *sandbox.Factory
+	tmpl    template.Template
+	// tmplPin holds the template cache pin on tmpl; a reload swaps it.
+	tmplPin     *templatePin
 	sbxConfig   *sandbox.Config
 	buildID     string
 	cache       *template.Cache
@@ -430,6 +432,28 @@ type runner struct {
 	// config.FirecrackerVersionsDir is redirected to a writable staging dir; the published
 	// firecracker-debug is resolved from this original (read-only) dir.
 	gdbOrigVersionsDir string
+}
+
+// templatePin is the cache pin on the runner's current template.
+type templatePin struct {
+	release func()
+}
+
+// Release returns the pin.
+func (p *templatePin) Release() { p.release() }
+
+// reloadTemplate re-acquires the runner's build after a cache invalidation and
+// moves the pin to the new instance.
+func (r *runner) reloadTemplate(ctx context.Context) error {
+	tmpl, release, err := r.cache.GetTemplatePinned(ctx, r.buildID, false, false)
+	if err != nil {
+		return fmt.Errorf("reload template: %w", err)
+	}
+	r.tmplPin.Release()
+	r.tmplPin.release = release
+	r.tmpl = wrapTemplate(tmpl, r.noPrefetch)
+
+	return nil
 }
 
 // wrapTemplate applies the CLI's template masks (-no-prefetch drops the
@@ -599,11 +623,9 @@ func (r *runner) cmdBenchmark(ctx context.Context, opts runOptions) error {
 			if err := dropPageCache(); err != nil {
 				return fmt.Errorf("drop page cache: %w", err)
 			}
-			tmpl, err := r.cache.GetTemplate(ctx, r.buildID, false, false)
-			if err != nil {
-				return fmt.Errorf("reload template: %w", err)
+			if err := r.reloadTemplate(ctx); err != nil {
+				return err
 			}
-			r.tmpl = wrapTemplate(tmpl, r.noPrefetch)
 		}
 
 		fmt.Printf("\r[%d/%d] Running...    ", i+1, opts.iterations)
@@ -846,7 +868,7 @@ func (r *runner) pauseOnce(ctx context.Context, opts pauseOptions, verbose bool)
 			fmt.Println("💾 Saving snapshot to local storage...")
 		}
 
-		upload, err := sandbox.NewUpload(ctx, nil, snapshot, r.storage, storage.CompressConfig{}, nil, "", nil)
+		upload, err := sandbox.NewUpload(ctx, nil, snapshot, r.storage, storage.CompressConfig{}, nil, "", nil, nil)
 		if err != nil {
 			return timings, fmt.Errorf("failed to prepare upload: %w", err)
 		}
@@ -887,11 +909,9 @@ func (r *runner) pauseBenchmark(ctx context.Context, opts pauseOptions) error {
 			if err := dropPageCache(); err != nil {
 				return fmt.Errorf("drop page cache: %w", err)
 			}
-			tmpl, err := r.cache.GetTemplate(ctx, r.buildID, false, false)
-			if err != nil {
-				return fmt.Errorf("reload template: %w", err)
+			if err := r.reloadTemplate(ctx); err != nil {
+				return err
 			}
-			r.tmpl = wrapTemplate(tmpl, r.noPrefetch)
 		}
 
 		// Generate unique build ID for each iteration (not saved)
@@ -1009,7 +1029,8 @@ func (r *runner) collectAndUploadPrefetch(ctx context.Context, opts pauseOptions
 	fmt.Println("\n🔍 Collecting prefetch mapping...")
 
 	r.cache.Invalidate(opts.newBuildID)
-	tmpl, err := r.cache.GetTemplate(ctx, opts.newBuildID, false, false)
+	tmpl, releaseTmpl, err := r.cache.GetTemplatePinned(ctx, opts.newBuildID, false, false)
+	defer releaseTmpl()
 	if err != nil {
 		return fmt.Errorf("load template: %w", err)
 	}
@@ -1132,11 +1153,9 @@ func (r *runner) benchmark(ctx context.Context, n int) error {
 			if err := dropPageCache(); err != nil {
 				return fmt.Errorf("drop page cache: %w", err)
 			}
-			tmpl, err := r.cache.GetTemplate(ctx, r.buildID, false, false)
-			if err != nil {
-				return fmt.Errorf("reload template: %w", err)
+			if err := r.reloadTemplate(ctx); err != nil {
+				return err
 			}
-			r.tmpl = wrapTemplate(tmpl, r.noPrefetch)
 		}
 
 		fmt.Printf("\r[%d/%d] Running...    ", i+1, n)
@@ -1362,7 +1381,9 @@ func run(ctx context.Context, buildID string, iterations int, coldStart, noPrefe
 	factory := sandbox.NewFactory(ctx, config.BuilderConfig, networkPool, devicePool, flags, hoststats.NewNoopDelivery(), cgroup.NewNoopManager(), egressProxy, sandbox.NoopNetworkAssignHook{}, sandboxes)
 
 	fmt.Printf("📦 Loading %s...\n", buildID)
-	tmpl, err := cache.GetTemplate(ctx, buildID, false, false)
+	tmpl, releaseTmpl, err := cache.GetTemplatePinned(ctx, buildID, false, false)
+	pin := &templatePin{release: releaseTmpl}
+	defer pin.Release()
 	if err != nil {
 		return err
 	}
@@ -1406,6 +1427,7 @@ func run(ctx context.Context, buildID string, iterations int, coldStart, noPrefe
 	r := &runner{
 		factory:     factory,
 		tmpl:        tmpl,
+		tmplPin:     pin,
 		buildID:     buildID,
 		cache:       cache,
 		coldStart:   coldStart,
