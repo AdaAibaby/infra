@@ -1417,6 +1417,20 @@ func (s *Server) checkpointResumeFresh(ctx context.Context, sbx *sandbox.Sandbox
 	if err != nil {
 		telemetry.ReportCriticalError(ctx, "error resuming sandbox after checkpoint", err, telemetry.WithSandboxID(in.GetSandboxId()))
 
+		// The snapshot itself already succeeded and is fully materialized in the
+		// local cache (resume-fresh never defers the rootfs export and never
+		// keeps a CoW memory window — see the snapshotAndCacheSandbox call above,
+		// which passes deferRootfsExport=false and maintainSandbox=false). Only
+		// the NEW replacement FC process failed to come up (e.g. mmap memfd:
+		// cannot allocate memory when the host hugepage pool is exhausted).
+		// Persist the snapshot before returning so it stays restorable instead of
+		// being marked failed with local-only bytes that surface as a 404 on
+		// restore (see e2b-dev/infra#3658). Best-effort: a failed upload here
+		// leaves today's behaviour, it never masks the resume error below.
+		if upErr := s.runCheckpointUpload(ctx, sbx, res, in, codes.Internal, nil); upErr != nil {
+			sbxlogger.I(sbx).Warn(ctx, "failed to persist checkpoint snapshot after resume failure", zap.Error(upErr))
+		}
+
 		return nil, status.Errorf(codes.Internal, "error resuming sandbox after checkpoint: %s", err)
 	}
 	rollback.Add(ctx, func(ctx context.Context) error { return stopAndCloseSandbox(ctx, resumedSbx) })
