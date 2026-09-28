@@ -225,24 +225,30 @@
 
   <text x="300" y="752" font-size="12" fill="#5B6470">one-shots run once along their gates (api-secrets waits only on preflight); ready prints the SDK variables and the dashboard URL</text>
 
-  <!-- ============ three ways to get this machine ============ -->
-  <text x="16" y="798" font-size="10.5" font-weight="600" letter-spacing="0.1em" fill="#5B6470">THREE WAYS TO GET THIS MACHINE</text>
+  <!-- ============ four ways to get this machine ============ -->
+  <text x="16" y="798" font-size="10.5" font-weight="600" letter-spacing="0.1em" fill="#5B6470">FOUR WAYS TO GET THIS MACHINE</text>
 
-  <rect x="14" y="808" width="380" height="94" rx="3" fill="#FFFFFF" stroke="#C9CED6" stroke-width="1"/>
+  <rect x="14" y="808" width="281" height="94" rx="3" fill="#FFFFFF" stroke="#C9CED6" stroke-width="1"/>
   <text x="30" y="834" font-size="14.5" font-weight="600" fill="#151A21">Docker Compose</text>
-  <rect x="30" y="844" width="218" height="26" rx="3" fill="#FDF1EA" stroke="#D9521B" stroke-width="1"/>
-  <text x="40" y="862" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#151A21">docker compose up -d --wait</text>
-  <text x="30" y="888" font-size="11.5" fill="#5B6470">you prepare the Linux host, then run this on it</text>
+  <rect x="30" y="844" width="203" height="26" rx="3" fill="#FDF1EA" stroke="#D9521B" stroke-width="1"/>
+  <text x="40" y="861" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#151A21">docker compose up -d --wait</text>
+  <text x="30" y="888" font-size="11.5" fill="#5B6470">on a Linux host you prepare</text>
 
-  <rect x="410" y="808" width="380" height="94" rx="3" fill="#FFFFFF" stroke="#C9CED6" stroke-width="1"/>
-  <text x="426" y="834" font-size="14.5" font-weight="600" fill="#151A21">Terraform on GCP</text>
-  <rect x="426" y="844" width="132" height="26" rx="3" fill="#FDF1EA" stroke="#D9521B" stroke-width="1"/>
-  <text x="436" y="862" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#151A21">terraform apply</text>
-  <text x="426" y="888" font-size="11.5" fill="#5B6470">one GCE instance; its template prepares the machine</text>
+  <rect x="311" y="808" width="281" height="94" rx="3" fill="#FFFFFF" stroke="#C9CED6" stroke-width="1"/>
+  <text x="327" y="834" font-size="14.5" font-weight="600" fill="#151A21">Terraform on GCP</text>
+  <rect x="327" y="844" width="122" height="26" rx="3" fill="#FDF1EA" stroke="#D9521B" stroke-width="1"/>
+  <text x="337" y="861" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#151A21">terraform apply</text>
+  <text x="327" y="888" font-size="11.5" fill="#5B6470">one GCE instance, set up at first boot</text>
 
-  <rect x="806" y="808" width="380" height="94" rx="3" fill="#FFFFFF" stroke="#C9CED6" stroke-width="1"/>
-  <text x="822" y="834" font-size="14.5" font-weight="600" fill="#151A21">Kubernetes</text>
-  <rect x="822" y="844" width="262" height="26" rx="3" fill="#FDF1EA" stroke="#D9521B" stroke-width="1"/>
-  <text x="832" y="862" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="12" fill="#151A21">kubectl apply -k embed/kubernetes</text>
-  <text x="822" y="888" font-size="11.5" fill="#5B6470">one KVM node; the pod's init containers prepare it</text>
+  <rect x="608" y="808" width="281" height="94" rx="3" fill="#FFFFFF" stroke="#C9CED6" stroke-width="1"/>
+  <text x="624" y="834" font-size="14.5" font-weight="600" fill="#151A21">Terraform on AWS</text>
+  <rect x="624" y="844" width="122" height="26" rx="3" fill="#FDF1EA" stroke="#D9521B" stroke-width="1"/>
+  <text x="634" y="861" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#151A21">terraform apply</text>
+  <text x="624" y="888" font-size="11.5" fill="#5B6470">one EC2 instance, set up at first boot</text>
+
+  <rect x="905" y="808" width="281" height="94" rx="3" fill="#FFFFFF" stroke="#C9CED6" stroke-width="1"/>
+  <text x="921" y="834" font-size="14.5" font-weight="600" fill="#151A21">Kubernetes</text>
+  <rect x="921" y="844" width="244" height="26" rx="3" fill="#FDF1EA" stroke="#D9521B" stroke-width="1"/>
+  <text x="931" y="861" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="11" fill="#151A21">kubectl apply -k embed/kubernetes</text>
+  <text x="921" y="888" font-size="11.5" fill="#5B6470">one KVM node, set up by init containers</text>
 </svg>

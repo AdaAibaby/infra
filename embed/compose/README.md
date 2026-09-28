@@ -11,8 +11,10 @@ the hub is [`../README.md`](../README.md).
 - Linux x86-64 or arm64 with KVM and a 4 KiB-page kernel (Ubuntu's default
   on both), on a host you own and may mutate: bare metal, or a VM created with
   nested virtualization enabled (on GCE, `--enable-nested-virtualization`; on
-  Apple silicon, a Lima or other Virtualization.framework VM with nested
-  virtualization on, which needs an M3 or newer and macOS 15 or newer). x86-64
+  EC2, `--cpu-options NestedVirtualization=enabled` on an Intel type that
+  offers it, such as `m8i`; on Apple silicon, a Lima or other
+  Virtualization.framework VM with nested virtualization on, which needs an
+  M3 or newer and macOS 15 or newer). x86-64
   is what the guides were written and tested on. arm64 is verified end to
   end on bare metal: on 2026-09-14 a bare-metal arm64 host (a GCE `c4a` metal
   instance, Ubuntu 26.04, kernel 7.0) reached `ready` in under two minutes
@@ -37,7 +39,9 @@ the hub is [`../README.md`](../README.md).
 - `/dev/kvm` and `/dev/net/tun` present. On a VM, `/dev/kvm` means nested
   virtualization is enabled for it; on GCE, stop the VM, run
   `gcloud compute instances update <vm> --enable-nested-virtualization`, and
-  start it again. Without either device, `up` stops at `preflight` with a
+  start it again; on EC2, stop the instance, run
+  `aws ec2 modify-instance-cpu-options --instance-id <id> --nested-virtualization enabled`,
+  and start it again. Without either device, `up` stops at `preflight` with a
   `FIX:` line and nothing that needs KVM is started.
 - Docker Engine 27 or newer with Compose 2.24 or newer, and your user in the
   `docker` group. Docker's own apt repository is the simplest way to get

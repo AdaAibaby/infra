@@ -2,7 +2,7 @@ SHELL := /bin/bash
 .PHONY: lint config test images stores-check vector-validate otel-validate sync-configs kubernetes-render terraform-validate
 
 # Every compose invocation runs against compose/, where compose.yaml and .env
-# live; the other two install shapes have their own directories beside it.
+# live; the other three install shapes have their own directories beside it.
 COMPOSE := docker compose --project-directory compose
 
 SHELL_FILES := $(strip $(wildcard compose/scripts/*.sh))
@@ -21,16 +21,24 @@ lint: config vector-validate otel-validate kubernetes-render terraform-validate
 kubernetes-render:
 	kubectl kustomize kubernetes >/dev/null
 
-# Both roots share one plugin cache, so the providers are downloaded once. The
-# example is validated too: a renamed input or output is exactly how a
-# copy-paste example goes stale.
+# All four roots share one plugin cache, so each provider is downloaded once.
+# Terraform reads that cache only for providers a lock file already lists
+# unless told otherwise, and none of these roots tracks a lock file
+# (.gitignore), so there is none to keep. The examples are validated too: a
+# renamed input or output is exactly how a copy-paste example goes stale.
+TF_CACHE := TF_PLUGIN_CACHE_DIR=$(CURDIR)/.terraform-cache TF_PLUGIN_CACHE_MAY_BREAK_DEPENDENCY_LOCK_FILE=true
 terraform-validate:
 	mkdir -p .terraform-cache
-	TF_PLUGIN_CACHE_DIR=$(CURDIR)/.terraform-cache terraform -chdir=terraform/gcp init -backend=false -input=false >/dev/null
+	$(TF_CACHE) terraform -chdir=terraform/gcp init -backend=false -input=false >/dev/null
 	terraform -chdir=terraform/gcp fmt -check -recursive
 	terraform -chdir=terraform/gcp validate
-	TF_PLUGIN_CACHE_DIR=$(CURDIR)/.terraform-cache terraform -chdir=terraform/gcp/examples/basic init -backend=false -input=false >/dev/null
+	$(TF_CACHE) terraform -chdir=terraform/gcp/examples/basic init -backend=false -input=false >/dev/null
 	terraform -chdir=terraform/gcp/examples/basic validate
+	$(TF_CACHE) terraform -chdir=terraform/aws init -backend=false -input=false >/dev/null
+	terraform -chdir=terraform/aws fmt -check -recursive
+	terraform -chdir=terraform/aws validate
+	$(TF_CACHE) terraform -chdir=terraform/aws/examples/basic init -backend=false -input=false >/dev/null
+	terraform -chdir=terraform/aws/examples/basic validate
 
 # Vector parses the config and compiles its VRL without connecting to sinks.
 # Catches a broken remap or a misspelled sink option before a host does.

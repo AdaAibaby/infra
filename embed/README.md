@@ -5,11 +5,12 @@
 
 # E2B Embed
 
-**A complete E2B, sandboxes included, on one machine you own.** Three ways to
+**A complete E2B, sandboxes included, on one machine you own.** Four ways to
 get that machine running, all of them the same stack.
 
 [Docker Compose](compose/README.md)
 | [Terraform on GCP](terraform/gcp/README.md)
+| [Terraform on AWS](terraform/aws/README.md)
 | [Kubernetes](kubernetes/README.md)
 | [Reference](docs/REFERENCE.md)
 | [Releasing](../docs/RELEASING.md)
@@ -22,12 +23,13 @@ get that machine running, all of them the same stack.
 |-------|---------------|-------------|-------|
 | Docker Compose | a Linux host with KVM that you may mutate | `docker compose up -d --wait` | [`compose/README.md`](compose/README.md) |
 | Terraform on GCP | a GCP project and credentials | `terraform apply` | [`terraform/gcp/README.md`](terraform/gcp/README.md) |
+| Terraform on AWS | an AWS account and credentials | `terraform apply` | [`terraform/aws/README.md`](terraform/aws/README.md) |
 | Kubernetes | a cluster with one KVM node | `kubectl apply -k` | [`kubernetes/README.md`](kubernetes/README.md) |
 
 Compose and Terraform run [`compose/compose.yaml`](compose/compose.yaml) and
 [`compose/.env`](compose/.env) as shipped. Kubernetes runs a StatefulSet
 translated from them, with the same pins in
-[`kubernetes/kustomization.yaml`](kubernetes/kustomization.yaml). All 3 are
+[`kubernetes/kustomization.yaml`](kubernetes/kustomization.yaml). All 4 are
 single-machine evaluation packages, not deployment patterns. For a production
 deployment see [e2b.dev/enterprise](https://e2b.dev/enterprise).
 
@@ -117,8 +119,8 @@ collector and the pprof endpoints stay on loopback;
 
 - `make images` builds the 3 stack images locally under their pinned tags.
 - `make lint` renders the compose file and the kustomization, validates the
-  Vector config and the Terraform module, and shellchecks the scripts and the
-  tests.
+  Vector config and the 2 Terraform modules, and shellchecks the scripts and
+  the tests.
 - `make test` runs the bats suite in `tests/`.
 - `make stores-check` runs the store-level integration check.
 - `make sync-configs` re-inlines the 3 configs into the compose file.

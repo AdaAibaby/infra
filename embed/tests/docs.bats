@@ -74,7 +74,7 @@ PY
 
 # The hub README's port table and the overview diagram state the same thirteen
 # ports in different notation (one row per port; a range in the picture). The
-# table is the one in README.md at the package root, the hub -- the three
+# table is the one in README.md at the package root, the hub -- the four
 # install guides point at it rather than repeating it. Expand the ranges and
 # compare both ways, so a port added to one and not the other fails.
 #
@@ -121,7 +121,7 @@ PY
 @test "every FIX line a guide quotes is printed by a script" {
   local quoted checked=0 line
   quoted="$(python3 - README.md compose/README.md terraform/gcp/README.md \
-    kubernetes/README.md <<'PY'
+    terraform/aws/README.md kubernetes/README.md <<'PY'
 import re, sys
 
 for path in sys.argv[1:]:
@@ -156,16 +156,16 @@ PY
   [ "$checked" -gt 0 ]
 }
 
-# The hub and the three install guides cross-link each other, the diagrams,
+# The hub and the four install guides cross-link each other, the diagrams,
 # the manifests and the tests. A relative link that does not resolve is a dead
 # end for whoever follows it, and nothing else checks them. URLs and bare
 # in-page anchors are somebody else's business; every other target has to
 # exist on disk, relative to the README that names it. Fenced code blocks are
 # dropped first: a `](` inside one is not a link.
-@test "every relative Markdown link in the four READMEs and the reference resolves" {
+@test "every relative Markdown link in the five READMEs and the reference resolves" {
   local checked=0 readme dir target
   for readme in README.md compose/README.md terraform/gcp/README.md \
-                kubernetes/README.md docs/REFERENCE.md; do
+                terraform/aws/README.md kubernetes/README.md docs/REFERENCE.md; do
     [ -f "$readme" ] || { echo "$readme is missing" >&2; return 1; }
     dir="$(dirname "$readme")"
     while IFS= read -r target; do
@@ -184,15 +184,16 @@ PY
   [ "$checked" -gt 0 ]
 }
 
-# The three install guides each end in the same Try-it snippet: the shapes
+# The four install guides each end in the same Try-it snippet: the shapes
 # differ in how the reader gets the SDK variables into their shell, but the
 # sandbox they then create is deliberately the same few lines, so someone who
 # has run one shape recognises it in the next. Kept byte-identical here
 # because nothing else compares them, and a snippet edited in one guide alone
 # reads as a difference between the shapes that does not exist.
-@test "the three guides' Try-it snippets are one snippet" {
+@test "the four guides' Try-it snippets are one snippet" {
   local guide out first=""
-  for guide in compose/README.md terraform/gcp/README.md kubernetes/README.md; do
+  for guide in compose/README.md terraform/gcp/README.md terraform/aws/README.md \
+               kubernetes/README.md; do
     out="$BATS_TEST_TMPDIR/${guide//\//_}"
     try_it_snippet "$guide" > "$out" || return 1
     [ -s "$out" ] || { echo "$guide: the Try-it snippet came out empty" >&2; return 1; }
@@ -204,4 +205,39 @@ PY
       return 1
     }
   done
+}
+
+# The hub's shape table and the picture's bottom row name the same install
+# shapes, and the row's heading and the hub's first sentence count them. A
+# shape added to the table and not the picture, or a count left at the old
+# number, is how the picture drifts from the page it illustrates.
+@test "overview.svg draws every shape the hub's table lists, and both count them" {
+  local shapes count heading word n
+  shapes="$(awk '/^\| Shape \|/ { f = 1; next }
+                 f && /^\|-/ { next }
+                 f && /^\|/ { print; next }
+                 f { exit }' README.md | awk -F' *[|] *' '{ print $2 }')"
+  count="$(printf '%s\n' "$shapes" | grep -c . || true)"
+  # A table the extractor stopped reading would pass vacuously.
+  [ "$count" -gt 1 ] || { echo "read $count rows from the hub's '| Shape |' table; expected more than one" >&2; return 1; }
+  while IFS= read -r shape; do
+    grep -qF ">$shape</text>" docs/overview.svg || {
+      echo "the hub's table lists $shape, which overview.svg does not draw" >&2
+      return 1
+    }
+  done <<<"$shapes"
+  heading="$(grep -oE '>[A-Z]+ WAYS TO GET THIS MACHINE<' docs/overview.svg | tr -d '<>')"
+  [ -n "$heading" ] || { echo "overview.svg has no '<WORD> WAYS TO GET THIS MACHINE' heading" >&2; return 1; }
+  word="${heading%% *}"
+  case "$word" in
+    TWO) n=2 ;; THREE) n=3 ;; FOUR) n=4 ;; FIVE) n=5 ;; SIX) n=6 ;; *) n=0 ;;
+  esac
+  [ "$n" -eq "$count" ] || {
+    echo "overview.svg's heading says $word ways; the hub's table has $count shapes" >&2
+    return 1
+  }
+  grep -qiE "^\*\*A complete E2B.*\*\* $word ways to" README.md || {
+    echo "the hub's first sentence does not say $word ways" >&2
+    return 1
+  }
 }
