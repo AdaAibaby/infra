@@ -31,6 +31,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/fc"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/rootfs"
 	sbxtemplate "github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/template"
+	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/uffd/userfaultfd"
 	buildenvd "github.com/e2b-dev/infra/packages/orchestrator/pkg/template/build/core/envd"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/template/metadata"
 	"github.com/e2b-dev/infra/packages/shared/pkg/events"
@@ -1074,6 +1075,83 @@ func sandboxFlagContexts(sbx *sandbox.Sandbox) []ldcontext.Context {
 	}
 }
 
+// The route a checkpoint took: in place, or the first gate condition that
+// sent it resume-fresh, in gate order. The counter and the span carry it so
+// a resume-fresh fraction is attributable per template.
+const (
+	routeInPlace          = "in_place"
+	routeSyncWPOff        = "sync_wp_off"
+	routeFlagOff          = "flag_off"
+	routeFCUnsupported    = "fc_unsupported"
+	routeBalloonReporting = "balloon_reporting"
+	routeBalloonUnknown   = "balloon_unknown"
+)
+
+// inPlaceEarlyRoute is the cheap half of the gate, in order; "" means the
+// balloon decides. fcSupported is called only when the earlier conditions
+// hold, as it logs when it refuses.
+func inPlaceEarlyRoute(syncWP, flagOn bool, fcSupported func() bool) string {
+	switch {
+	case !syncWP:
+		return routeSyncWPOff
+	case !flagOn:
+		return routeFlagOff
+	case !fcSupported():
+		return routeFCUnsupported
+	default:
+		return ""
+	}
+}
+
+// inPlaceBalloonRoute is the balloon half. Only an allow-listed mode goes in
+// place. Reporting matters only when the export would pause it: the CoW
+// window does, the synchronous copy does not, so with the deferred export
+// off a reporting or unread balloon goes in place too. With it on, reporting
+// and unknown go in place only when admit says so. A value this build does
+// not know fails closed. deferred and admit are called only when they
+// decide, so neither flag is evaluated for cohorts it never applies to.
+func inPlaceBalloonRoute(mode userfaultfd.BalloonMode, deferred, admit func() bool) string {
+	switch mode {
+	case userfaultfd.BalloonModeHinting, userfaultfd.BalloonModeNone:
+		return routeInPlace
+	case userfaultfd.BalloonModeReporting:
+		if !deferred() || admit() {
+			return routeInPlace
+		}
+
+		return routeBalloonReporting
+	case userfaultfd.BalloonModeUnknown:
+		if !deferred() || admit() {
+			return routeInPlace
+		}
+
+		return routeBalloonUnknown
+	default:
+		return routeBalloonUnknown
+	}
+}
+
+// checkpointRoute decides the route under the flags in ctx. The device read
+// behind ResolveBalloonMode runs only once the cheap conditions hold; a route
+// decided before it carries the stamped mode as its label.
+func (s *Server) checkpointRoute(ctx context.Context, sbx *sandbox.Sandbox) (string, userfaultfd.BalloonMode) {
+	early := inPlaceEarlyRoute(
+		sbx.UseSyncWP(),
+		s.featureFlags.BoolFlag(ctx, featureflags.InPlaceCheckpointFlag),
+		func() bool {
+			return firecrackerSupports(ctx, sbx, "in-place checkpoint", (*fcversion.Info).HasInPlaceCheckpoint)
+		},
+	)
+	if early != "" {
+		return early, sbx.BalloonModeValue()
+	}
+	mode := sbx.ResolveBalloonMode(ctx)
+	deferred := func() bool { return sbx.DeferredMemoryExport(ctx) }
+	admit := func() bool { return s.featureFlags.BoolFlag(ctx, featureflags.InPlaceCheckpointReportingFlag) }
+
+	return inPlaceBalloonRoute(mode, deferred, admit), mode
+}
+
 func (s *Server) Checkpoint(ctx context.Context, in *orchestrator.SandboxCheckpointRequest) (*orchestrator.SandboxCheckpointResponse, error) {
 	releaseWork := s.info.TrackWork()
 	defer releaseWork()
@@ -1101,6 +1179,8 @@ func (s *Server) Checkpoint(ctx context.Context, in *orchestrator.SandboxCheckpo
 		telemetry.WithFirecrackerVersion(sbx.Config.FirecrackerConfig.FirecrackerVersion),
 		telemetry.WithKernelVersion(sbx.Config.FirecrackerConfig.KernelVersion),
 		telemetry.WithEnvdVersion(sbx.Config.Envd.Version),
+		// The stamp, so a refusal below still carries the cohort; the route
+		// decision overwrites it with the device's answer.
 		attribute.String("balloon_mode", sbx.BalloonMode()),
 	)
 
@@ -1147,24 +1227,64 @@ func (s *Server) Checkpoint(ctx context.Context, in *orchestrator.SandboxCheckpo
 	// balloon free-page-reporting pause API). Everything else takes the
 	// resume-fresh flow, so an older FC degrades gracefully rather than
 	// erroring.
-	inPlace := sbx.UseSyncWP() &&
-		s.featureFlags.BoolFlag(ctx, featureflags.InPlaceCheckpointFlag) &&
-		firecrackerSupports(ctx, sbx, "in-place checkpoint", (*fcversion.Info).HasInPlaceCheckpoint)
+	//
+	// Sandboxes whose balloon runs free-page REPORTING are excluded as well:
+	// the CoW window pauses reporting for its lifetime and the deferred
+	// reports drain onto the serve loop the moment it resumes, so on these
+	// sandboxes the in-place path costs the latency it exists to remove.
+	// The mode is the device's, from one read cached per process, so the gate
+	// cannot disagree with the running VM or with the memory export, which
+	// reads the same cache; the template stamp is only the label. The
+	// exclusion applies only while the deferred export would pause reporting:
+	// with defer-memory-export off the synchronous copy never touches it and
+	// every balloon goes in place. A mode unknown after that read goes
+	// resume-fresh: unknown device truth
+	// never buys the in-place path. in-place-checkpoint-reporting re-admits
+	// reporting balloons, per team, as the way back without a redeploy.
+	//
+	// Decided here, after admission, so a refused RPC records no route; one
+	// decision feeds the span, the gate and the counter.
+	route, balloonMode := s.checkpointRoute(ctx, sbx)
+	inPlace := route == routeInPlace
+	childSpan.SetAttributes(
+		attribute.String("balloon_mode", balloonMode.String()),
+		attribute.String("route", route),
+	)
+	// A caller that went away during the device read must not be answered
+	// with resume-fresh under its dead context: that path stops the sandbox
+	// on the failure it is about to hit, while the API restores the record.
+	if err := ctx.Err(); err != nil {
+		sbxlogger.E(sbx).Info(ctx, "checkpoint abandoned by the caller after the route decision, before either path started",
+			zap.String("route", route), zap.String("balloon_mode", balloonMode.String()), zap.Error(err))
+
+		return nil, status.FromContextError(err).Err()
+	}
 
 	var res *orchestrator.SandboxCheckpointResponse
+	var deferred bool
 	var err error
+	start := time.Now()
 	if inPlace {
-		res, err = s.checkpointInPlace(ctx, sbx, in)
+		res, deferred, err = s.checkpointInPlace(ctx, sbx, in)
 	} else {
 		res, err = s.checkpointResumeFresh(ctx, sbx, in)
 	}
+	// deferred splits the in-place arm by export mechanism (CoW window or
+	// synchronous copy), so the three arms of the reporting A/B are one
+	// series apart; it is always false on resume-fresh.
+	attrs := metric.WithAttributes(
+		attribute.Bool("in_place", inPlace),
+		attribute.String("route", route),
+		attribute.String("balloon_mode", balloonMode.String()),
+		attribute.Bool("deferred", deferred),
+		attribute.Bool("success", err == nil),
+	)
+	s.sandboxCheckpointDuration.Record(ctx, time.Since(start).Milliseconds(), attrs)
 
 	// The denominator for the in_place-labeled duration histograms: what
-	// fraction of checkpoints went in-place, at what success rate.
-	s.sandboxCheckpointCounter.Add(ctx, 1, metric.WithAttributes(
-		attribute.Bool("in_place", inPlace),
-		attribute.Bool("success", err == nil),
-	))
+	// fraction of checkpoints went in-place, at what success rate, and for
+	// the rest which gate condition sent them resume-fresh.
+	s.sandboxCheckpointCounter.Add(ctx, 1, attrs)
 
 	return res, err
 }
@@ -1270,7 +1390,10 @@ func (s *Server) runCheckpointUpload(ctx context.Context, sbx *sandbox.Sandbox, 
 // the killed event/counter itself, because the teardown's cleanup has already
 // MarkStopping-ed the sandbox out of the live map, so the API's follow-up
 // Delete finds nothing to attribute.
-func (s *Server) checkpointInPlace(ctx context.Context, sbx *sandbox.Sandbox, in *orchestrator.SandboxCheckpointRequest) (*orchestrator.SandboxCheckpointResponse, error) {
+// checkpointInPlace reports, next to the reply, whether the memory export
+// went through the CoW window (true) or the synchronous copy (false); false
+// as well when the snapshot failed before that was decided.
+func (s *Server) checkpointInPlace(ctx context.Context, sbx *sandbox.Sandbox, in *orchestrator.SandboxCheckpointRequest) (_ *orchestrator.SandboxCheckpointResponse, deferred bool, _ error) {
 	// The sandbox stays live and addressable through an in-place checkpoint —
 	// that is the point — so unlike resume-fresh there is no MarkStopping to
 	// naturally exclude concurrent lifecycle RPCs. The API already serializes
@@ -1280,7 +1403,7 @@ func (s *Server) checkpointInPlace(ctx context.Context, sbx *sandbox.Sandbox, in
 	// checkpoints into Pause/CreateSnapshot/ResumeInPlace on the same FC
 	// process. FailedPrecondition tells the API the sandbox is still healthy.
 	if !sbx.BeginInPlaceCheckpoint() {
-		return nil, status.Errorf(codes.FailedPrecondition, "a checkpoint is already in progress for sandbox '%s'", in.GetSandboxId())
+		return nil, false, status.Errorf(codes.FailedPrecondition, "a checkpoint is already in progress for sandbox '%s'", in.GetSandboxId())
 	}
 	defer sbx.EndInPlaceCheckpoint()
 
@@ -1316,7 +1439,7 @@ func (s *Server) checkpointInPlace(ctx context.Context, sbx *sandbox.Sandbox, in
 			// killed event and no kill-counter sample.
 			s.emitSandboxKilled(ctx, sbx, killReasonResumeFailed)
 
-			return nil, status.Errorf(codes.Internal, "error snapshotting sandbox '%s': %s", in.GetSandboxId(), err)
+			return nil, false, status.Errorf(codes.Internal, "error snapshotting sandbox '%s': %s", in.GetSandboxId(), err)
 		}
 
 		// FailedPrecondition, not Internal, for everything else: Pause's
@@ -1326,7 +1449,7 @@ func (s *Server) checkpointInPlace(ctx context.Context, sbx *sandbox.Sandbox, in
 		// transient storage or disk error destroying a running sandbox). A
 		// failing resume-on-error cleanup no longer lands here: it tears the
 		// sandbox down and tags ErrSandboxLost, taking the branch above.
-		return nil, status.Errorf(codes.FailedPrecondition, "error snapshotting sandbox '%s': %s", in.GetSandboxId(), err)
+		return nil, false, status.Errorf(codes.FailedPrecondition, "error snapshotting sandbox '%s': %s", in.GetSandboxId(), err)
 	}
 
 	// Prefetch mapping is intentionally omitted for an in-place checkpoint: the
@@ -1336,8 +1459,9 @@ func (s *Server) checkpointInPlace(ctx context.Context, sbx *sandbox.Sandbox, in
 	// resumed in place inside Pause, so there is no resume-fresh / lifecycle setup
 	// / envd-upgrade / markSandboxLive here — the original sandbox keeps running.
 
+	deferred = res.memoryExportDeferred
 	if err := s.runCheckpointUpload(ctx, sbx, res, in, codes.FailedPrecondition, nil); err != nil {
-		return nil, err
+		return nil, deferred, err
 	}
 
 	s.publishSandboxEvent(ctx, sbx, events.SandboxCheckpointedEvent)
@@ -1346,7 +1470,7 @@ func (s *Server) checkpointInPlace(ctx context.Context, sbx *sandbox.Sandbox, in
 
 	return &orchestrator.SandboxCheckpointResponse{
 		SchedulingMetadata: res.schedulingMetadata,
-	}, nil
+	}, deferred, nil
 }
 
 // checkpointResumeFresh snapshots the sandbox and resumes a FRESH sandbox

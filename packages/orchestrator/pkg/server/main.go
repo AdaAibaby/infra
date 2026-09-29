@@ -66,32 +66,33 @@ type Server struct {
 	orchestrator.UnimplementedSandboxServiceServer
 	orchestrator.UnimplementedChunkServiceServer
 
-	config                   cfg.Config
-	sandboxFactory           *sandbox.Factory
-	info                     *service.ServiceInfo
-	proxy                    *proxy.SandboxProxy
-	networkPool              network.PoolInterface
-	templateCache            *template.Cache
-	devicePool               *nbd.DevicePool
-	persistence              storage.StorageProvider
-	featureFlags             *featureflags.Client
-	sbxEventsService         *events.EventsService
-	startingSandboxes        *utils.AdjustableSemaphore
-	peerRegistry             peerclient.Registry
-	uploadedBuilds           *ttlcache.Cache[string, struct{}]
-	uploads                  *sandbox.Uploads
-	sandboxCreateDuration    metric.Int64Histogram
-	sandboxExecutionDuration metric.Int64Histogram
-	sandboxPauseDuration     metric.Int64Histogram
-	sandboxKilledCounter     metric.Int64Counter
-	sandboxCrashedCounter    metric.Int64Counter
-	sandboxCheckpointCounter metric.Int64Counter
-	uploadFailedCounter      metric.Int64Counter
-	envdUpgradeAttempts      metric.Int64Counter
-	envdUpgradeGated         metric.Int64Counter
-	envdUpgradeHandover      metric.Int64Counter
-	envdUpgradeDuration      metric.Int64Histogram
-	envdUpgradePhaseDuration metric.Int64Histogram
+	config                    cfg.Config
+	sandboxFactory            *sandbox.Factory
+	info                      *service.ServiceInfo
+	proxy                     *proxy.SandboxProxy
+	networkPool               network.PoolInterface
+	templateCache             *template.Cache
+	devicePool                *nbd.DevicePool
+	persistence               storage.StorageProvider
+	featureFlags              *featureflags.Client
+	sbxEventsService          *events.EventsService
+	startingSandboxes         *utils.AdjustableSemaphore
+	peerRegistry              peerclient.Registry
+	uploadedBuilds            *ttlcache.Cache[string, struct{}]
+	uploads                   *sandbox.Uploads
+	sandboxCreateDuration     metric.Int64Histogram
+	sandboxExecutionDuration  metric.Int64Histogram
+	sandboxPauseDuration      metric.Int64Histogram
+	sandboxKilledCounter      metric.Int64Counter
+	sandboxCrashedCounter     metric.Int64Counter
+	sandboxCheckpointCounter  metric.Int64Counter
+	sandboxCheckpointDuration metric.Int64Histogram
+	uploadFailedCounter       metric.Int64Counter
+	envdUpgradeAttempts       metric.Int64Counter
+	envdUpgradeGated          metric.Int64Counter
+	envdUpgradeHandover       metric.Int64Counter
+	envdUpgradeDuration       metric.Int64Histogram
+	envdUpgradePhaseDuration  metric.Int64Histogram
 
 	pauseAdmissionCounter      metric.Int64Counter
 	pauseAdmissionWaitDuration metric.Int64Histogram
@@ -190,6 +191,12 @@ func New(ctx context.Context, cfg ServiceConfig) (*Server, error) {
 		return nil, fmt.Errorf("failed to register sandbox checkpoint counter: %w", err)
 	}
 	server.sandboxCheckpointCounter = sandboxCheckpointCounter
+
+	sandboxCheckpointDuration, err := telemetry.GetHistogram(meter, telemetry.CheckpointDurationName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to register sandbox checkpoint duration histogram: %w", err)
+	}
+	server.sandboxCheckpointDuration = sandboxCheckpointDuration
 
 	pauseAdmissionCounter, err := telemetry.GetCounter(meter, telemetry.OrchestratorSandboxPauseAdmissionCounterName)
 	if err != nil {

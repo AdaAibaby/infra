@@ -350,9 +350,18 @@ type Sandbox struct {
 	// afterwards (see UseSyncWP).
 	useSyncWP bool
 
-	// balloonMode is the balloon's free-page mechanism, read from Firecracker
-	// once the process is up (labelBalloonMode); unknown until then.
+	// balloonMode is the balloon's free-page mechanism as last stamped: from
+	// the template metadata at resume, the configuration at boot, or a device
+	// read (labelBalloonMode after start, ResolveBalloonMode at checkpoint).
+	// Unknown until one of those landed. A known value does not imply the
+	// device was consulted; decisions that must match the VM resolve it.
 	balloonMode atomic.Uint32
+	// readBalloonCaps replaces the device read in tests; nil means the process.
+	readBalloonCaps func(context.Context) (fc.BalloonCaps, error)
+	// balloonReadRetryAt (unix ns) holds off the checkpoint-time device read
+	// after a failure, so an unreadable balloon does not cost every checkpoint
+	// the full read bound.
+	balloonReadRetryAt atomic.Int64
 
 	Template template.Template
 
@@ -1040,7 +1049,7 @@ func (f *Factory) CreateSandbox(
 	freePageHinting := fc.FCSupportsFreePageHinting(config.FirecrackerConfig.FirecrackerVersion) && config.FreePageHinting
 	// A boot's balloon is whatever it is configured with here; a cold-booted
 	// resume configures none.
-	sbx.setBalloonMode(balloonModeOf(fc.BalloonCaps{Reporting: config.FreePageReporting, Hinting: freePageHinting}))
+	sbx.StampBalloonMode(balloonModeOf(fc.BalloonCaps{Reporting: config.FreePageReporting, Hinting: freePageHinting}))
 
 	err = fcHandle.Create(
 		ctx,
@@ -1605,7 +1614,7 @@ func (f *Factory) ResumeSandbox(
 	// resume working set is labelled; older templates are labelled by
 	// labelBalloonMode once the process is up.
 	if meta.Balloon != nil {
-		sbx.setBalloonMode(balloonModeOf(fc.BalloonCaps{Reporting: meta.Balloon.Reporting, Hinting: meta.Balloon.Hinting}))
+		sbx.StampBalloonMode(balloonModeOf(fc.BalloonCaps{Reporting: meta.Balloon.Reporting, Hinting: meta.Balloon.Hinting}))
 	}
 
 	useMemfd := fc.FCSupportsMemfd(config.FirecrackerConfig.FirecrackerVersion) &&
@@ -2176,6 +2185,7 @@ func (s *Sandbox) Pause(
 				guestFreezeDurationHistogram.Record(ctx, time.Since(freezeStart).Milliseconds(),
 					metric.WithAttributes(
 						attribute.Bool("deferred", memExportDeferred),
+						attribute.String("balloon_mode", s.BalloonMode()),
 						attribute.Bool("success", false),
 					))
 
@@ -2350,6 +2360,7 @@ func (s *Sandbox) Pause(
 				// deferred marks the treated arm of the memory-export ramp on
 				// the series the feature exists to move.
 				attribute.Bool("deferred", memExportDeferred),
+				attribute.String("balloon_mode", s.BalloonMode()),
 				attribute.Bool("success", true),
 			))
 
@@ -2505,16 +2516,18 @@ func (s *Sandbox) processMemorySnapshot(ctx context.Context, buildID uuid.UUID, 
 	// this point, so hinting needs no pause. The guest is unaffected beyond
 	// a deferred RSS reduction: its driver holds reported pages isolated
 	// until the ACK.)
-	deferOK := keepMemfdOpen &&
-		s.featureFlags.BoolFlag(ctx, featureflags.DeferMemoryExportFlag, sandboxLDContext(s.Runtime, s.Config))
+	deferOK := keepMemfdOpen && s.DeferredMemoryExport(ctx)
 	fprPaused := false
 	if deferOK {
-		reporting, fprErr := s.process.BalloonFreePageReporting(ctx)
+		caps, fprErr := s.process.BalloonCaps(ctx)
+		reporting := caps.Reporting
 		switch {
 		case fprErr != nil:
 			sbxlogger.I(s).Warn(ctx, "defer-memory-export: balloon query failed; using sync copy", zap.Error(fprErr))
 			deferOK = false
 		case reporting:
+			// Reached only when in-place-checkpoint-reporting admitted a reporting
+			// balloon: Server.Checkpoint decides on this same cached read.
 			if pauseErr := s.process.PauseFreePageReporting(ctx); pauseErr != nil {
 				sbxlogger.I(s).Warn(ctx, "defer-memory-export: pausing free-page reporting failed; using sync copy",
 					zap.Error(pauseErr))
@@ -2596,6 +2609,7 @@ func (s *Sandbox) processMemorySnapshot(ctx context.Context, buildID uuid.UUID, 
 					metric.WithAttributes(
 						attribute.Bool("in_place", true),
 						attribute.Bool("deferred", startMemSeal != nil),
+						attribute.String("balloon_mode", s.BalloonMode()),
 						attribute.Bool("success", true),
 					))
 
@@ -2664,6 +2678,7 @@ func (s *Sandbox) processMemorySnapshot(ctx context.Context, buildID uuid.UUID, 
 		dedupInflightServe,
 		dedupFreeIndex,
 		keepMemfdOpen,
+		s.BalloonMode(),
 	)
 	if err != nil {
 		return MemorySnapshot{}, nil, fmt.Errorf("error while post processing: %w", err)
@@ -3125,6 +3140,7 @@ func pauseProcessMemory(
 	dedupInflightServe bool,
 	dedupFreeIndex bool,
 	keepMemfdOpen bool,
+	balloonMode string,
 ) (d build.Diff, h *DiffHeader, provisionalHeader *header.Header, provisionalDiff build.Diff, provisionalSwapDone func(), e error) {
 	ctx, span := tracer.Start(ctx, "process-memory")
 	defer span.End()
@@ -3143,6 +3159,7 @@ func pauseProcessMemory(
 				// actually taken, not the flag.
 				attribute.Bool("in_place", keepMemfdOpen),
 				attribute.Bool("deferred", false),
+				attribute.String("balloon_mode", balloonMode),
 				attribute.Bool("success", e == nil),
 			))
 	}()

@@ -211,6 +211,17 @@ var (
 	// sandboxes and when this flag is off.
 	InPlaceCheckpointFlag = NewBoolFlag("in-place-checkpoint", false)
 
+	// InPlaceCheckpointReportingFlag re-admits to the in-place checkpoint the
+	// sandboxes whose balloon runs free-page reporting, and those whose
+	// balloon could not be read. It only decides where DeferMemoryExportFlag
+	// is on: there the CoW window pauses reporting and the deferred reports
+	// drain onto the serve loop when it resumes, so off (the default) sends
+	// both cohorts resume-fresh, and on lets them in place for a per-team A/B
+	// of the two paths without a redeploy. Where the deferred export is off
+	// the in-place checkpoint takes the synchronous copy, never touches
+	// reporting, and every balloon goes in place regardless of this flag.
+	InPlaceCheckpointReportingFlag = NewBoolFlag("in-place-checkpoint-reporting", false)
+
 	// DeferMemoryExportFlag makes the in-place checkpoint export guest
 	// memory through the CoW window instead of the synchronous dirty-RAM
 	// copy: the dirty set is write-protect-armed while the VM is paused, the
@@ -223,7 +234,12 @@ var (
 	// is owed); requires an FC build with /balloon/reporting — pause failures
 	// fall back to the synchronous copy. (The synchronous pre-pause
 	// free-page-hinting drain settles before the dirty readout and needs no
-	// pause.) Default off = today's synchronous copy.
+	// pause.) Default off = today's synchronous copy. Because of that pause,
+	// this flag also moves the checkpoint ROUTE of reporting-built (and
+	// unread-balloon) sandboxes: turning it on sends them resume-fresh unless
+	// InPlaceCheckpointReportingFlag re-admits them, and turning it off
+	// mid-ramp sends them back in place. The route panel and the checkpoint
+	// counter's route label show the move.
 	DeferMemoryExportFlag = NewBoolFlag("defer-memory-export", false)
 
 	// SyncWPTrackerDirtyFlag derives the pause-time dirty set from the

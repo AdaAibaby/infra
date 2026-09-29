@@ -413,6 +413,7 @@ const (
 	SnapshotProcessRootfsDurationName     HistogramType = "orchestrator.sandbox.snapshot.process_rootfs.duration"
 	SnapshotRootfsSealDurationName        HistogramType = "orchestrator.sandbox.snapshot.rootfs_seal.duration"
 	SnapshotGuestFreezeDurationName       HistogramType = "orchestrator.sandbox.snapshot.guest_freeze.duration"
+	CheckpointDurationName                HistogramType = "orchestrator.sandbox.checkpoint.duration"
 	SnapshotMemorySealDurationName        HistogramType = "orchestrator.sandbox.snapshot.memory_seal.duration"
 
 	// OrchestratorSandboxExecutionDurationName is one sample per Firecracker
@@ -686,8 +687,8 @@ var counterDesc = map[CounterType]string{
 	OrchestratorSandboxKilledCounterName:         "Number of sandboxes killed, labeled by kill reason",
 	OrchestratorSandboxCrashedCounterName:        "Sandbox executions that ended without a recorded stop reason, labeled by cause (clean_exit/exit_error/external_signal/fault/memory_handler_failed/requested_signal/unknown)",
 	OrchestratorSandboxPauseAdmissionCounterName: "Snapshot-admission decisions, labeled by outcome (ready/ready_after_wait/refused/latched_error) and rpc (pause/checkpoint)",
-	OrchestratorSandboxCheckpointCounterName:     "Number of sandbox checkpoints taken, labeled by in_place and success",
-	OrchestratorFPRResumeCounterName:             "Free-page-reporting resumes after a CoW window, labeled by outcome (inline, retry, fenced, fc_exited, abandoned)",
+	OrchestratorSandboxCheckpointCounterName:     "Number of sandbox checkpoints taken, labeled by in_place, route (in_place, or the gate condition that sent it resume-fresh: sync_wp_off, flag_off, fc_unsupported, balloon_reporting, balloon_unknown), balloon_mode, deferred (in-place memory export through the CoW window rather than the synchronous copy; always false on resume-fresh) and success",
+	OrchestratorFPRResumeCounterName:             "Free-page-reporting resumes after a CoW window, labeled by outcome (inline, retry, fenced, fc_exited, abandoned); produced only while in-place-checkpoint-reporting admits reporting balloons to the in-place path",
 	OrchestratorFPHRunCounterName:                "Free-page-hinting drains and runs, labeled by phase (pre-pause, periodic) and outcome (ok, not-configured, refused, timeout, timeout-guest-silent, failed, cancelled, skipped-<reason> incl. skipped-host-busy)",
 	OrchestratorFPHStopCounterName:               "Stops of hinting cycles the host stopped waiting for, labeled by outcome (ok, unacked, failed, skipped-exited, skipped-disabled)",
 	OrchestratorFPHFreedCounterName:              "Bytes discarded by completed free-page-hinting drains and runs (FC free_page_hint_freed before the drain and after a metrics flush that follows it), labeled by phase",
@@ -1007,10 +1008,11 @@ var histogramDesc = map[HistogramType]string{
 	EnvdCollapseDurationHistogramName:                 "Time taken for the pre-pause envd heap collapse round-trip",
 	GuestSyncDurationHistogramName:                    "Time taken for the mandatory pre-pause guest sync (filesystem-only pause)",
 	PauseDurationHistogramName:                        "Time taken to pause a sandbox, labeled by fs_only (filesystem-only vs memory) and success",
-	SnapshotProcessMemoryDurationName:                 "Time to export+diff the memory file during a pause snapshot (memory pauses only), labeled by success",
+	SnapshotProcessMemoryDurationName:                 "Time to export+diff the memory file during a pause snapshot (memory pauses only), labeled by in_place, deferred, balloon_mode and success",
 	SnapshotProcessRootfsDurationName:                 "Time to export+diff the rootfs during a pause snapshot, labeled by fs_only and success",
 	SnapshotRootfsSealDurationName:                    "Time for the background deferred rootfs reflink seal (off the pause critical path), labeled by in_place and success",
-	SnapshotGuestFreezeDurationName:                   "Wall time the guest is frozen during an in-place checkpoint, from the FC pause call to the in-place resume; success=false means the resume ran on the pause-failure cleanup path",
+	SnapshotGuestFreezeDurationName:                   "Wall time the guest is frozen during an in-place checkpoint, from the FC pause call to the in-place resume, labeled by deferred, balloon_mode and success; success=false means the resume ran on the pause-failure cleanup path",
+	CheckpointDurationName:                            "Wall time of one Checkpoint RPC from the route decision to the reply, labeled by in_place, route, balloon_mode, deferred and success: the per-route latency the checkpoint counter only counts, with deferred separating the CoW-window and synchronous-copy arms of an in-place reporting checkpoint",
 	SnapshotMemorySealDurationName:                    "Time for the background CoW-window memory capture (off the in-place resume critical path), labeled by success",
 	OrchestratorSandboxMemfileDedupDurationName:       "Background memfile dedup latency, from the provisional header's creation at pause to the durable-header swap",
 	OrchestratorSandboxPauseAdmissionWaitDurationName: "Time snapshot admission waited on the durable parent header whenever it waited, labeled by outcome (ready_after_wait/refused)",
@@ -1090,6 +1092,7 @@ var histogramUnits = map[HistogramType]string{
 	SnapshotProcessRootfsDurationName:                 "ms",
 	SnapshotRootfsSealDurationName:                    "ms",
 	SnapshotGuestFreezeDurationName:                   "ms",
+	CheckpointDurationName:                            "ms",
 	SnapshotMemorySealDurationName:                    "ms",
 	OrchestratorSandboxMemfileDedupDurationName:       "ms",
 	OrchestratorSandboxPauseAdmissionWaitDurationName: "ms",

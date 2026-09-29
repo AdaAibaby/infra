@@ -11,6 +11,7 @@ import (
 
 	"github.com/RoaringBitmap/roaring/v2"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"go.opentelemetry.io/otel/sdk/metric/metricdata"
 	"golang.org/x/sys/unix"
@@ -71,6 +72,33 @@ func deadStructureOutcomeTotal(t *testing.T, structure, outcome string) int64 {
 	return total
 }
 
+// processMemorySamples counts the process_memory.duration samples recorded
+// so far with the given balloon_mode, across every other attribute.
+func processMemorySamples(t *testing.T, balloonMode string) uint64 {
+	t.Helper()
+
+	var rm metricdata.ResourceMetrics
+	require.NoError(t, testMetricReader.Collect(t.Context(), &rm))
+
+	var total uint64
+	for _, sm := range rm.ScopeMetrics {
+		for _, m := range sm.Metrics {
+			if m.Name != string(telemetry.SnapshotProcessMemoryDurationName) {
+				continue
+			}
+			hist, ok := m.Data.(metricdata.Histogram[int64])
+			require.True(t, ok)
+			for _, dp := range hist.DataPoints {
+				if hasAttr(dp.Attributes, "balloon_mode", balloonMode) {
+					total += dp.Count
+				}
+			}
+		}
+	}
+
+	return total
+}
+
 // The index-free flag is read in processMemorySnapshot and acted on deep
 // inside the block package, three calls away. Nothing but this test notices
 // if a hop drops it: the index would simply never be freed. Drive the real
@@ -108,6 +136,7 @@ func TestPauseProcessMemory_CarriesFreeIndexToRelease(t *testing.T) {
 	dirty.AddRange(0, numPages)
 
 	before := deadStructureOutcomeTotal(t, "dedup_index", "dropped")
+	samplesBefore := processMemorySamples(t, "none")
 	diff, diffHeader, _, _, swapDone, err := pauseProcessMemory(
 		t.Context(),
 		uuid.New(),
@@ -124,9 +153,11 @@ func TestPauseProcessMemory_CarriesFreeIndexToRelease(t *testing.T) {
 		true,
 		true,
 		false,
+		"none",
 	)
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = diff.Close() })
+	assert.Equal(t, samplesBefore+1, processMemorySamples(t, "none"), "the process_memory sample carries the balloon_mode it was handed")
 
 	_, err = diffHeader.WaitWithContext(t.Context())
 	require.NoError(t, err)
