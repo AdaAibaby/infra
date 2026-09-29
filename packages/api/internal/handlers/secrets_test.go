@@ -582,6 +582,7 @@ func TestSecretsBackendErrorMapping(t *testing.T) {
 		// usable answer; everything else is malformed.
 		{name: "one secret limit reached detail", err: exhausted(reason(managementv1.ManagementErrorReason_MANAGEMENT_ERROR_REASON_SECRET_LIMIT_REACHED)), wantStatus: http.StatusConflict},
 		{name: "one value too large detail", err: exhausted(reason(managementv1.ManagementErrorReason_MANAGEMENT_ERROR_REASON_VALUE_TOO_LARGE)), wantStatus: http.StatusBadRequest},
+		{name: "value too large ignores reason details", err: exhausted(&managementv1.ManagementErrorDetail{Reason: managementv1.ManagementErrorReason_MANAGEMENT_ERROR_REASON_VALUE_TOO_LARGE, ReasonDetails: sentinelBackendMessage}), wantStatus: http.StatusBadRequest},
 		{name: "no detail", err: exhausted(), wantStatus: http.StatusBadGateway},
 		{name: "unspecified reason", err: exhausted(reason(managementv1.ManagementErrorReason_MANAGEMENT_ERROR_REASON_UNSPECIFIED)), wantStatus: http.StatusBadGateway},
 		{name: "unknown future reason", err: exhausted(reason(managementv1.ManagementErrorReason(4242))), wantStatus: http.StatusBadGateway},
@@ -634,6 +635,49 @@ func TestSecretsBackendErrorMapping(t *testing.T) {
 			for _, ginErr := range ginCtx.Errors {
 				requireNoSentinel(t, "gin error", ginErr.Error(), sentinelBackendMessage)
 			}
+		})
+	}
+}
+
+func TestSecretsLimitErrorResponse(t *testing.T) {
+	t.Parallel()
+
+	for _, test := range []struct {
+		name          string
+		reasonDetails string
+		message       string
+	}{
+		{name: "effective limit", reasonDetails: "Project has reached its limit of 50 live secrets", message: "Project has reached its limit of 50 live secrets"},
+		{name: "older backend", message: "Project secret limit reached"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+
+			backendStatus, err := status.New(codes.ResourceExhausted, sentinelBackendMessage).WithDetails(
+				&managementv1.ManagementErrorDetail{
+					Reason:        managementv1.ManagementErrorReason_MANAGEMENT_ERROR_REASON_SECRET_LIMIT_REACHED,
+					ReasonDetails: test.reasonDetails,
+				},
+			)
+			require.NoError(t, err)
+			backend := &fakeSecretsBackend{err: backendStatus.Err()}
+			store := newSecretsStore(t, startSecretsBackend(t, backend), true)
+
+			requestBody, err := json.Marshal(api.NewSecret{Name: "my-secret", Value: sentinelSecretValue})
+			require.NoError(t, err)
+			ginCtx, recorder, _ := newSecretsRequest(t, http.MethodPost, "/secrets", string(requestBody))
+			store.PostSecrets(ginCtx)
+
+			require.Equal(t, http.StatusConflict, recorder.Code)
+			requireNoSentinel(t, "quota error response", recorder.Body.String(), sentinelBackendMessage, sentinelSecretValue)
+			var body map[string]any
+			require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
+			want := map[string]any{
+				"code":       float64(http.StatusConflict),
+				"message":    test.message,
+				"error_code": secretLimitReachedCode,
+			}
+			require.Equal(t, want, body)
 		})
 	}
 }

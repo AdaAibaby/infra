@@ -2185,7 +2185,8 @@ components:
           description: >-
             Machine-readable semantic error code. Not a closed set; initial values:
             sandbox_capacity_unavailable, sandbox_placement_timeout,
-            sandbox_no_compatible_node, sandbox_create_failed, internal_server_error.
+            sandbox_no_compatible_node, sandbox_create_failed, internal_server_error,
+            secret_limit_reached.
         message:
           type: string
           description: Error
@@ -4848,7 +4849,20 @@ paths:
         "404":
           $ref: "#/components/responses/404"
         "409":
-          $ref: "#/components/responses/409"
+          description: >-
+            Secret name conflict or project live-secret limit reached. A quota
+            response has error_code secret_limit_reached and, when reported by
+            the backend, the effective cap in message.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+              examples:
+                secretLimitReached:
+                  value:
+                    code: 409
+                    message: Project has reached its limit of 50 live secrets
+                    error_code: secret_limit_reached
         "429":
           $ref: "#/components/responses/429"
         "500":

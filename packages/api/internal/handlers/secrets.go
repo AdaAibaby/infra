@@ -23,6 +23,7 @@ import (
 	"github.com/e2b-dev/infra/packages/api/internal/middleware"
 	managementv1 "github.com/e2b-dev/infra/packages/api/internal/secretsstore/management/v1"
 	"github.com/e2b-dev/infra/packages/auth/pkg/auth"
+	"github.com/e2b-dev/infra/packages/shared/pkg/apierrors"
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/id"
 	"github.com/e2b-dev/infra/packages/shared/pkg/secretsstore"
@@ -32,7 +33,8 @@ import (
 const (
 	// secretsBackendTimeout bounds one management call. A caller deadline that
 	// is already shorter wins, since context.WithTimeout keeps the earlier one.
-	secretsBackendTimeout = 25 * time.Second
+	secretsBackendTimeout  = 25 * time.Second
+	secretLimitReachedCode = "secret_limit_reached"
 )
 
 // Client-facing messages. They are fixed and carry no request material: no
@@ -325,13 +327,13 @@ func (a *APIStore) rejectSecretsRequest(c *gin.Context, reason string) {
 }
 
 // sendSecretsBackendError maps a management failure onto the public status. The
-// gRPC status description is never parsed, logged, or returned: only the code,
-// which is a bounded enum, is recorded.
+// gRPC status description is never parsed, logged, or returned. Only its code
+// and the typed quota detail determine the public response.
 func (a *APIStore) sendSecretsBackendError(c *gin.Context, err error) {
-	code, message := secretsBackendStatus(err)
+	publicError := secretsBackendStatus(err)
 
-	a.sendAPIStoreError(c, code, message)
-	telemetry.ReportErrorByCode(c.Request.Context(), code, "secrets backend call failed", errSecretsBackendCall,
+	apierrors.SendAPIError(c, publicError)
+	telemetry.ReportErrorByCode(c.Request.Context(), publicError.Code, "secrets backend call failed", errSecretsBackendCall,
 		attribute.String("rpc.grpc.status_code", status.Code(err).String()),
 	)
 }
@@ -344,55 +346,65 @@ func (a *APIStore) sendSecretsBackendResponseError(c *gin.Context) {
 }
 
 // secretsBackendStatus is the whole public error contract of the private hop.
-func secretsBackendStatus(err error) (int, string) {
+func secretsBackendStatus(err error) *apierrors.APIError {
 	st, ok := status.FromError(err)
 	if !ok {
-		return http.StatusBadGateway, middleware.SecretsBackendMessage
+		return &apierrors.APIError{Code: http.StatusBadGateway, ClientMsg: middleware.SecretsBackendMessage}
 	}
 
 	switch st.Code() {
 	case codes.InvalidArgument:
-		return http.StatusBadRequest, middleware.SecretsInvalidRequestMessage
+		return &apierrors.APIError{Code: http.StatusBadRequest, ClientMsg: middleware.SecretsInvalidRequestMessage}
 	case codes.NotFound:
-		return http.StatusNotFound, middleware.SecretsNotFoundMessage
+		return &apierrors.APIError{Code: http.StatusNotFound, ClientMsg: middleware.SecretsNotFoundMessage}
 	case codes.AlreadyExists, codes.Aborted, codes.FailedPrecondition:
-		return http.StatusConflict, middleware.SecretsConflictMessage
+		return &apierrors.APIError{Code: http.StatusConflict, ClientMsg: middleware.SecretsConflictMessage}
 	case codes.ResourceExhausted:
 		return secretsExhaustedStatus(st)
 	case codes.DeadlineExceeded:
-		return http.StatusGatewayTimeout, middleware.SecretsBackendTimeoutMessage
+		return &apierrors.APIError{Code: http.StatusGatewayTimeout, ClientMsg: middleware.SecretsBackendTimeoutMessage}
 	default:
 		// Unavailable, Unimplemented, Internal, Unknown and everything else
 		// the backend may grow are one outcome to a client: the backend did
 		// not answer usefully.
-		return http.StatusBadGateway, middleware.SecretsBackendMessage
+		return &apierrors.APIError{Code: http.StatusBadGateway, ClientMsg: middleware.SecretsBackendMessage}
 	}
 }
 
 // secretsExhaustedStatus splits RESOURCE_EXHAUSTED by its typed detail. The
 // contract carries exactly one ManagementErrorDetail and nothing else, so a
 // missing, repeated, foreign, unspecified or unrecognized detail is a response
-// the API cannot act on: it is a malformed answer, not a lenient one. Nothing
-// of the status - description or detail contents - is read beyond the reason.
-func secretsExhaustedStatus(st *status.Status) (int, string) {
+// the API cannot act on: it is a malformed answer, not a lenient one. The
+// status description stays private; only the typed, client-visible reason
+// details for a secret limit error are returned.
+func secretsExhaustedStatus(st *status.Status) *apierrors.APIError {
 	details := st.Details()
 	if len(details) != 1 {
-		return http.StatusBadGateway, middleware.SecretsBackendMessage
+		return &apierrors.APIError{Code: http.StatusBadGateway, ClientMsg: middleware.SecretsBackendMessage}
 	}
 
 	detail, ok := details[0].(*managementv1.ManagementErrorDetail)
 	if !ok {
-		return http.StatusBadGateway, middleware.SecretsBackendMessage
+		return &apierrors.APIError{Code: http.StatusBadGateway, ClientMsg: middleware.SecretsBackendMessage}
 	}
 
 	switch detail.GetReason() {
 	case managementv1.ManagementErrorReason_MANAGEMENT_ERROR_REASON_SECRET_LIMIT_REACHED:
-		return http.StatusConflict, middleware.SecretsConflictMessage
+		publicError := &apierrors.APIError{
+			Code:      http.StatusConflict,
+			ClientMsg: "Project secret limit reached",
+			ErrorCode: secretLimitReachedCode,
+		}
+		if reasonDetails := detail.GetReasonDetails(); reasonDetails != "" {
+			publicError.ClientMsg = reasonDetails
+		}
+
+		return publicError
 	case managementv1.ManagementErrorReason_MANAGEMENT_ERROR_REASON_VALUE_TOO_LARGE:
-		return http.StatusBadRequest, middleware.SecretsInvalidRequestMessage
+		return &apierrors.APIError{Code: http.StatusBadRequest, ClientMsg: middleware.SecretsInvalidRequestMessage}
 	default:
 		// Unspecified today, and whatever the contract grows tomorrow.
-		return http.StatusBadGateway, middleware.SecretsBackendMessage
+		return &apierrors.APIError{Code: http.StatusBadGateway, ClientMsg: middleware.SecretsBackendMessage}
 	}
 }
 
