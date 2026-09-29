@@ -159,6 +159,8 @@ func (cs *CreateSandbox) Sandbox(
 			// are part of the layer cache key. Only the BusyBox provisioning boot is
 			// left on the default, because its VM is discarded.
 			CmdlineArgs: layerExecutor.Config.CmdlineArgs,
+			// Same reasoning as CmdlineArgs above, but for the CPU template.
+			CPUTemplate: layerExecutor.Config.CPUTemplate,
 		},
 		nil,
 		cs.preBootFn,

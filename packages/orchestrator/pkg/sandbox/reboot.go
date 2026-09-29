@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
+	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
@@ -18,6 +19,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/block"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/envdbin"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/fc"
+	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/fc/cputemplate"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/rootfs"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/template"
 	buildenvd "github.com/e2b-dev/infra/packages/orchestrator/pkg/template/build/core/envd"
@@ -25,6 +27,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/template/metadata"
 	"github.com/e2b-dev/infra/packages/shared/pkg/consts"
 	"github.com/e2b-dev/infra/packages/shared/pkg/fc/models"
+	"github.com/e2b-dev/infra/packages/shared/pkg/fcversion"
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/orchestrator"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
@@ -57,6 +60,41 @@ var (
 
 // journalOnlyProbe fires the host e2fsck support probe once per process.
 var journalOnlyProbe sync.Once
+
+// checkRebootCPUTemplate reports whether the Firecracker version this reboot resolved to can
+// apply the stored template. It can differ from the build's, since firecracker-versions remaps it.
+func checkRebootCPUTemplate(tmpl *cputemplate.Template, fcVersion string) error {
+	if tmpl == nil || tmpl.IsEmpty() {
+		return nil
+	}
+
+	info, err := fcversion.New(fcVersion)
+	if err != nil {
+		return fmt.Errorf("parse firecracker version %q: %w", fcVersion, err)
+	}
+
+	if err := tmpl.Validate(info); err != nil {
+		return fmt.Errorf("firecracker %s: %w", fcVersion, err)
+	}
+
+	return nil
+}
+
+// rebootCPUTemplate picks the template a cold boot applies: the build's, not whatever the last
+// boot ran, unless override (the reboot-cpu-template-override flag) replaces it. An invalid
+// override is returned as an error alongside the build's template.
+func rebootCPUTemplate(meta metadata.Template, override ldvalue.Value) (*cputemplate.Template, bool, error) {
+	if override.IsNull() {
+		return meta.BuildCPUTemplate, false, nil
+	}
+
+	tmpl, err := cputemplate.Parse([]byte(override.JSONString()))
+	if err != nil {
+		return meta.BuildCPUTemplate, false, err
+	}
+
+	return tmpl, true, nil
+}
 
 // rebootAllowed reports whether a snapshot may be cold-booted: it is marked
 // filesystem-only, or the request explicitly demanded a filesystem boot of its
@@ -112,6 +150,30 @@ func (f *Factory) RebootSandbox(
 		return nil, fmt.Errorf("refusing to reboot build %s: not a filesystem-only snapshot and the request did not demand a filesystem boot", buildID)
 	}
 
+	// It becomes the running template, so the next pause stores what this boot applied.
+	override := f.featureFlags.JSONFlag(ctx, featureflags.RebootCPUTemplateOverride,
+		featureflags.SandboxContext(runtime.SandboxID),
+		featureflags.TemplateContext(runtime.TemplateID),
+		featureflags.TeamContext(runtime.TeamID))
+	cpuTemplate, overridden, err := rebootCPUTemplate(meta, override)
+	if err != nil {
+		logger.L().Error(ctx, "ignoring invalid reboot CPU template override", zap.Error(err))
+	}
+	if overridden {
+		logger.L().Info(ctx, "reboot CPU template overridden",
+			zap.String("build_cpu_template", cputemplate.AppliedDigest(meta.BuildCPUTemplate)),
+			zap.String("cpu_template", cputemplate.AppliedDigest(cpuTemplate)))
+	}
+	meta.CPUTemplate = cpuTemplate
+	span.SetAttributes(
+		attribute.String("sandbox.build_cpu_template", cputemplate.AppliedDigest(meta.BuildCPUTemplate)),
+		attribute.Bool("sandbox.cpu_template_overridden", overridden),
+	)
+
+	if err := checkRebootCPUTemplate(meta.CPUTemplate, config.FirecrackerConfig.FirecrackerVersion); err != nil {
+		return nil, fmt.Errorf("reboot build %s: %w", buildID, err)
+	}
+
 	// A cold boot starts envd with no prior state, so unlike a memory resume it
 	// can't inherit the template's default user/workdir from restored RAM — they
 	// must be re-sent via /init, or envd falls back to root and /root.
@@ -147,7 +209,8 @@ func (f *Factory) RebootSandbox(
 		return nil, fmt.Errorf("create empty memfile: %w", err)
 	}
 
-	maskedTemplate := template.NewMaskTemplate(t, template.WithMemfile(memfile))
+	// With the resolved CPU template, so the next pause stores what this boot applied.
+	maskedTemplate := template.NewMaskTemplate(t, template.WithMemfile(memfile), template.WithMetadata(meta))
 
 	kvmClock, err := utils.IsGTEVersion(config.Envd.Version, minEnvdVersionForKVMClock)
 	if err != nil {
@@ -181,6 +244,8 @@ func (f *Factory) RebootSandbox(
 		// variant name means can change after the build, so re-resolving would boot a
 		// different guest than the one this lineage was created as.
 		CmdlineArgs: meta.CmdlineArgs,
+		// Same as CmdlineArgs: the stored template, not the build flag (see the override above).
+		CPUTemplate: meta.CPUTemplate,
 	}
 
 	// Recorded so a dropped variant is detectable after the fact: a cold boot carrying
@@ -197,8 +262,12 @@ func (f *Factory) RebootSandbox(
 		applied = fc.KernelArgs(meta.CmdlineArgs).String()
 	}
 
+	// A stored template is either applied or fails the boot, so it is what the guest got.
+	appliedCPUTemplate := cputemplate.AppliedDigest(meta.CPUTemplate)
+
 	span.SetAttributes(
 		attribute.String("sandbox.cmdline_args", applied),
+		attribute.String("sandbox.cpu_template", appliedCPUTemplate),
 		attribute.Bool("sandbox.filesystem_boot_requested", requestFilesystemBoot),
 	)
 	for _, opt := range procOpts {

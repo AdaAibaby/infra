@@ -968,6 +968,20 @@ var (
 	// a snapshot keeps booting the way it was built even if this flag later changes.
 	BuildKernelCmdlineArgs = NewStringFlag("build-kernel-cmdline-args", "")
 
+	// BuildCPUTemplate is the per-team custom Firecracker CPU template every layer of a build
+	// boots with, as the PUT /cpu-config body.
+	// A template the build's host or Firecracker version cannot apply falls back to none.
+	// The applied template is stored in the template's metadata and replayed on cold boot.
+	BuildCPUTemplate = NewJSONFlag("build-cpu-template", ldvalue.Null())
+
+	// RebootCPUTemplateOverride replaces the build's CPU template on a filesystem-only cold
+	// boot, as the PUT /cpu-config body; {} boots with none. Null (the default) boots the
+	// build's template. The applied template is recorded as the running one, so the next
+	// pause stores it, while the build's template is kept and returns once the flag clears.
+	// A value that does not parse is logged and ignored; one the resolved Firecracker version
+	// or host cannot apply fails the boot, like a stored template would.
+	RebootCPUTemplateOverride = NewJSONFlag("reboot-cpu-template-override", ldvalue.Null())
+
 	// EnvdUpgradeTargetFlag drives the resume-time envd live-upgrade.
 	// Multivariate string:
 	//   "off"        (fallback) — no upgrade; dev has no LD so this is inert & safe.

@@ -17,6 +17,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/fc"
+	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/fc/cputemplate"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/template/build/builderrors"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/template/build/buildlogger"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/template/build/config"
@@ -39,6 +40,10 @@ var (
 	// feature-flag service but inert in the build shows up as the empty label rather
 	// than as silence.
 	buildCmdlineArgs = utils.Must(telemetry.GetCounter(meter, telemetry.TemplateBuildCmdlineArgs))
+
+	// buildCPUTemplate counts builds by the digest of the CPU template applied and by result,
+	// so a template the build rejected is not read as a team that has none.
+	buildCPUTemplate = utils.Must(telemetry.GetCounter(meter, telemetry.TemplateBuildCPUTemplate))
 )
 
 func (s *ServerStore) TemplateCreate(ctx context.Context, templateRequest *templatemanager.TemplateCreateRequest) (*emptypb.Empty, error) {
@@ -110,6 +115,48 @@ func (s *ServerStore) TemplateCreate(ctx context.Context, templateRequest *templ
 	if err != nil {
 		return nil, fmt.Errorf("invalid resolved firecracker version %q: %w", firecrackerVersion, err)
 	}
+
+	// Read once per build, so every layer boots with the same template.
+	cpuTemplateResult := cpuTemplateNone
+	var cpuTemplate *cputemplate.Template
+	cpuTemplate, err = cputemplate.Parse([]byte(s.featureFlags.JSONFlag(ctx, featureflags.BuildCPUTemplate).JSONString()))
+	if err != nil {
+		// A malformed flag fails the build: falling back would silently boot at host frequency.
+		// The flag and parse detail stay in the log and the counter, not the client's message.
+		s.logger.Error(ctx, "invalid build CPU template flag",
+			zap.String("flag", featureflags.BuildCPUTemplate.Key()),
+			zap.Error(err),
+			logger.WithTeamID(cfg.GetTeamID()),
+			logger.WithTemplateID(cfg.GetTemplateID()),
+			logger.WithBuildID(cfg.GetBuildID()),
+		)
+		childSpan.SetAttributes(attribute.String("env.cpu_template_result", cpuTemplateMalformed))
+		buildCPUTemplate.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("template", ""),
+			attribute.String("result", cpuTemplateMalformed),
+		))
+
+		return nil, status.Error(codes.Internal, "invalid build configuration, contact support")
+	}
+	if cpuTemplate != nil {
+		// A template this Firecracker version or host architecture cannot apply falls back to
+		// none, so one flag value can serve a mixed fleet during rollout. The span and counter
+		// mark the build rejected; this log carries the reason.
+		if err := cpuTemplate.Validate(fcInfo); err != nil {
+			cpuTemplateErr := fmt.Errorf("firecracker %s: %w", firecrackerVersion, err)
+			s.logger.Warn(ctx, "rejected build CPU template, using none",
+				zap.Error(cpuTemplateErr),
+				logger.WithTemplateID(cfg.GetTemplateID()),
+				logger.WithBuildID(cfg.GetBuildID()),
+			)
+
+			cpuTemplate = nil
+			cpuTemplateResult = cpuTemplateRejected
+		} else {
+			cpuTemplateResult = cpuTemplateApplied
+		}
+	}
+
 	hugePages := fcInfo.HasHugePages()
 	freePageReporting := fcInfo.HasFreePageReporting() && s.featureFlags.BoolFlag(ctx, featureflags.FreePageReportingFlag)
 	freePageHinting := fcInfo.HasFreePageHinting() && featureflags.IsFreePageHintingEnabled(ctx, s.featureFlags)
@@ -126,10 +173,17 @@ func (s *ServerStore) TemplateCreate(ctx context.Context, templateRequest *templ
 		attribute.Bool("env.free_page_reporting", freePageReporting),
 		attribute.Bool("env.free_page_hinting", freePageHinting),
 		attribute.String("env.kernel_cmdline_args", fc.KernelArgs(cmdlineArgs).String()),
+		attribute.String("env.cpu_template", cputemplate.AppliedDigest(cpuTemplate)),
+		attribute.String("env.cpu_template_result", cpuTemplateResult),
 	)
 
 	buildCmdlineArgs.Add(ctx, 1, metric.WithAttributes(
 		attribute.String("args", fc.KernelArgs(cmdlineArgs).String()),
+	))
+
+	buildCPUTemplate.Add(ctx, 1, metric.WithAttributes(
+		attribute.String("template", cputemplate.AppliedDigest(cpuTemplate)),
+		attribute.String("result", cpuTemplateResult),
 	))
 
 	freeDiskSizeMB := resolveFreeDiskSizeMB(cfg)
@@ -156,6 +210,7 @@ func (s *ServerStore) TemplateCreate(ctx context.Context, templateRequest *templ
 		KernelVersion:        kernelVersion,
 		FirecrackerVersion:   firecrackerVersion,
 		CmdlineArgs:          cmdlineArgs,
+		CPUTemplate:          cpuTemplate,
 	}
 
 	logs := buildlogger.NewLogEntryLogger()
@@ -246,6 +301,15 @@ func (s *ServerStore) TemplateCreate(ctx context.Context, templateRequest *templ
 
 	return nil, nil
 }
+
+// Results of resolving the build CPU template flag, for the counter's result attribute.
+const (
+	cpuTemplateApplied  = "applied"
+	cpuTemplateRejected = "rejected"
+	cpuTemplateNone     = "none"
+	// cpuTemplateMalformed is a flag value that does not parse; the build fails.
+	cpuTemplateMalformed = "malformed"
+)
 
 func resolveFreeDiskSizeMB(cfg *templatemanager.TemplateConfig) int64 {
 	if cfg.FreeDiskSizeMB != nil {

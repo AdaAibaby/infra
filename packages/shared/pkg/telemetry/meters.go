@@ -338,6 +338,11 @@ const (
 	// than as the parameters that were asked for.
 	TemplateBuildCmdlineArgs CounterType = "orchestrator.template.build.cmdline_args"
 
+	// TemplateBuildCPUTemplate counts template builds by the digest of the CPU template
+	// applied (empty for none) and by result: applied, rejected (the flag's template was
+	// unusable and the build fell back to none) or none (the flag sets no template).
+	TemplateBuildCPUTemplate CounterType = "orchestrator.template.build.cpu_template"
+
 	// PauseResumePrefetchHarvestAttempts counts pause-resume prefetch harvest
 	// attempts, by result (success|resume_failed|collect_failed|skipped). The
 	// throwaway is absent from Prometheus otherwise (registration-skip), so this
@@ -566,6 +571,9 @@ const (
 	// Alert on the total excluding canceled rather than on one reason: a
 	// failure mode we have not seen still counts, under bad_request, and the
 	// breakdown is for reading afterwards.
+	//
+	// cpu_template is the digest of the CPU template the snapshot's build booted with,
+	// empty for none, so failures split by build cohort.
 	SandboxFCSnapshotLoadFailures CounterType = "orchestrator.sandbox.fc.snapshot_load.failures"
 
 	// SandboxTemplateLegFaults counts a running sandbox's reads and writes that
@@ -699,6 +707,7 @@ var counterDesc = map[CounterType]string{
 	OrchestratorFsRecoveryRuns:                   "Pre-boot filesystem-recovery decisions on cold boots, by result and trigger",
 	OrchestratorFsRecoveryToolingUnsupported:     "Fires once per process when the host e2fsck rejects -E journal_only",
 	TemplateBuildCmdlineArgs:                     "Template builds by the guest kernel cmdline parameters applied",
+	TemplateBuildCPUTemplate:                     "Template builds by the digest of the custom Firecracker CPU template applied and by result (result=applied|rejected|none|malformed)",
 	OrchestratorEnvdUpgradeGated:                 "Resumes where the envd-upgrade-target flag named a target but a gate declined the upgrade, by reason",
 	OrchestratorEnvdBinaryCacheReads:             "Host envd binary cache lookups on the resume path, by what the lookup found (hit|miss) and upgrade path",
 	OrchestratorEnvdBinaryCacheDeliveries:        "Host envd binary reads at delivery time, by outcome (copy|stale) and upgrade path",
@@ -724,7 +733,7 @@ var counterDesc = map[CounterType]string{
 	SandboxFCBlockFails:         "Total Firecracker VMM block device execution/event failures",
 	SandboxFCBlockNoAvailBuffer: "Total Firecracker VMM block events where no virtqueue buffer was available",
 
-	SandboxFCSnapshotLoadFailures: "Total snapshot loads refused by Firecracker (reason=vcpu_msr|vcpu_other|missing_file|bad_request|unavailable|transport|timeout|canceled)",
+	SandboxFCSnapshotLoadFailures: "Total snapshot loads refused by Firecracker (reason=vcpu_msr|vcpu_other|missing_file|bad_request|unavailable|transport|timeout|canceled), by the digest of the CPU template the snapshot was built with (cpu_template)",
 	SandboxTemplateLegFaults:      "Sandbox reads and writes its template's backing device failed (leg=memfile|rootfs)",
 
 	ApiRedisStoragePublisherPublished: "Total Redis PUBLISH calls completed by the storage publisher (result=success|failure)",
@@ -773,6 +782,7 @@ var counterUnits = map[CounterType]string{
 	OrchestratorFsRecoveryRuns:                   "{run}",
 	OrchestratorFsRecoveryToolingUnsupported:     "{probe}",
 	TemplateBuildCmdlineArgs:                     "{build}",
+	TemplateBuildCPUTemplate:                     "{build}",
 	OrchestratorEnvdUpgradeGated:                 "{sandbox}",
 	OrchestratorEnvdBinaryCacheReads:             "{read}",
 	OrchestratorEnvdBinaryCacheWarms:             "{warm}",

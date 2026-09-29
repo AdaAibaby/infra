@@ -33,10 +33,14 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/templates"
 )
 
-func newWorkTrackingServer(t *testing.T, fcVersion string) (*ServerStore, *storage.MockStorageProvider, *templatemanager.TemplateCreateRequest) {
+// cpuTemplate is the raw build-cpu-template flag value; "" leaves the flag unset.
+func newWorkTrackingServer(t *testing.T, fcVersion, cpuTemplate string) (*ServerStore, *storage.MockStorageProvider, *templatemanager.TemplateCreateRequest) {
 	t.Helper()
 
 	td := ldtestdata.DataSource()
+	if cpuTemplate != "" {
+		td.Update(td.Flag(featureflags.BuildCPUTemplate.Key()).ValueForAll(ldvalue.Parse([]byte(cpuTemplate))))
+	}
 	td.Update(td.Flag(featureflags.BuildFirecrackerVersion.Key()).ValueForAll(ldvalue.String(fcVersion)))
 	td.Update(td.Flag(featureflags.BuildEnvdVersion.Key()).ValueForAll(ldvalue.String("")))
 	flags, err := featureflags.NewClientWithDatasource(td)
@@ -101,16 +105,18 @@ func TestTemplateCreateRejectionReleasesWork(t *testing.T) {
 		duplicate                bool
 		mutate                   func(*templatemanager.TemplateCreateRequest)
 		code                     codes.Code
+		cpuTemplate              string
 	}{
-		{"invalid firecracker", "invalid", "invalid resolved firecracker version", false, nil, codes.OK},
-		{"duplicate build", featureflags.DefaultFirecrackerVersion, "already exists in cache", true, nil, codes.OK},
-		{"no source", featureflags.DefaultFirecrackerVersion, "requires either fromImage or fromTemplate", false, noSource, codes.InvalidArgument},
-		{"empty fromImage", featureflags.DefaultFirecrackerVersion, "requires either fromImage or fromTemplate", false, emptyImage, codes.InvalidArgument},
+		{"invalid firecracker", "invalid", "invalid resolved firecracker version", false, nil, codes.OK, ""},
+		{"duplicate build", featureflags.DefaultFirecrackerVersion, "already exists in cache", true, nil, codes.OK, ""},
+		{"no source", featureflags.DefaultFirecrackerVersion, "requires either fromImage or fromTemplate", false, noSource, codes.InvalidArgument, ""},
+		{"empty fromImage", featureflags.DefaultFirecrackerVersion, "requires either fromImage or fromTemplate", false, emptyImage, codes.InvalidArgument, ""},
+		{"malformed cpu template", featureflags.DefaultFirecrackerVersion, "invalid build configuration", false, nil, codes.Internal, `{"x86_tsc_khx":1}`}, // a misspelled key passes LaunchDarkly's JSON check
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			s, _, req := newWorkTrackingServer(t, tc.fcVersion)
+			s, _, req := newWorkTrackingServer(t, tc.fcVersion, tc.cpuTemplate)
 			s.featureFlags.RegisterContextProvider(func(context.Context) ldcontext.Context {
 				assert.Equal(t, int64(1), s.info.OutstandingWork())
 
@@ -125,6 +131,7 @@ func TestTemplateCreateRejectionReleasesWork(t *testing.T) {
 			}
 			_, err := s.TemplateCreate(t.Context(), req)
 			require.ErrorContains(t, err, tc.message)
+			require.NotContains(t, err.Error(), featureflags.BuildCPUTemplate.Key(), "the flag key must not reach the client")
 			if tc.code != codes.OK {
 				require.Equal(t, tc.code, status.Code(err))
 				_, err := s.buildCache.Get(req.GetTemplate().GetBuildID())
@@ -139,7 +146,7 @@ func TestTemplateCreateRejectionReleasesWork(t *testing.T) {
 func TestTemplateCreateTracksCleanupAfterCallerCancellation(t *testing.T) {
 	t.Parallel()
 
-	s, provider, req := newWorkTrackingServer(t, featureflags.DefaultFirecrackerVersion)
+	s, provider, req := newWorkTrackingServer(t, featureflags.DefaultFirecrackerVersion, "")
 	started, release := blockTemplateCleanup(t, provider, req.GetTemplate().GetBuildID(), nil)
 	ctx, cancel := context.WithCancel(t.Context())
 	defer cancel()
@@ -161,7 +168,7 @@ func TestTemplateCreateTracksCleanupAfterCallerCancellation(t *testing.T) {
 func TestTemplateBuildDeleteTracksCleanupWithoutReleasingBuild(t *testing.T) {
 	t.Parallel()
 
-	s, provider, req := newWorkTrackingServer(t, featureflags.DefaultFirecrackerVersion)
+	s, provider, req := newWorkTrackingServer(t, featureflags.DefaultFirecrackerVersion, "")
 	buildStarted, releaseBuild := blockTemplateCleanup(t, provider, req.GetTemplate().GetBuildID(), nil)
 	_, err := s.TemplateCreate(t.Context(), req)
 	require.NoError(t, err)
@@ -191,7 +198,7 @@ func TestTemplateBuildDeleteTracksCleanupWithoutReleasingBuild(t *testing.T) {
 func TestTemplateBuildDeleteValidationReleasesWork(t *testing.T) {
 	t.Parallel()
 
-	s, _, _ := newWorkTrackingServer(t, featureflags.DefaultFirecrackerVersion)
+	s, _, _ := newWorkTrackingServer(t, featureflags.DefaultFirecrackerVersion, "")
 	for _, req := range []*templatemanager.TemplateBuildDeleteRequest{
 		{TemplateID: "template-id"}, {BuildID: "build-id"},
 	} {
@@ -218,7 +225,7 @@ func TestTemplateCreateTracksLogSyncAndPanicRecovery(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 
-			s, provider, req := newWorkTrackingServer(t, featureflags.DefaultFirecrackerVersion)
+			s, provider, req := newWorkTrackingServer(t, featureflags.DefaultFirecrackerVersion, "")
 			started, release := blockTemplateCleanup(t, provider, req.GetTemplate().GetBuildID(), nil)
 			synced := false
 			s.buildLogger = logger.NewTracedLoggerFromCore(workTrackingSyncCore{

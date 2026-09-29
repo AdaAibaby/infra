@@ -32,6 +32,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/artifact"
 	blockmetrics "github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/block/metrics"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/cgroup"
+	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/fc/cputemplate"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/nbd"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network"
 	sbxtemplate "github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/template"
@@ -84,6 +85,7 @@ func main() {
 	startCmd := flag.String("start-cmd", "", "start command")
 	setupCmd := flag.String("setup-cmd", "", "setup command to run during build (e.g., install deps)")
 	readyCmd := flag.String("ready-cmd", "", "ready check command")
+	cpuTemplateFile := flag.String("cpu-template", "", "path to a custom Firecracker CPU template JSON file to be used for boot every layer with (empty = none)")
 	timeout := flag.Int("timeout", 5, "build timeout in minutes")
 	verbose := flag.Bool("v", false, "verbose output")
 	flag.Parse()
@@ -100,6 +102,19 @@ func main() {
 
 	if *toBuild == "" {
 		log.Fatal("-to-build required")
+	}
+
+	var cpuTmpl *cputemplate.Template
+	if *cpuTemplateFile != "" {
+		raw, err := os.ReadFile(*cpuTemplateFile)
+		if err != nil {
+			log.Fatalf("read -cpu-template: %v", err)
+		}
+
+		cpuTmpl, err = cputemplate.Parse(raw)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 
 	// FPH must be installed at boot — flag is read by Create, not Resume.
@@ -133,7 +148,7 @@ func main() {
 		log.Fatalf("network config: %v", err)
 	}
 
-	err = doBuild(ctx, *templateID, *toBuild, *fromBuild, *kernel, *fc, *vcpu, *memory, *disk, *hugePages, *startCmd, *setupCmd, *readyCmd, localMode, *verbose, *timeout, builderConfig, networkConfig)
+	err = doBuild(ctx, *templateID, *toBuild, *fromBuild, *kernel, *fc, *vcpu, *memory, *disk, *hugePages, *startCmd, *setupCmd, *readyCmd, cpuTmpl, localMode, *verbose, *timeout, builderConfig, networkConfig)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -232,6 +247,7 @@ func doBuild(
 	vcpu, memory, disk int,
 	hugePages bool,
 	startCmd, setupCmd, readyCmd string,
+	cpuTemplate *cputemplate.Template,
 	localMode, verbose bool,
 	timeout int,
 	builderConfig cfg.BuilderConfig,
@@ -388,6 +404,14 @@ func doBuild(
 		return fmt.Errorf("invalid firecracker version %q: %w", fc, err)
 	}
 
+	// Warn only, so a template can be tried against a debug Firecracker that supports it;
+	// an unsupported one still fails the boot when Firecracker rejects PUT /cpu-config.
+	if cpuTemplate != nil {
+		if err := cpuTemplate.Validate(fcInfo); err != nil {
+			fmt.Printf("firecracker %s: %v; sending it anyway\n", fc, err)
+		}
+	}
+
 	tmpl := config.TemplateConfig{
 		Version:            templates.TemplateV2LatestVersion,
 		TemplateID:         templateID,
@@ -405,6 +429,11 @@ func doBuild(
 		FreePageHinting:    fcInfo.HasFreePageHinting(),
 		TeamID:             "local",
 		Steps:              steps,
+		CPUTemplate:        cpuTemplate,
+	}
+
+	if cpuTemplate != nil {
+		fmt.Printf("CPU template: %s (%s)\n", cpuTemplate.Digest(), cpuTemplate.String())
 	}
 
 	pageSizeStr := "2MB (hugepages)"

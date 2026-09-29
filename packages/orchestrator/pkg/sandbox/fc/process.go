@@ -23,6 +23,7 @@ import (
 
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/cfg"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/cgroup"
+	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/fc/cputemplate"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/rootfs"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/socket"
@@ -110,6 +111,10 @@ type ProcessOptions struct {
 	// layer sandbox whose memory becomes the template, and the cold boot of a
 	// filesystem-only snapshot. A memory resume never re-reads the command line.
 	CmdlineArgs map[string]string
+
+	// CPUTemplate is the custom Firecracker CPU template sent before boot. Nil is none. Only
+	// a cold boot needs it; a memory resume restores the vCPU state the template produced.
+	CPUTemplate *cputemplate.Template
 
 	// AccessToken, when non-nil, makes Create write the guest MMDS metadata
 	// (sandbox/template IDs, logs address, and the access-token hash) before the
@@ -439,6 +444,19 @@ func (p *Process) Create(
 	}
 	telemetry.ReportEvent(ctx, "set fc machine config")
 
+	// A template this host rejects is corrupt metadata or a placement bug.
+	if options.CPUTemplate != nil && !options.CPUTemplate.IsEmpty() {
+		err = p.client.setCPUConfig(ctx, *options.CPUTemplate)
+		if err != nil {
+			fcStopErr := p.Stop(ctx)
+
+			return errors.Join(fmt.Errorf("error setting fc cpu config: %w", err), fcStopErr)
+		}
+		telemetry.ReportEvent(ctx, "set fc cpu config",
+			attribute.String("fc.cpu_template", options.CPUTemplate.Digest()),
+		)
+	}
+
 	err = p.client.setEntropyDevice(ctx)
 	if err != nil {
 		fcStopErr := p.Stop(ctx)
@@ -519,6 +537,7 @@ func (p *Process) Resume(
 	cgroupFD int,
 	useMemfd bool,
 	useSyncWP bool,
+	cpuTemplate string,
 	txRateLimit RateLimiterConfig,
 	driveRateLimit RateLimiterConfig,
 ) error {
@@ -609,6 +628,7 @@ func (p *Process) Resume(
 		snapfile,
 		useMemfd,
 		useSyncWP,
+		cpuTemplate,
 	)
 	if err != nil {
 		fcStopErr := p.Stop(ctx)

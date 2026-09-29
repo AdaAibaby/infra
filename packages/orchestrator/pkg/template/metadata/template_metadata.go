@@ -11,6 +11,7 @@ import (
 	"go.opentelemetry.io/otel"
 
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/block"
+	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/fc/cputemplate"
 	"github.com/e2b-dev/infra/packages/shared/pkg/consts"
 	"github.com/e2b-dev/infra/packages/shared/pkg/ioutils"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage"
@@ -189,6 +190,16 @@ type Template struct {
 	// cold-booted lineage (no balloon) does not inherit its template's.
 	Balloon *Balloon `json:"balloon,omitempty"`
 
+	// CPUTemplate is the CPU template this template's guest booted with. Nil is none. Stored
+	// parsed, since the flag can change after the build; a filesystem-only cold boot replays
+	// it. Top level like CmdlineArgs, so SameVersionTemplate carries it on every pause.
+	CPUTemplate *cputemplate.Template `json:"cpu_template,omitempty"`
+
+	// BuildCPUTemplate is the CPU template the build booted with. It never changes after the
+	// build, while CPUTemplate follows what the guest runs: a reboot override replaces
+	// CPUTemplate only, so clearing the override boots BuildCPUTemplate again.
+	BuildCPUTemplate *cputemplate.Template `json:"build_cpu_template,omitempty"`
+
 	// FilesystemOnly marks a snapshot that persists only the filesystem (no
 	// memory snapshot); resuming it must cold-boot (reboot) from the rootfs. The
 	// zero value (false) is a full memory snapshot, so pre-existing snapshots
@@ -257,10 +268,8 @@ func V1TemplateVersion() Template {
 
 // BasedOn derives the metadata of a build that starts FROM another template.
 //
-// Deliberately does NOT carry CmdlineArgs. Unlike a pause, which continues one
-// lineage, this is a new build that resolves the guest kernel cmdline flag for its own
-// team — inheriting the parent's arguments would record arguments the child's kernel
-// never booted with, and a later filesystem-only cold boot would then apply them.
+// Deliberately does NOT carry CmdlineArgs or the CPU templates: a new build resolves both flags
+// for its own team, and a cold boot must not replay a parent's settings.
 func (t Template) BasedOn(
 	ft FromTemplate,
 ) Template {
@@ -276,27 +285,31 @@ func (t Template) BasedOn(
 
 func (t Template) NewVersionTemplate(metadata TemplateMetadata) Template {
 	return Template{
-		Version:      CurrentVersion,
-		Template:     metadata,
-		Context:      t.Context,
-		Start:        t.Start,
-		FromTemplate: t.FromTemplate,
-		FromImage:    t.FromImage,
-		CmdlineArgs:  t.CmdlineArgs,
-		Balloon:      t.Balloon,
+		Version:          CurrentVersion,
+		Template:         metadata,
+		Context:          t.Context,
+		Start:            t.Start,
+		FromTemplate:     t.FromTemplate,
+		FromImage:        t.FromImage,
+		CmdlineArgs:      t.CmdlineArgs,
+		Balloon:          t.Balloon,
+		CPUTemplate:      t.CPUTemplate,
+		BuildCPUTemplate: t.BuildCPUTemplate,
 	}
 }
 
 func (t Template) SameVersionTemplate(metadata TemplateMetadata) Template {
 	return Template{
-		Version:      t.Version,
-		Template:     metadata,
-		Context:      t.Context,
-		Start:        t.Start,
-		FromTemplate: t.FromTemplate,
-		FromImage:    t.FromImage,
-		CmdlineArgs:  t.CmdlineArgs,
-		Balloon:      t.Balloon,
+		Version:          t.Version,
+		Template:         metadata,
+		Context:          t.Context,
+		Start:            t.Start,
+		FromTemplate:     t.FromTemplate,
+		FromImage:        t.FromImage,
+		CmdlineArgs:      t.CmdlineArgs,
+		Balloon:          t.Balloon,
+		CPUTemplate:      t.CPUTemplate,
+		BuildCPUTemplate: t.BuildCPUTemplate,
 	}
 }
 
@@ -311,15 +324,17 @@ func (t Template) WithBalloon(reporting, hinting bool) Template {
 // WithPrefetch returns a copy of the template with the given prefetch mapping.
 func (t Template) WithPrefetch(prefetch *Prefetch) Template {
 	return Template{
-		Version:      t.Version,
-		Template:     t.Template,
-		Context:      t.Context,
-		Start:        t.Start,
-		FromTemplate: t.FromTemplate,
-		FromImage:    t.FromImage,
-		Prefetch:     prefetch,
-		CmdlineArgs:  t.CmdlineArgs,
-		Balloon:      t.Balloon,
+		Version:          t.Version,
+		Template:         t.Template,
+		Context:          t.Context,
+		Start:            t.Start,
+		FromTemplate:     t.FromTemplate,
+		FromImage:        t.FromImage,
+		Prefetch:         prefetch,
+		CmdlineArgs:      t.CmdlineArgs,
+		Balloon:          t.Balloon,
+		CPUTemplate:      t.CPUTemplate,
+		BuildCPUTemplate: t.BuildCPUTemplate,
 	}
 }
 

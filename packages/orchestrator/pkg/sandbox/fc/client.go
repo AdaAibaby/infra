@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 
+	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/fc/cputemplate"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/template"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/uffd/memory"
 	"github.com/e2b-dev/infra/packages/shared/pkg/fc/client"
@@ -47,6 +48,7 @@ func (c *apiClient) loadSnapshot(
 	snapfile template.File,
 	useMemfd bool,
 	useSyncWP bool,
+	cpuTemplate string,
 ) error {
 	ctx, span := tracer.Start(ctx, "load-snapshot")
 	defer span.End()
@@ -82,7 +84,10 @@ func (c *apiClient) loadSnapshot(
 	_, err := c.client.Operations.LoadSnapshot(&snapshotConfig)
 	if err != nil {
 		reason := classifySnapshotLoadFailure(err)
-		fcSnapshotLoadFailures.Add(ctx, 1, metric.WithAttributes(attribute.String("reason", string(reason))))
+		fcSnapshotLoadFailures.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("reason", string(reason)),
+			attribute.String("cpu_template", cpuTemplate),
+		))
 		span.SetAttributes(attribute.String("snapshot_load.failure_reason", string(reason)))
 
 		return fmt.Errorf("error loading snapshot: %w", err)
@@ -400,6 +405,30 @@ func (c *apiClient) setMachineConfig(
 	_, err := c.client.Operations.PutMachineConfiguration(&machineConfigParams)
 	if err != nil {
 		return fmt.Errorf("error setting fc machine config: %w", err)
+	}
+
+	return nil
+}
+
+// cpuConfigBody renders the PUT /cpu-config body. Unset collections must be omitted:
+// Firecracker accepts an absent field but rejects null.
+func cpuConfigBody(tmpl cputemplate.Template) *models.CPUConfig {
+	body := models.CPUConfig(tmpl)
+
+	return &body
+}
+
+// setCPUConfig installs a custom CPU template. Firecracker accepts it only before boot,
+// and in either order with PUT /machine-config as long as that omits cpu_template.
+func (c *apiClient) setCPUConfig(ctx context.Context, tmpl cputemplate.Template) error {
+	cpuConfigParams := operations.PutCPUConfigurationParams{
+		Context: ctx,
+		Body:    cpuConfigBody(tmpl),
+	}
+
+	_, err := c.client.Operations.PutCPUConfiguration(&cpuConfigParams)
+	if err != nil {
+		return fmt.Errorf("error setting fc cpu config (template %s): %w", tmpl.Digest(), err)
 	}
 
 	return nil

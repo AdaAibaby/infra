@@ -82,6 +82,7 @@ func main() {
 	fsOnly := flag.Bool("fs-only", false, "pause without a memory snapshot (filesystem-only; resume reboots the guest)")
 	reboot := flag.Bool("reboot", false, "cold-boot from the build's rootfs instead of resuming from memory")
 	forceReboot := flag.Bool("force-reboot", false, "cold-boot like -reboot, but bypass the filesystem-only safety gate for memory-snapshot builds (the disk is only crash-consistent)")
+	cpuTemplate := flag.String("cpu-template", "", "with -reboot/-force-reboot, boot this CPU template (a JSON file, or \"none\") instead of the build's (overrides the reboot-cpu-template-override flag)")
 	shell := flag.Bool("shell", false, "attach an interactive PTY shell via envd (no sshd required in the sandbox)")
 
 	fphTimeoutMs := flag.Int("fph-timeout-ms", 0, "override free-page-hinting-config pause timeout LD flag (0 = use LD default)")
@@ -160,6 +161,17 @@ func main() {
 		featureflags.OverrideJSONFlag(featureflags.MemfileDiffDedupFlag, ldvalue.FromJSONMarshal(map[string]any{
 			"enabled": true,
 		}))
+	}
+
+	if *cpuTemplate != "" {
+		raw := []byte("{}")
+		if *cpuTemplate != "none" {
+			var err error
+			if raw, err = os.ReadFile(*cpuTemplate); err != nil {
+				log.Fatalf("read -cpu-template: %v", err)
+			}
+		}
+		featureflags.OverrideJSONFlag(featureflags.RebootCPUTemplateOverride, ldvalue.Parse(raw))
 	}
 
 	if *fromBuild == "" {

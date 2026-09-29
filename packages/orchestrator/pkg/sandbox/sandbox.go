@@ -30,6 +30,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/cgroup"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/envdbin"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/fc"
+	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/fc/cputemplate"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/nbd"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/rootfs"
@@ -1465,6 +1466,11 @@ func (f *Factory) ResumeSandbox(
 		return nil, fmt.Errorf("failed to get metadata: %w", err)
 	}
 
+	// The snapshot was taken from a guest booted with this template, so it labels the build
+	// cohort a resume belongs to.
+	cpuTemplate := cputemplate.AppliedDigest(meta.CPUTemplate)
+	span.SetAttributes(attribute.String("sandbox.cpu_template", cpuTemplate))
+
 	// The default user lives only in the restored envd's memory, so a resume that sends it
 	// empty is correct only for as long as that process survives. Replace it — a live
 	// upgrade re-execs into a new image with no such state — and every request that omits a
@@ -1692,6 +1698,7 @@ func (f *Factory) ResumeSandbox(
 		cgroupFD,
 		useMemfd,
 		useSyncWP,
+		cpuTemplate,
 		fc.RateLimiterConfig{
 			Ops:       fc.TokenBucketConfig(resumeThrottleConfig.Ops),
 			Bandwidth: fc.TokenBucketConfig(resumeThrottleConfig.Bandwidth),
