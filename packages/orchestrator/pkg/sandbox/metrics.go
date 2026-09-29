@@ -24,12 +24,6 @@ type Metrics struct {
 
 	DiskUsed  int64 `json:"disk_used"`  // Used disk space in bytes
 	DiskTotal int64 `json:"disk_total"` // Total disk space in bytes
-
-	// Deprecated
-	MemTotalMiB int64 `json:"mem_total_mib"` // Total virtual memory in MiB
-
-	// Deprecated
-	MemUsedMiB int64 `json:"mem_used_mib"` // Used virtual memory in MiB
 }
 
 func (c *Checks) GetMetrics(ctx context.Context, timeout time.Duration) (*Metrics, error) {

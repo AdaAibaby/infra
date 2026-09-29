@@ -535,12 +535,6 @@ components:
         mem_cache:
           type: integer
           description: Cached memory (page cache) in bytes
-        mem_total_mib:
-          type: integer
-          description: Total virtual memory in MiB
-        mem_used_mib:
-          type: integer
-          description: Used virtual memory in MiB
         disk_used:
           type: integer
           description: Used disk space in bytes
