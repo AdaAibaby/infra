@@ -31,7 +31,9 @@ const maxForkCount = 100
 // PostSandboxesSandboxIDFork forks a running sandbox: it checkpoints the
 // sandbox in place (snapshot it and resume it on its node, so the original
 // keeps running with its ID and expiration untouched) and creates count new
-// sandboxes from that snapshot under fresh IDs. Each fork succeeds or fails
+// sandboxes from that snapshot under fresh IDs. A fork starts as a new sandbox,
+// not a resume, so placement spreads the forks across the cluster instead of
+// pinning every one to the original's node. Each fork succeeds or fails
 // independently: the response carries one result per requested fork, holding
 // either the created sandbox or the error that prevented it from starting.
 func (a *APIStore) PostSandboxesSandboxIDFork(c *gin.Context, sandboxID api.SandboxID) {
@@ -163,7 +165,7 @@ func (a *APIStore) PostSandboxesSandboxIDFork(c *gin.Context, sandboxID api.Sand
 				teamInfo,
 				a.buildResumeSandboxDataFromSnapshot(sandboxID, forkedSandboxID, nil, nil),
 				&c.Request.Header,
-				true,
+				false, // isResume
 				false,
 				nil, // mcp
 			)
