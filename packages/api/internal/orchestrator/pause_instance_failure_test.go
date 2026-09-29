@@ -128,3 +128,38 @@ func TestPauseSandbox_FailsBuildWhenPauseQueueExhausted(t *testing.T) {
 	assert.Equal(t, string(types.BuildStatusFailed), buildStatus)
 	assert.True(t, hasFinishedAt, "a terminal build must record finished_at")
 }
+
+// A FailedPrecondition carrying the "sandbox preserved after snapshot failure"
+// marker (emitted by the node when WithResumeOnFailure resumed the VM instead
+// of destroying it, e2b-dev/infra#3658) must be classified as
+// ErrPausePreservedSandbox so DeleteInstance restores the record + route.
+func TestSnapshotInstance_PreservedSandboxIsClassified(t *testing.T) {
+	t.Parallel()
+
+	node := nodemanager.NewTestNode("node-preserved", api.NodeStatusReady, 0, 8)
+	node.SetSandboxClient(&pauseFailingSandboxClient{
+		err: status.Error(codes.FailedPrecondition, "sandbox preserved after snapshot failure for 'sbx-x': fsync: input/output error"),
+	})
+
+	sbx := sandbox.Sandbox{SandboxID: "sbx-x", ClusterID: consts.LocalClusterID}
+
+	err := snapshotInstance(t.Context(), node, sbx, "tmpl", "build", false, true)
+	require.ErrorIs(t, err, ErrPausePreservedSandbox)
+}
+
+// A plain FailedPrecondition WITHOUT the preserved marker (e.g. an envd-version
+// precondition) must NOT be misclassified as a preserved sandbox.
+func TestSnapshotInstance_PlainFailedPreconditionNotPreserved(t *testing.T) {
+	t.Parallel()
+
+	node := nodemanager.NewTestNode("node-plain-fp", api.NodeStatusReady, 0, 8)
+	node.SetSandboxClient(&pauseFailingSandboxClient{
+		err: status.Error(codes.FailedPrecondition, "envd version too old"),
+	})
+
+	sbx := sandbox.Sandbox{SandboxID: "sbx-y", ClusterID: consts.LocalClusterID}
+
+	err := snapshotInstance(t.Context(), node, sbx, "tmpl", "build", false, true)
+	require.Error(t, err)
+	require.NotErrorIs(t, err, ErrPausePreservedSandbox)
+}

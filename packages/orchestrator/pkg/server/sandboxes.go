@@ -997,8 +997,15 @@ func (s *Server) Pause(ctx context.Context, in *orchestrator.SandboxPauseRequest
 	// guest and can close the sandbox, which would read as a crash.
 	sbx.SetStopReason(sandbox.StopReasonPaused)
 
-	// Stop the old sandbox in background after we're done
-	defer s.stopSandboxAsync(context.WithoutCancel(ctx), sbx)
+	// When enabled, a snapshot that fails AFTER the guest was suspended (e.g. a
+	// rootfs-diff fsync EIO or a memfd ENOMEM) resumes the VM in place instead
+	// of leaving it frozen for the deferred stop to tear down, so a transient
+	// snapshot error no longer destroys an otherwise-healthy sandbox
+	// (e2b-dev/infra#3658). Gated by the same flag as pause-refusal restore:
+	// both keep the sandbox recoverable when a pause could not be persisted, and
+	// the API path that restores the store record + route already keys off it.
+	// Off by default preserves today's destroy-on-failure behaviour.
+	preserveOnFailure := s.featureFlags.BoolFlag(ctx, featureflags.PauseRefusalRestoreFlag)
 
 	// Defer the rootfs reflink off the pause critical path when enabled: pause is a
 	// suspend, so nothing reads the diff until a later resume (which waits on the
@@ -1006,12 +1013,42 @@ func (s *Server) Pause(ctx context.Context, in *orchestrator.SandboxPauseRequest
 	deferRootfsExport := s.featureFlags.BoolFlag(ctx, featureflags.DeferRootfsExportFlag)
 
 	// Fire and forget - upload completes in the background
-	res, err := s.snapshotAndCacheSandbox(ctx, sbx, in.GetBuildId(), map[string]string{storage.ObjectMetadataTemplateID: in.GetTemplateId()}, storage.ObjectOriginPause, in.GetFilesystemOnly(), deferRootfsExport, false)
+	res, err := s.snapshotAndCacheSandbox(ctx, sbx, in.GetBuildId(), map[string]string{storage.ObjectMetadataTemplateID: in.GetTemplateId()}, storage.ObjectOriginPause, in.GetFilesystemOnly(), deferRootfsExport, false, preserveOnFailure)
 	if err != nil {
 		telemetry.ReportCriticalError(ctx, "error snapshotting sandbox", err, telemetry.WithSandboxID(in.GetSandboxId()))
 
+		// With preserveOnFailure, sbx.Pause (WithResumeOnFailure) resumed the
+		// guest in place on any error short of ErrSandboxLost, so the VM is
+		// still alive. Put it back in the live map — MarkStopping removed it
+		// before the snapshot — and tell the API the sandbox was preserved via
+		// FailedPrecondition, so it restores the store record and route instead
+		// of removing them. ErrSandboxLost means the resume itself failed and
+		// Pause already tore the VM down: fall through to the destroy path.
+		if preserveOnFailure && !errors.Is(err, sandbox.ErrSandboxLost) {
+			if markErr := s.sandboxFactory.Sandboxes.MarkRunning(ctx, sbx); markErr != nil {
+				// Could not re-register the resumed VM; it would be an
+				// unrouteable orphan. Stop it and report the original error.
+				sbxlogger.E(sbx).Error(ctx, "failed to restore resumed sandbox to live map after snapshot failure", zap.Error(markErr))
+				sbx.SetStopReason(sandbox.StopReasonKilled)
+				s.stopSandboxAsync(context.WithoutCancel(ctx), sbx)
+
+				return nil, status.Errorf(codes.Internal, "error snapshotting sandbox '%s': %s", in.GetSandboxId(), err)
+			}
+
+			return nil, status.Errorf(codes.FailedPrecondition, "sandbox preserved after snapshot failure for '%s': %s", in.GetSandboxId(), err)
+		}
+
+		// Default (flag off) or the resume itself failed (ErrSandboxLost): the
+		// VM is frozen or already gone, so stop it as before.
+		s.stopSandboxAsync(context.WithoutCancel(ctx), sbx)
+
 		return nil, status.Errorf(codes.Internal, "error snapshotting sandbox '%s': %s", in.GetSandboxId(), err)
 	}
+
+	// Snapshot succeeded: stop the old sandbox in background after we're done.
+	// Armed here rather than before the snapshot so a preserved failure above
+	// does not also stop the sandbox it just resumed.
+	defer s.stopSandboxAsync(context.WithoutCancel(ctx), sbx)
 
 	s.uploadSnapshotAsync(ctx, sbx, res)
 
@@ -1283,7 +1320,8 @@ func (s *Server) checkpointInPlace(ctx context.Context, sbx *sandbox.Sandbox, in
 		storage.ObjectOriginSnapshotTemplate,
 		false, // filesystemOnly: full-memory checkpoint (fs-only in-place is a follow-up)
 		deferRootfsExport,
-		true, // maintainSandbox: resume in place
+		true,  // maintainSandbox: resume in place
+		false, // resumeOnFailure: maintainSandbox already resumes on every outcome
 	)
 	if err != nil {
 		telemetry.ReportCriticalError(ctx, "error snapshotting sandbox for checkpoint", err, telemetry.WithSandboxID(in.GetSandboxId()))
@@ -1368,7 +1406,7 @@ func (s *Server) checkpointResumeFresh(ctx context.Context, sbx *sandbox.Sandbox
 	// Checkpoint resumes a fresh sandbox from the new build immediately, so the
 	// diff must be materialized synchronously — never defer the rootfs export
 	// here, and never maintain the paused sandbox.
-	res, err := s.snapshotAndCacheSandbox(ctx, sbx, in.GetBuildId(), in.GetMetadata(), storage.ObjectOriginSnapshotTemplate, false, false, false)
+	res, err := s.snapshotAndCacheSandbox(ctx, sbx, in.GetBuildId(), in.GetMetadata(), storage.ObjectOriginSnapshotTemplate, false, false, false, false)
 	if err != nil {
 		telemetry.ReportCriticalError(ctx, "error snapshotting sandbox for checkpoint", err, telemetry.WithSandboxID(in.GetSandboxId()))
 
@@ -1552,6 +1590,7 @@ func (s *Server) snapshotAndCacheSandbox(
 	filesystemOnly bool,
 	deferRootfsExport bool,
 	maintainSandbox bool,
+	resumeOnFailure bool,
 ) (*snapshotResult, error) {
 	meta, err := sbx.Template.Metadata()
 	if err != nil {
@@ -1573,6 +1612,9 @@ func (s *Server) snapshotAndCacheSandbox(
 	}
 	if maintainSandbox {
 		pauseOpts = append(pauseOpts, sandbox.WithMaintainSandbox())
+	}
+	if resumeOnFailure {
+		pauseOpts = append(pauseOpts, sandbox.WithResumeOnFailure())
 	}
 
 	snapshot, err := sbx.Pause(ctx, meta, sandbox.SnapshotUseCasePause, pauseOpts...)

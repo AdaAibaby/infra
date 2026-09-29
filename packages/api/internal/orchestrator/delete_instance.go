@@ -182,6 +182,45 @@ func (o *Orchestrator) RemoveSandbox(ctx context.Context, teamID uuid.UUID, sand
 			return PauseQueueExhaustedError{}
 		}
 
+		// The node's snapshot failed but it resumed the sandbox in place
+		// (e2b-dev/infra#3658). The VM is alive and back in the node's live map,
+		// so restore the store record and route — exactly like a retryable
+		// refusal — instead of removing them and orphaning a healthy sandbox.
+		// Gated by the same restoreOnRefusal flag the node used to decide to
+		// preserve; if it is off the node would have taken the destroy path and
+		// never returned this error.
+		if errors.Is(err, ErrPausePreservedSandbox) {
+			if restoreOnRefusal {
+				outcome := o.restoreRefusedPause(context.WithoutCancel(ctx), transition)
+				o.recordRefusalRestore(ctx, outcome, opts.Eviction)
+				switch outcome {
+				case restoreOutcomeRestored:
+					preserveRecord = true
+					err = sandbox.ErrTransitionRestored
+				case restoreOutcomeSuperseded:
+					preserveRecord = true
+					err = sandbox.ErrTransitionRestored
+
+					return fmt.Errorf("%w: %w", ErrSandboxNotFound, sandbox.ErrExecutionMismatch)
+				}
+			}
+
+			logger.L().Info(ctx, "Pause snapshot failed but the node preserved the sandbox",
+				logger.WithSandboxID(sbx.SandboxID),
+				zap.Bool("restored", preserveRecord),
+			)
+
+			if !preserveRecord {
+				// The sandbox is alive on the node but we could not restore its
+				// record/route, so it would be an unrouteable orphan: kill it.
+				o.killRefusedSandbox(ctx, sbx)
+
+				return ErrSandboxOperationFailed
+			}
+
+			return nil
+		}
+
 		if errors.Is(err, ErrRefusedRouteLost) {
 			// The record is going and the route is already gone: kill the VM
 			// now rather than leaving it to the orphan reconciler.

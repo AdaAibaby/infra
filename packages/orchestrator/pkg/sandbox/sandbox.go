@@ -1915,6 +1915,7 @@ type pauseOptions struct {
 	filesystemSnapshot bool
 	deferRootfsExport  bool
 	maintainSandbox    bool
+	resumeOnFailure    bool
 }
 
 type PauseOption func(*pauseOptions)
@@ -1926,6 +1927,22 @@ type PauseOption func(*pauseOptions)
 // background; without it the in-place export is synchronous.
 func WithMaintainSandbox() PauseOption {
 	return func(o *pauseOptions) { o.maintainSandbox = true }
+}
+
+// WithResumeOnFailure keeps the sandbox recoverable across a FAILED pause: if
+// the snapshot fails after the guest has been suspended, the VM is resumed in
+// place (health checks restarted, guest clock re-synced) instead of being left
+// frozen for the caller to tear down, so a transient snapshot error (e.g. a
+// rootfs-diff fsync EIO) no longer destroys an otherwise-healthy sandbox (see
+// e2b-dev/infra#3658).
+//
+// Unlike WithMaintainSandbox, this does NOT resume on success: a successful
+// pause still suspends the guest and leaves it for the caller to stop. It only
+// arms the same resume-on-error cleanup that the in-place checkpoint uses, for
+// the destroy path. The two compose: maintainSandbox implies resume on every
+// outcome; resumeOnFailure alone resumes only on failure.
+func WithResumeOnFailure() PauseOption {
+	return func(o *pauseOptions) { o.resumeOnFailure = true }
 }
 
 // WithFilesystemSnapshot makes the pause produce a filesystem-only snapshot:
@@ -2130,8 +2147,13 @@ func (s *Sandbox) Pause(
 	// assignment).
 	memExportDeferred := false
 	var freezeStart time.Time
-	resumeOnError := pauseOpts.maintainSandbox
-	if pauseOpts.maintainSandbox {
+	// resumeOnError arms the resume-in-place cleanup below for BOTH the in-place
+	// checkpoint (maintainSandbox: resume on every outcome) and the recoverable
+	// destroy path (resumeOnFailure: resume only when the pause fails). The
+	// cleanup runs only on the error path (see the top-level deferred cleanup.Run
+	// guarded by e != nil), so a successful pause never resumes here regardless.
+	resumeOnError := pauseOpts.maintainSandbox || pauseOpts.resumeOnFailure
+	if resumeOnError {
 		cleanup.Add(ctx, func(ctx context.Context) error {
 			if !resumeOnError {
 				return nil
@@ -2186,7 +2208,7 @@ func (s *Sandbox) Pause(
 	}
 
 	freezeStart = time.Now()
-	if pauseOpts.maintainSandbox {
+	if resumeOnError {
 		// The pause PATCH is the one state flip whose failure is AMBIGUOUS: a
 		// request-ctx cancellation (client disconnect) can kill the round-trip
 		// after FC already applied it. So it runs immune to request
@@ -2194,6 +2216,9 @@ func (s *Sandbox) Pause(
 		// cleanup above resumes on EVERY outcome (see the pre-arm rule at its
 		// registration). pauseLanded — the metric/clock gate — is set only on
 		// a successful return, the one case the guest is KNOWN to have frozen.
+		// Both the in-place checkpoint and the recoverable destroy path
+		// (resumeOnFailure) need this: each arms a resume that must be able to
+		// unfreeze the guest even if the caller's context died.
 		pauseCtx, cancelPause := context.WithTimeout(context.WithoutCancel(ctx), inPlaceStateFlipTimeout)
 		err := s.process.Pause(pauseCtx)
 		cancelPause()
@@ -2202,9 +2227,8 @@ func (s *Sandbox) Pause(
 		}
 		pauseLanded = true
 	} else {
-		// Destroy path: no resume cleanup exists (resumeOnError is false), so
-		// the ambiguity above has no consumer; keep the plain request-scoped
-		// call.
+		// Plain destroy path with no resume cleanup: the ambiguity above has no
+		// consumer, so keep the plain request-scoped call.
 		if err := s.process.Pause(ctx); err != nil {
 			return nil, fmt.Errorf("failed to pause VM: %w", err)
 		}

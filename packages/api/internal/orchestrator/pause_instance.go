@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/gogo/status"
 	"github.com/google/uuid"
@@ -116,6 +117,17 @@ func snapshotInstance(ctx context.Context, node *nodemanager.Node, sbx sandbox.S
 		logger.L().Warn(ctx, "Pause refused by the node but its route was lost", logger.WithSandboxID(sbx.SandboxID), zap.String("edge_message", st.Message()))
 
 		return ErrRefusedRouteLost
+	}
+
+	// The node's snapshot failed but it resumed the sandbox in place instead of
+	// destroying it (e2b-dev/infra#3658). The orchestrator signals this with
+	// FailedPrecondition and a stable "sandbox preserved" marker in the message.
+	// Classify it so DeleteInstance restores the record + route rather than
+	// removing them, keeping the still-healthy sandbox usable.
+	if st.Code() == codes.FailedPrecondition && strings.Contains(st.Message(), "sandbox preserved after snapshot failure") {
+		logger.L().Warn(ctx, "Pause snapshot failed but the node preserved the sandbox", logger.WithSandboxID(sbx.SandboxID), zap.String("node_message", st.Message()))
+
+		return ErrPausePreservedSandbox
 	}
 
 	return fmt.Errorf("failed to pause sandbox '%s': %w", sbx.SandboxID, err)
