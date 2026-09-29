@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -28,6 +29,8 @@ var (
 type ProjectLimitsProjection struct {
 	ProjectID uuid.UUID
 	Revision  int64
+	// Zero when the caller did not say.
+	DecidedAt time.Time
 
 	MaxLengthHours           int64
 	ConcurrentSandboxes      int64
@@ -54,8 +57,12 @@ func (s *Service) ApplyProjectLimits(ctx context.Context, projection ProjectLimi
 		return err
 	}
 
-	if _, err := s.applyProjectLimits(ctx, projection); err != nil {
+	stored, err := s.applyProjectLimits(ctx, projection)
+	if err != nil {
 		return err
+	}
+	if stored {
+		s.applyLag.stored(ctx, projectionProjectLimits, projection.DecidedAt)
 	}
 
 	// Logged rather than returned, as the sibling writes do: the row is
@@ -89,6 +96,7 @@ func (s *Service) applyProjectLimits(ctx context.Context, projection ProjectLimi
 	applied, err := txDB.ApplyProjectLimitsProjection(ctx, queries.ApplyProjectLimitsProjectionParams{
 		ProjectID: projection.ProjectID,
 		Revision:  projection.Revision,
+		DecidedAt: decidedAtParam(projection.DecidedAt),
 	})
 	if err != nil {
 		return false, fmt.Errorf("advance project limits projection: %w", err)

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 
@@ -20,6 +21,8 @@ type ProjectBlockProjection struct {
 	Revision  int64
 	Blocked   bool
 	Reason    string
+	// Zero when the caller did not say.
+	DecidedAt time.Time
 }
 
 func (s *Service) ApplyProjectBlock(ctx context.Context, projection ProjectBlockProjection) error {
@@ -27,8 +30,12 @@ func (s *Service) ApplyProjectBlock(ctx context.Context, projection ProjectBlock
 		return ErrInvalidProjectBlock
 	}
 
-	if err := s.applyProjectBlock(ctx, projection); err != nil {
+	stored, err := s.applyProjectBlock(ctx, projection)
+	if err != nil {
 		return err
+	}
+	if stored {
+		s.applyLag.stored(ctx, projectionProjectBlocks, projection.DecidedAt)
 	}
 
 	// Duplicate deliveries must retry eviction after a committed write's cache failure.
@@ -39,10 +46,10 @@ func (s *Service) ApplyProjectBlock(ctx context.Context, projection ProjectBlock
 	return nil
 }
 
-func (s *Service) applyProjectBlock(ctx context.Context, projection ProjectBlockProjection) error {
+func (s *Service) applyProjectBlock(ctx context.Context, projection ProjectBlockProjection) (bool, error) {
 	txDB, tx, err := s.projectDB.WithTx(ctx)
 	if err != nil {
-		return fmt.Errorf("start project block transaction: %w", err)
+		return false, fmt.Errorf("start project block transaction: %w", err)
 	}
 	defer func() {
 		_ = tx.Rollback(ctx)
@@ -50,25 +57,26 @@ func (s *Service) applyProjectBlock(ctx context.Context, projection ProjectBlock
 
 	if _, err := txDB.LockManagedProject(ctx, projection.ProjectID); err != nil {
 		if dberrors.IsNotFoundError(err) {
-			return ErrProjectNotFound
+			return false, ErrProjectNotFound
 		}
 
-		return fmt.Errorf("lock project: %w", err)
+		return false, fmt.Errorf("lock project: %w", err)
 	}
 
 	applied, err := txDB.ApplyProjectBlockProjection(ctx, queries.ApplyProjectBlockProjectionParams{
 		ProjectID: projection.ProjectID,
 		Revision:  projection.Revision,
+		DecidedAt: decidedAtParam(projection.DecidedAt),
 	})
 	if err != nil {
-		return fmt.Errorf("advance project block projection: %w", err)
+		return false, fmt.Errorf("advance project block projection: %w", err)
 	}
 	if !applied {
 		if err := tx.Commit(ctx); err != nil {
-			return fmt.Errorf("commit stale project block projection: %w", err)
+			return false, fmt.Errorf("commit stale project block projection: %w", err)
 		}
 
-		return nil
+		return false, nil
 	}
 
 	if _, err := txDB.Dashboard.SetTeamBlocked(ctx, dashboardqueries.SetTeamBlockedParams{
@@ -76,14 +84,14 @@ func (s *Service) applyProjectBlock(ctx context.Context, projection ProjectBlock
 		IsBlocked:     projection.Blocked,
 		BlockedReason: blockedReason(projection),
 	}); err != nil {
-		return fmt.Errorf("set project block state: %w", err)
+		return false, fmt.Errorf("set project block state: %w", err)
 	}
 
 	if err := tx.Commit(ctx); err != nil {
-		return fmt.Errorf("commit project block projection: %w", err)
+		return false, fmt.Errorf("commit project block projection: %w", err)
 	}
 
-	return nil
+	return true, nil
 }
 
 func blockedReason(projection ProjectBlockProjection) *string {

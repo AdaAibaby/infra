@@ -8,6 +8,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel/metric/noop"
 
 	"github.com/e2b-dev/infra/packages/db/pkg/testutils"
 )
@@ -17,7 +18,7 @@ func TestApplyProjectBlockRetriesFailedCacheInvalidation(t *testing.T) {
 
 	db := testutils.SetupDatabase(t)
 	cache := &failingBlockCache{err: errors.New("cache unavailable")}
-	service := NewService(db.AuthDB, db.SqlcClient, cache)
+	service := NewService(db.AuthDB, db.SqlcClient, cache, noop.NewMeterProvider())
 	teamID := testutils.CreateTestTeam(t, db)
 	projection := ProjectBlockProjection{ProjectID: teamID, Revision: 1, Blocked: true, Reason: "credit_exhausted"}
 

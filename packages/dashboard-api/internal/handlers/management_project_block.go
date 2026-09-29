@@ -3,6 +3,7 @@ package handlers
 import (
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"go.opentelemetry.io/otel/attribute"
@@ -11,6 +12,7 @@ import (
 	"github.com/e2b-dev/infra/packages/dashboard-api/internal/management"
 	"github.com/e2b-dev/infra/packages/shared/pkg/ginutils"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
+	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
 )
 
 func (s *APIStore) ManagementApplyProjectBlock(c *gin.Context, projectID api.ProjectID) {
@@ -36,6 +38,7 @@ func (s *APIStore) ManagementApplyProjectBlock(c *gin.Context, projectID api.Pro
 		Revision:  body.Revision,
 		Blocked:   body.Blocked,
 		Reason:    reason,
+		DecidedAt: utils.DerefOrDefault(body.DecidedAt, time.Time{}),
 	}); err != nil {
 		s.sendProjectBlockError(c, err, attrs...)
 

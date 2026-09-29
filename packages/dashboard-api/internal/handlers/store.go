@@ -7,6 +7,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.opentelemetry.io/otel/metric"
 
 	sharedauth "github.com/e2b-dev/infra/packages/auth/pkg/auth"
 	"github.com/e2b-dev/infra/packages/auth/pkg/types"
@@ -39,6 +40,7 @@ func NewAPIStore(
 	ch clickhouse.Clickhouse,
 	authService sharedauth.Service,
 	identityService identity.Service,
+	meterProvider metric.MeterProvider,
 ) *APIStore {
 	return &APIStore{
 		config:            config,
@@ -47,7 +49,7 @@ func NewAPIStore(
 		clickhouse:        ch,
 		authService:       authService,
 		identityService:   identityService,
-		managementService: management.NewService(authDB, db, authService),
+		managementService: management.NewService(authDB, db, authService, meterProvider),
 	}
 }
 

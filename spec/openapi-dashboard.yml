@@ -1316,6 +1316,17 @@ components:
           type: string
           description: >-
             Reason included in blocked-request errors. Cleared when blocked is false.
+        decided_at:
+          $ref: "#/components/schemas/ManagementDecidedAt"
+
+    ManagementDecidedAt:
+      type: string
+      format: date-time
+      description: >-
+        When the caller decided this revision, in RFC 3339. Stored with the
+        revision and used to measure how long the decision took to apply here.
+        Omit it when the caller does not know; the delivery is then counted as
+        origin unknown rather than as zero lag.
 
     ManagementProjectLimits:
       type: object
@@ -1425,6 +1436,8 @@ components:
           description: >-
             Requests per second a project may make to each list endpoint. Zero
             disables the limit.
+        decided_at:
+          $ref: "#/components/schemas/ManagementDecidedAt"
 
 tags:
   - name: builds

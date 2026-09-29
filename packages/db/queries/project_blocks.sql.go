@@ -7,20 +7,23 @@ package queries
 
 import (
 	"context"
+	"time"
 
 	"github.com/google/uuid"
 )
 
 const applyProjectBlockProjection = `-- name: ApplyProjectBlockProjection :one
 WITH changed AS (
-    INSERT INTO projection.project_blocks (project_id, revision)
+    INSERT INTO projection.project_blocks (project_id, revision, decided_at)
     VALUES (
         $1::uuid,
-        $2::bigint
+        $2::bigint,
+        $3::timestamptz
     )
     ON CONFLICT (project_id) DO UPDATE
     SET
         revision = EXCLUDED.revision,
+        decided_at = EXCLUDED.decided_at,
         updated_at = now()
     WHERE projection.project_blocks.revision < EXCLUDED.revision
     RETURNING project_id
@@ -31,11 +34,12 @@ SELECT EXISTS (SELECT 1 FROM changed) AS applied
 type ApplyProjectBlockProjectionParams struct {
 	ProjectID uuid.UUID
 	Revision  int64
+	DecidedAt *time.Time
 }
 
 // Advance in the same transaction as teams.is_blocked so retries cannot skip an unwritten state.
 func (q *Queries) ApplyProjectBlockProjection(ctx context.Context, arg ApplyProjectBlockProjectionParams) (bool, error) {
-	row := q.db.QueryRow(ctx, applyProjectBlockProjection, arg.ProjectID, arg.Revision)
+	row := q.db.QueryRow(ctx, applyProjectBlockProjection, arg.ProjectID, arg.Revision, arg.DecidedAt)
 	var applied bool
 	err := row.Scan(&applied)
 	return applied, err

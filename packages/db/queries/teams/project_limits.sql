@@ -19,14 +19,16 @@ FOR UPDATE;
 -- rather than against what it read.
 -- name: ApplyProjectLimitsProjection :one
 WITH changed AS (
-    INSERT INTO projection.project_limits (project_id, revision)
+    INSERT INTO projection.project_limits (project_id, revision, decided_at)
     VALUES (
         sqlc.arg(project_id)::uuid,
-        sqlc.arg(revision)::bigint
+        sqlc.arg(revision)::bigint,
+        sqlc.narg(decided_at)::timestamptz
     )
     ON CONFLICT (project_id) DO UPDATE
     SET
         revision = EXCLUDED.revision,
+        decided_at = EXCLUDED.decided_at,
         updated_at = now()
     WHERE projection.project_limits.revision < EXCLUDED.revision
     RETURNING project_id

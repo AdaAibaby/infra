@@ -366,6 +366,13 @@ failures return an error so retries can finish invalidation after commit. The AP
 uses this state when admitting billable work. Direct admin block writes do not
 advance the projection revision; a newer management delivery replaces them.
 
+Limit and block deliveries may carry `decided_at`, when the caller decided that
+revision. The ledger row stores it beside the revision. Each delivery the ledger
+accepts records the seconds since then in `dashboard-api.management.apply_lag`, by
+`projection` (`project_limits`, `project_blocks`); one without `decided_at` counts
+in `dashboard-api.management.origin_unknown` instead, never as zero lag. Dropped,
+refused and failed deliveries record nothing.
+
 The management surface also owns a replay-safe cluster lifecycle. A caller registers a stable
 cluster UUID with immutable connection details, assigns it only to the named project, detaches that
 exact assignment before provider cleanup, and deletes the cluster only after no project references
