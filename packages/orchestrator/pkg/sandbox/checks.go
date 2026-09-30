@@ -88,6 +88,7 @@ func (c *Checks) logHealth(ctx context.Context) {
 
 	// Get metrics and health status on sandbox startup
 	go c.Healthcheck(ctx, false)
+	go c.seedOOMWatermark(ctx)
 
 	for {
 		select {

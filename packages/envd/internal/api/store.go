@@ -84,6 +84,9 @@ type API struct {
 	// cgroups after envd started.
 	memory cgroups.MemoryProtection
 
+	// oomKills is nil outside Firecracker.
+	oomKills *host.OOMWatcher
+
 	// initialized flips true on the first authenticated /init. It gates the
 	// live-upgrade /upgrade endpoint and the handover fallback thaw so a
 	// re-adopted (possibly hostile) guest process can neither drive an upgrade
@@ -138,6 +141,11 @@ func New(l *zerolog.Logger, defaults *execcontext.Defaults, mmdsChan chan *host.
 		logFlusher = logFlushers[0]
 	}
 
+	var oomKills *host.OOMWatcher
+	if !isNotFC {
+		oomKills = host.NewOOMWatcher()
+	}
+
 	return &API{
 		logger:          l,
 		defaults:        defaults,
@@ -149,6 +157,7 @@ func New(l *zerolog.Logger, defaults *execcontext.Defaults, mmdsChan chan *host.
 		caCertInstaller: host.NewCACertInstaller(l),
 		workloadFreezer: workloadFreezer,
 		memory:          workloadFreezer.MemoryProtection(),
+		oomKills:        oomKills,
 		logFlusher:      logFlusher,
 		initLock:        semaphore.NewWeighted(1),
 		fsFreezer:       fsfreeze.New(),
@@ -167,6 +176,13 @@ func (a *API) GetHealth(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+// WatchOOMKills collects OOM kills for /metrics until ctx is done.
+func (a *API) WatchOOMKills(ctx context.Context) {
+	if a.oomKills != nil {
+		a.oomKills.Watch(ctx, a.logger)
+	}
+}
+
 func (a *API) GetMetrics(w http.ResponseWriter, r *http.Request) {
 	defer r.Body.Close()
 
@@ -181,6 +197,12 @@ func (a *API) GetMetrics(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 
 		return
+	}
+
+	if a.oomKills != nil {
+		if kills, ok := a.oomKills.Kills(); ok {
+			metrics.OomKills = &kills
+		}
 	}
 
 	w.WriteHeader(http.StatusOK)

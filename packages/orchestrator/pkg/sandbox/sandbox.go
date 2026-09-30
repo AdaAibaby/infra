@@ -398,6 +398,9 @@ type Sandbox struct {
 
 	Checks *Checks
 
+	// Kept here, not on Checks, so it survives checkpoints.
+	OOMKills OOMWatermark
+
 	hostStatsCollector *HostStatsCollector
 
 	// Deprecated: to be removed in the future

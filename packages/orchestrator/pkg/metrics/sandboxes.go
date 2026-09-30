@@ -18,6 +18,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox"
+	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/envd"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 	sbxlogger "github.com/e2b-dev/infra/packages/shared/pkg/logger/sandbox"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
@@ -29,6 +30,12 @@ const (
 
 	sbxMemThresholdPct = 80
 	sbxCpuThresholdPct = 80
+
+	// Caps the guest-supplied process name, in runes. Real names are escaped to ASCII, 60 at most.
+	maxOomProcessLen = 64
+
+	// Caps the kill lines one poll writes.
+	maxOomKillsLogged = 10
 
 	minEnvdVersionForMetrics         = "0.1.5"
 	minEnvVersionForMetricsTimestamp = "0.1.3"
@@ -264,6 +271,16 @@ func (so *SandboxObserver) startObserving() (metric.Registration, error) {
 						)
 					}
 
+					kills, more := unseenOOMKills(sbx, sbxMetrics)
+					for _, kill := range kills {
+						sbxlogger.E(sbx).Warn(ctx, "Out of memory: process was killed", zap.String("process", kill.Process))
+					}
+					if more > 0 {
+						// envd lists only its latest kills, so there may have been more.
+						sbxlogger.E(sbx).Warn(ctx, "Out of memory: at least this many more processes were killed",
+							zap.Int("processes", more))
+					}
+
 					return nil
 				})
 			}
@@ -307,6 +324,25 @@ func (so *SandboxObserver) Close(ctx context.Context) error {
 	}
 
 	return errors.Join(errs...)
+}
+
+// unseenOOMKills returns up to maxOomKillsLogged kills not yet logged for sbx, names capped, and
+// how many more it saw; envd lists only its latest kills, so there may have been more. Builds log none.
+func unseenOOMKills(sbx *sandbox.Sandbox, m *sandbox.Metrics) ([]envd.OOMKill, int) {
+	if !sbx.LogsOOMKills() || m.OomKills == nil {
+		return nil, 0
+	}
+
+	kills := sbx.OOMKills.Unseen(*m.OomKills)
+	for i := range kills {
+		kills[i].Process = utils.Truncate(kills[i].Process, maxOomProcessLen)
+	}
+
+	if len(kills) > maxOomKillsLogged {
+		return kills[:maxOomKillsLogged], len(kills) - maxOomKillsLogged
+	}
+
+	return kills, 0
 }
 
 // sandboxMemory returns the sandbox's memory in bytes. envd reports bytes since

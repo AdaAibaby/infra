@@ -21,6 +21,8 @@ type Metrics struct {
 
 	DiskUsed  uint64 `json:"disk_used"`  // Used disk space in bytes
 	DiskTotal uint64 `json:"disk_total"` // Total disk space in bytes
+
+	OomKills *[]OOMKill `json:"oom_kills,omitempty"` // Latest OOM kills; nil when not known
 }
 
 func GetMetrics() (*Metrics, error) {
