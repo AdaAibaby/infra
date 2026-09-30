@@ -321,7 +321,7 @@ func TestCheckpoint_RecordsRouteAndBalloonMode(t *testing.T) {
 	require.True(t, ok)
 	assert.Equal(t, codes.FailedPrecondition, st.Code())
 
-	want := map[string]string{"in_place": "true", "route": routeInPlace, "balloon_mode": "hinting", "deferred": "false", "success": "false"}
+	want := map[string]string{"in_place": "true", "fs_only": "false", "route": routeInPlace, "balloon_mode": "hinting", "deferred": "false", "success": "false"}
 	points := checkpointCounterAttrs(t, reader)
 	require.Len(t, points, 1)
 	assert.Equal(t, want, points[0])
@@ -351,4 +351,39 @@ func TestCheckpoint_CancelledDuringRouteIsNotCheckpointed(t *testing.T) {
 	assert.Empty(t, checkpointDurationAttrs(t, reader), "no path ran, so no duration was recorded")
 	_, live := s.sandboxFactory.Sandboxes.Get("ckpt-cancel")
 	assert.True(t, live, "the sandbox was never marked stopping")
+}
+
+// A filesystem-only checkpoint is routed by its own flag: with
+// in-place-checkpoint off and the balloon unreadable it still goes in place,
+// and the device is never consulted. The in-flight guard refuses the RPC after
+// the decision, so it completes without a template.
+func TestCheckpoint_FilesystemOnlyGoesInPlaceOnItsOwnFlag(t *testing.T) {
+	t.Parallel()
+	s, reader := routeTestServer(t, false, false)
+	td := ldtestdata.DataSource()
+	td.Update(td.Flag(featureflags.InPlaceCheckpointFlag.Key()).ValueForAll(ldvalue.Bool(false)))
+	td.Update(td.Flag(featureflags.FilesystemOnlyCheckpointFlag.Key()).ValueForAll(ldvalue.Bool(true)))
+	ff, err := featureflags.NewClientWithDatasource(td)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = ff.Close(context.WithoutCancel(t.Context())) })
+	s.featureFlags = ff
+	sbx := liveRouteSandbox(t, s, "ckpt-fs-only", 43, func(context.Context) (fc.BalloonCaps, error) {
+		t.Error("a filesystem-only checkpoint must not read the balloon")
+
+		return fc.BalloonCaps{}, nil
+	})
+	require.True(t, sbx.BeginInPlaceCheckpoint())
+
+	_, ckptErr := s.Checkpoint(t.Context(), &orchestrator.SandboxCheckpointRequest{SandboxId: "ckpt-fs-only", FilesystemOnly: true})
+	require.Error(t, ckptErr)
+	st, ok := status.FromError(ckptErr)
+	require.True(t, ok)
+	assert.Equal(t, codes.FailedPrecondition, st.Code())
+	assert.Contains(t, st.Message(), "already in progress", "the RPC must reach the in-place path, not be refused by a flag")
+
+	points := checkpointCounterAttrs(t, reader)
+	require.Len(t, points, 1)
+	assert.Equal(t, "true", points[0]["in_place"])
+	assert.Equal(t, "true", points[0]["fs_only"])
+	assert.Equal(t, routeInPlace, points[0]["route"])
 }

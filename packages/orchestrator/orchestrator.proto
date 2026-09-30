@@ -222,6 +222,9 @@ message SandboxCheckpointRequest {
   // index (e.g. template_id). Opaque to the orchestrator, which just forwards
   // it to object metadata.
   map<string, string> metadata = 4;
+  // Persist only the filesystem: no memfile is exported and a sandbox created
+  // from the build cold-boots. The source sandbox keeps running.
+  bool filesystem_only = 5;
 }
 
 message SandboxCheckpointResponse {

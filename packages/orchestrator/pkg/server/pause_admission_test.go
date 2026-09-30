@@ -658,3 +658,53 @@ func TestPauseAdmissionMetrics_ReadyOutcomes(t *testing.T) {
 		assert.Empty(t, admissionWaitPoints(t, reader), "a no-wait admission must not sample the wait histogram")
 	})
 }
+
+// A filesystem-only checkpoint has no resume-fresh fallback: with its flag
+// off it is refused with FailedPrecondition before any destructive step, so
+// the API restores the sandbox to Running.
+func TestCheckpoint_FilesystemOnlyRefusedWithoutItsFlag(t *testing.T) {
+	t.Parallel()
+
+	s := admissionTestServer(t, nil)
+	sbx := admissionTestSandbox(t, "sbx-ckpt-fs-only-off", 27, utils.NewSetOnce[*header.Header]())
+	s.sandboxFactory.Sandboxes.MarkRunning(t.Context(), sbx)
+
+	_, ckptErr := s.Checkpoint(t.Context(), &orchestrator.SandboxCheckpointRequest{SandboxId: "sbx-ckpt-fs-only-off", FilesystemOnly: true})
+
+	require.Error(t, ckptErr)
+	st, ok := status.FromError(ckptErr)
+	require.True(t, ok)
+	assert.Equal(t, codes.FailedPrecondition, st.Code())
+
+	_, live := s.sandboxFactory.Sandboxes.Get("sbx-ckpt-fs-only-off")
+	assert.True(t, live, "a refused checkpoint must leave the sandbox live")
+	assert.Equal(t, sandbox.StopReasonCrashed, sbx.GetStopReason(), "no stop reason may be set by a refusal")
+	assert.True(t, s.sandboxFactory.Sandboxes.MarkStopping(t.Context(), "sbx-ckpt-fs-only-off", "lifecycle-1"),
+		"the sandbox must still be markable after a refusal")
+}
+
+// The admission pre-flight waits for the parent memfile header only when a
+// memory snapshot is taken. With the header still deduplicating past the
+// grace, a memory checkpoint refuses retryably while a filesystem-only one
+// passes admission and reaches its own flag instead; the status split is the
+// proof, no clock is measured.
+func TestCheckpoint_FilesystemOnlySkipsMemoryAdmission(t *testing.T) {
+	t.Parallel()
+
+	s := admissionTestServer(t, new(40))
+	sbx := admissionTestSandbox(t, "sbx-ckpt-fs-only-admission", 28, utils.NewSetOnce[*header.Header]())
+	s.sandboxFactory.Sandboxes.MarkRunning(t.Context(), sbx)
+
+	_, memErr := s.Checkpoint(t.Context(), &orchestrator.SandboxCheckpointRequest{SandboxId: "sbx-ckpt-fs-only-admission"})
+	require.Error(t, memErr)
+	memSt, ok := status.FromError(memErr)
+	require.True(t, ok)
+	require.Equal(t, codes.ResourceExhausted, memSt.Code())
+
+	_, fsErr := s.Checkpoint(t.Context(), &orchestrator.SandboxCheckpointRequest{SandboxId: "sbx-ckpt-fs-only-admission", FilesystemOnly: true})
+
+	require.Error(t, fsErr)
+	fsSt, ok := status.FromError(fsErr)
+	require.True(t, ok)
+	assert.Equal(t, codes.FailedPrecondition, fsSt.Code(), "fs-only must pass admission and be refused by its own flag; the memory call's ResourceExhausted above shows the grace was live")
+}

@@ -1356,9 +1356,12 @@ type SandboxCheckpointRequest struct {
 	// Provenance stamped onto the snapshot's storage objects for the storage
 	// index (e.g. template_id). Opaque to the orchestrator, which just forwards
 	// it to object metadata.
-	Metadata      map[string]string `protobuf:"bytes,4,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	Metadata map[string]string `protobuf:"bytes,4,rep,name=metadata,proto3" json:"metadata,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// Persist only the filesystem: no memfile is exported and a sandbox created
+	// from the build cold-boots. The source sandbox keeps running.
+	FilesystemOnly bool `protobuf:"varint,5,opt,name=filesystem_only,json=filesystemOnly,proto3" json:"filesystem_only,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *SandboxCheckpointRequest) Reset() {
@@ -1410,6 +1413,13 @@ func (x *SandboxCheckpointRequest) GetMetadata() map[string]string {
 		return x.Metadata
 	}
 	return nil
+}
+
+func (x *SandboxCheckpointRequest) GetFilesystemOnly() bool {
+	if x != nil {
+		return x.FilesystemOnly
+	}
+	return false
 }
 
 type SandboxCheckpointResponse struct {
@@ -1770,12 +1780,13 @@ const file_orchestrator_proto_rawDesc = "" +
 	"\x12rootfs_build_bytes\x18\b \x03(\x04R\x10rootfsBuildBytes\x12/\n" +
 	"\x14rootfs_base_build_id\x18\t \x01(\tR\x11rootfsBaseBuildId\"\\\n" +
 	"\x14SandboxPauseResponse\x12D\n" +
-	"\x13scheduling_metadata\x18\x01 \x01(\v2\x13.SchedulingMetadataR\x12schedulingMetadata\"\xd6\x01\n" +
+	"\x13scheduling_metadata\x18\x01 \x01(\v2\x13.SchedulingMetadataR\x12schedulingMetadata\"\xff\x01\n" +
 	"\x18SandboxCheckpointRequest\x12\x1d\n" +
 	"\n" +
 	"sandbox_id\x18\x01 \x01(\tR\tsandboxId\x12\x19\n" +
 	"\bbuild_id\x18\x03 \x01(\tR\abuildId\x12C\n" +
-	"\bmetadata\x18\x04 \x03(\v2'.SandboxCheckpointRequest.MetadataEntryR\bmetadata\x1a;\n" +
+	"\bmetadata\x18\x04 \x03(\v2'.SandboxCheckpointRequest.MetadataEntryR\bmetadata\x12'\n" +
+	"\x0ffilesystem_only\x18\x05 \x01(\bR\x0efilesystemOnly\x1a;\n" +
 	"\rMetadataEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"a\n" +

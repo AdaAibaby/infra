@@ -211,6 +211,16 @@ var (
 	// sandboxes and when this flag is off.
 	InPlaceCheckpointFlag = NewBoolFlag("in-place-checkpoint", false)
 
+	// FilesystemOnlyCheckpointFlag enables the filesystem-only checkpoint:
+	// the rootfs is exported and no memfile, the SAME Firecracker process is
+	// resumed afterwards, and a sandbox created from the build cold-boots.
+	// Independent of InPlaceCheckpointFlag: no memory is exported, so the
+	// sync-WP tracking, the Firecracker release and the balloon that gate the
+	// memory in-place path play no part. Off (the default) refuses the
+	// request before anything is touched; there is no memory fallback, since
+	// the caller asked for a template that cold-boots.
+	FilesystemOnlyCheckpointFlag = NewBoolFlag("filesystem-only-checkpoint", false)
+
 	// InPlaceCheckpointReportingFlag re-admits to the in-place checkpoint the
 	// sandboxes whose balloon runs free-page reporting, and those whose
 	// balloon could not be read. It only decides where DeferMemoryExportFlag

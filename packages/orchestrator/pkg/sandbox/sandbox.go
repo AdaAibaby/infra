@@ -69,6 +69,7 @@ var (
 	envdDefaultsBuiltinFallback   = utils.Must(telemetry.GetCounter(meter, telemetry.EnvdDefaultsBuiltinFallback))
 	envdFreezeCgroupsHistogram    = utils.Must(telemetry.GetHistogram(meter, telemetry.EnvdFreezeCgroupsHistogramName))
 	envdUnfreezeDurationHistogram = utils.Must(telemetry.GetHistogram(meter, telemetry.EnvdUnfreezeDurationHistogramName))
+	envdFsthawDurationHistogram   = utils.Must(telemetry.GetHistogram(meter, telemetry.EnvdFsthawDurationHistogramName))
 	envdCollapseChunks            = utils.Must(telemetry.GetCounter(meter, telemetry.EnvdCollapseChunks))
 	guestSyncDurationHistogram    = utils.Must(telemetry.GetHistogram(meter, telemetry.GuestSyncDurationHistogramName))
 	fsQuiescedPauseCounter        = utils.Must(telemetry.GetCounter(meter, telemetry.SandboxPauseFsQuiescedCounterName))
@@ -2057,6 +2058,23 @@ func (s *Sandbox) Pause(
 
 	// Stop the health check before pausing the VM
 	s.Checks.Stop()
+	// Restart it on any failed exit that leaves the sandbox live. Registered
+	// first, so it runs last in the cleanup chain, after the resume in place
+	// below, and ahead of the filesystem quiesce, whose error return would
+	// otherwise skip it.
+	restartChecksOnError := pauseOpts.maintainSandbox
+	// The in-place error path resumes the VM, so its registered thaw escalates;
+	// cleared with the flags above once the success path owns the thaw.
+	thawOrLose := pauseOpts.maintainSandbox
+	cleanup.Add(ctx, func(ctx context.Context) error {
+		if !restartChecksOnError || s.GetStopReason() == StopReasonKilled {
+			return nil
+		}
+		s.Checks = NewChecks(s)
+		go s.Checks.Start(context.WithoutCancel(ctx))
+
+		return nil
+	})
 	// Wait out a periodic hinting run that already held the mutex: it stops the
 	// guest cycle before releasing, so nothing hints past this point.
 	_, hintBarrier := tracer.Start(ctx, "wait for hinting run")
@@ -2067,7 +2085,7 @@ func (s *Sandbox) Pause(
 	// Best-effort pre-pause guest reclaim (fstrim, sync, drop_caches,
 	// compact_memory) on the live VM via envd. Per-step caps are LD-flag-driven;
 	// all default to 0 which disables the chain entirely. Non-fatal.
-	s.bestEffortReclaim(ctx)
+	s.bestEffortReclaim(ctx, pauseOpts.filesystemSnapshot)
 	// reclaim freezes user cgroups; if pause/snapshot fails the sandbox stays
 	// live, so unfreeze on error to avoid a permanently frozen live VM.
 	// Only runs via cleanup.Run on the error path; success leaves the frozen
@@ -2096,7 +2114,7 @@ func (s *Sandbox) Pause(
 		// preserve it, so the rootfs must be quiesced before pause or it would
 		// persist missing acknowledged writes. This is mandatory, unlike the
 		// best-effort reclaim above.
-		frozen, err = s.guestPrepareFsForPause(ctx, cleanup)
+		frozen, err = s.guestPrepareFsForPause(ctx, cleanup, &thawOrLose)
 		if err != nil {
 			return nil, err
 		}
@@ -2125,7 +2143,9 @@ func (s *Sandbox) Pause(
 
 	// Drain free-page-hinting before pause so the snapshot doesn't capture
 	// pages the guest already considers free. Budget per use case; 0 disables.
-	if cfg := featureflags.GetPrePauseHintConfig(ctx, s.featureFlags, string(useCase), sandboxLDContext(s.Runtime, s.Config)); cfg.Timeout > 0 {
+	// It shapes the memfile, so a filesystem-only snapshot skips it: the guest
+	// would sit with its rootfs frozen through a drain that buys nothing.
+	if cfg := featureflags.GetPrePauseHintConfig(ctx, s.featureFlags, string(useCase), sandboxLDContext(s.Runtime, s.Config)); !pauseOpts.filesystemSnapshot && cfg.Timeout > 0 {
 		s.prePauseHintDrain(ctx, cfg, s.process)
 	}
 
@@ -2166,6 +2186,7 @@ func (s *Sandbox) Pause(
 			err := s.process.ResumeInPlace(resumeCtx)
 			cancel()
 			if err != nil {
+				restartChecksOnError = false
 				// Same failure mode and same handling as the success-path
 				// resume below: the VM is stuck paused and unrecoverable,
 				// so tear it down and tag ErrSandboxLost. Returning a
@@ -2188,6 +2209,7 @@ func (s *Sandbox) Pause(
 				guestFreezeDurationHistogram.Record(ctx, time.Since(freezeStart).Milliseconds(),
 					metric.WithAttributes(
 						attribute.Bool("deferred", memExportDeferred),
+						attribute.Bool("fs_only", pauseOpts.filesystemSnapshot),
 						attribute.String("balloon_mode", s.BalloonMode()),
 						attribute.Bool("success", false),
 					))
@@ -2197,9 +2219,6 @@ func (s *Sandbox) Pause(
 				// paused just as long.
 				go s.bestEffortEnvdReinit(ctx)
 			}
-
-			s.Checks = NewChecks(s)
-			go s.Checks.Start(context.WithoutCancel(ctx))
 
 			return nil
 		})
@@ -2326,7 +2345,11 @@ func (s *Sandbox) Pause(
 	// stall stays off the resume critical path. The destroy path skips this — its
 	// sandbox is already stopped.
 	if pauseOpts.maintainSandbox {
+		// From here the final resume owns the sandbox's fate: on success it
+		// starts the checks itself, on failure it tears the sandbox down.
 		resumeOnError = false
+		restartChecksOnError = false
+		thawOrLose = false
 
 		// WithoutCancel: a client disconnect that cancels the request context
 		// must not fail this resume — the VM is paused and a failure here tears
@@ -2363,6 +2386,7 @@ func (s *Sandbox) Pause(
 				// deferred marks the treated arm of the memory-export ramp on
 				// the series the feature exists to move.
 				attribute.Bool("deferred", memExportDeferred),
+				attribute.Bool("fs_only", pauseOpts.filesystemSnapshot),
 				attribute.String("balloon_mode", s.BalloonMode()),
 				attribute.Bool("success", true),
 			))
@@ -2374,11 +2398,13 @@ func (s *Sandbox) Pause(
 		// (a no-op if the guest was only sync'd). A native-only thaw would leave an
 		// exec-frozen guest's filesystem frozen after resume.
 		s.bestEffortUnfreeze(ctx)
-		if pauseOpts.filesystemSnapshot {
-			if s.envdSupportsFsFreeze(ctx) {
-				s.bestEffortFsthaw(ctx)
-			} else {
-				s.bestEffortFsthawViaExec(ctx)
+		// Only a rootfs that was frozen needs thawing: a guest that was merely
+		// synced (old envd, exec freeze off) has nothing to undo, and fsfreeze -u
+		// on an unfrozen filesystem fails. A guest that runs but cannot write is
+		// not a running sandbox: same exit as a failed resume.
+		if pauseOpts.filesystemSnapshot && frozen {
+			if err := s.thawRootfsOrLose(ctx); err != nil {
+				return nil, err
 			}
 		}
 

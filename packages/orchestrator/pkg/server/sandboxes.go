@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"net/http"
 	"slices"
 	"time"
 
@@ -1189,11 +1190,13 @@ func (s *Server) Checkpoint(ctx context.Context, in *orchestrator.SandboxCheckpo
 		return nil, status.Errorf(codes.FailedPrecondition, "%s", err.Error())
 	}
 
-	// The same flag-gated admission pre-flight as Pause (a checkpoint always
-	// takes a full memory snapshot, on both the in-place and resume-fresh
-	// paths); before waitForAcquire so a grace wait never holds a start slot.
+	fsOnly := in.GetFilesystemOnly()
+
+	// The same flag-gated admission pre-flight as Pause; before waitForAcquire
+	// so a grace wait never holds a start slot. A filesystem-only checkpoint
+	// has no memory parent to wait for, only the latched checks apply.
 	if graceMs := s.featureFlags.IntFlag(ctx, featureflags.PauseAdmissionGraceMs); graceMs >= 0 {
-		outcome, waited, admitErr := sbx.AwaitSnapshotAdmission(ctx, time.Duration(graceMs)*time.Millisecond, true)
+		outcome, waited, admitErr := sbx.AwaitSnapshotAdmission(ctx, time.Duration(graceMs)*time.Millisecond, !fsOnly)
 		s.recordPauseAdmission(ctx, "checkpoint", outcome, waited)
 		switch {
 		case errors.Is(admitErr, sandbox.ErrSnapshotAdmissionPending):
@@ -1216,7 +1219,7 @@ func (s *Server) Checkpoint(ctx context.Context, in *orchestrator.SandboxCheckpo
 	}
 	defer s.startingSandboxes.Release(1)
 
-	sbxlogger.E(sbx).Info(ctx, "Checkpointing sandbox")
+	sbxlogger.E(sbx).Info(ctx, "Checkpointing sandbox", zap.Bool("fs_only", fsOnly))
 
 	// In-place checkpoint (pause, snapshot, resume the SAME FC process) is
 	// only honored for sandboxes resumed with use_sync_wp: it skips the
@@ -1242,9 +1245,27 @@ func (s *Server) Checkpoint(ctx context.Context, in *orchestrator.SandboxCheckpo
 	// never buys the in-place path. in-place-checkpoint-reporting re-admits
 	// reporting balloons, per team, as the way back without a redeploy.
 	//
+	// A filesystem-only checkpoint exports no memory, so neither the sync-WP
+	// dirty tracking, the Firecracker in-place release nor the balloon is
+	// involved, and in-place-checkpoint is not consulted: it goes in place
+	// behind filesystem-only-checkpoint alone. It has no resume-fresh
+	// fallback (resuming a fresh sandbox from a memoryless build would
+	// cold-boot it, turning "snapshot my running sandbox" into a reboot), so
+	// with its flag off it is refused before anything is touched, and the API
+	// restores the sandbox to Running.
+	//
 	// Decided here, after admission, so a refused RPC records no route; one
 	// decision feeds the span, the gate and the counter.
-	route, balloonMode := s.checkpointRoute(ctx, sbx)
+	var route string
+	var balloonMode userfaultfd.BalloonMode
+	if fsOnly {
+		if !s.featureFlags.BoolFlag(ctx, featureflags.FilesystemOnlyCheckpointFlag) {
+			return nil, filesystemOnlyDisabledStatus(in.GetSandboxId()).Err()
+		}
+		route, balloonMode = routeInPlace, sbx.BalloonModeValue()
+	} else {
+		route, balloonMode = s.checkpointRoute(ctx, sbx)
+	}
 	inPlace := route == routeInPlace
 	childSpan.SetAttributes(
 		attribute.String("balloon_mode", balloonMode.String()),
@@ -1274,6 +1295,7 @@ func (s *Server) Checkpoint(ctx context.Context, in *orchestrator.SandboxCheckpo
 	// series apart; it is always false on resume-fresh.
 	attrs := metric.WithAttributes(
 		attribute.Bool("in_place", inPlace),
+		attribute.Bool("fs_only", fsOnly),
 		attribute.String("route", route),
 		attribute.String("balloon_mode", balloonMode.String()),
 		attribute.Bool("deferred", deferred),
@@ -1418,7 +1440,7 @@ func (s *Server) checkpointInPlace(ctx context.Context, sbx *sandbox.Sandbox, in
 		in.GetBuildId(),
 		in.GetMetadata(),
 		storage.ObjectOriginSnapshotTemplate,
-		false, // filesystemOnly: full-memory checkpoint (fs-only in-place is a follow-up)
+		in.GetFilesystemOnly(),
 		deferRootfsExport,
 		true, // maintainSandbox: resume in place
 	)
@@ -1501,11 +1523,11 @@ func (s *Server) checkpointResumeFresh(ctx context.Context, sbx *sandbox.Sandbox
 	// Set before the snapshot, as in Pause.
 	sbx.SetStopReason(sandbox.StopReasonCheckpointing)
 
-	// Checkpoint always takes a full memory snapshot; filesystem-only checkpoint
-	// (resume-in-place would need to reboot) is not supported yet.
-	// Checkpoint resumes a fresh sandbox from the new build immediately, so the
-	// diff must be materialized synchronously — never defer the rootfs export
-	// here, and never maintain the paused sandbox.
+	// Always a full memory snapshot: the fresh sandbox is resumed from the new
+	// build, which a memoryless build could only cold-boot (Checkpoint routes
+	// filesystem-only requests to checkpointInPlace instead). The resume is
+	// immediate, so the diff must be materialized synchronously — never defer
+	// the rootfs export here, and never maintain the paused sandbox.
 	res, err := s.snapshotAndCacheSandbox(ctx, sbx, in.GetBuildId(), in.GetMetadata(), storage.ObjectOriginSnapshotTemplate, false, false, false)
 	if err != nil {
 		telemetry.ReportCriticalError(ctx, "error snapshotting sandbox for checkpoint", err, telemetry.WithSandboxID(in.GetSandboxId()))
@@ -2567,4 +2589,21 @@ func envdUpgradeDeclineReason(sentUser string, workdirWithheld, envdPreserves bo
 	}
 
 	return ""
+}
+
+// filesystemOnlyDisabledStatus is the flag refusal with a typed detail, so the
+// API can answer it as its own pre-flight does instead of a generic failure
+// when the two flag evaluations disagree.
+func filesystemOnlyDisabledStatus(sandboxID string) *status.Status {
+	st := status.Newf(codes.FailedPrecondition, "filesystem-only checkpoint of sandbox '%s' is disabled", sandboxID)
+	withDetails, err := st.WithDetails(&orchestrator.UserError{
+		Code:       orchestrator.UserErrorCode_FILESYSTEM_ONLY_CHECKPOINT_DISABLED,
+		Message:    st.Message(),
+		HttpStatus: http.StatusBadRequest,
+	})
+	if err != nil {
+		return st
+	}
+
+	return withDetails
 }
