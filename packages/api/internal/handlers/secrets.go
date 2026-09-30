@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	scpb "buf.build/gen/go/grpc/grpc/protocolbuffers/go/grpc/service_config"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.opentelemetry.io/contrib/instrumentation/google.golang.org/grpc/otelgrpc"
@@ -16,8 +17,11 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	_ "google.golang.org/grpc/health" // Registers the client side of healthCheckConfig.
 	"google.golang.org/grpc/status"
+	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/types/known/timestamppb"
+	"google.golang.org/protobuf/types/known/wrapperspb"
 
 	"github.com/e2b-dev/infra/packages/api/internal/api"
 	"github.com/e2b-dev/infra/packages/api/internal/middleware"
@@ -35,6 +39,10 @@ const (
 	// is already shorter wins, since context.WithTimeout keeps the earlier one.
 	secretsBackendTimeout  = 25 * time.Second
 	secretLimitReachedCode = "secret_limit_reached"
+
+	// secretsReadinessService is the health service a backend reports SERVING
+	// only while it can take management calls.
+	secretsReadinessService = "readiness"
 )
 
 // Client-facing messages. They are fixed and carry no request material: no
@@ -53,13 +61,37 @@ var (
 // connection, so a backend that is down or not yet deployed cannot keep the API
 // from starting. The hop is private, in-cluster and plaintext by decision, it
 // carries no credential of any kind, and a call that may have reached the
-// backend is never replayed by the transport.
+// backend is never replayed by the transport. gRPC may still transparently
+// retry a call that it knows never reached the server's application code.
+//
+// address is a gRPC target used as given. A plain "host:port" goes through
+// the default DNS resolver. With a headless Service name every ready backend
+// address becomes its own connection. The client resolves again whenever a
+// connection closes, so a backend that rotates its connections by age lets it
+// find replicas added later.
 func newSecretsManagementClient(address string) (*grpc.ClientConn, error) {
+	// Calls are spread over every resolved backend address, and only to a
+	// backend whose readiness health service reports SERVING. A backend without
+	// the health service is still picked: gRPC treats its UNIMPLEMENTED answer
+	// as healthy. grpc-go takes a default service config only as JSON.
+	serviceConfig, err := protojson.Marshal(&scpb.ServiceConfig{
+		LoadBalancingConfig: []*scpb.LoadBalancingConfig{{Policy: &scpb.LoadBalancingConfig_RoundRobin{RoundRobin: &scpb.RoundRobinConfig{}}}},
+		HealthCheckConfig:   &scpb.ServiceConfig_HealthCheckConfig{ServiceName: wrapperspb.String(secretsReadinessService)},
+	})
+	if err != nil {
+		return nil, fmt.Errorf("encoding the secrets store management service config: %w", err)
+	}
+
 	conn, err := grpc.NewClient(
 		address,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+		// Turns off configured retries, whatever any service config says.
 		grpc.WithDisableRetry(),
+		// Keeps this caller's balancing and readiness policy: a resolver
+		// cannot supply a service config that replaces it.
+		grpc.WithDisableServiceConfig(),
+		grpc.WithDefaultServiceConfig(string(serviceConfig)),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating the secrets store management client: %w", err)

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"net"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
@@ -14,6 +16,7 @@ import (
 	"go.uber.org/zap/zaptest/observer"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/connectivity"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/status"
 
@@ -85,7 +88,94 @@ func TestNewGRPCServerWithUnaryInterceptors(t *testing.T) {
 	require.Equal(t, "rejected by interceptor", status.Convert(err).Message())
 }
 
+// heldService holds every call until the test releases it or the call ends,
+// and counts how many times its application code ran.
+type heldService struct {
+	proxygrpc.UnimplementedSandboxServiceServer
+
+	entered chan struct{}
+	release chan struct{}
+	calls   atomic.Int32
+}
+
+func (s *heldService) ResumeSandbox(ctx context.Context, _ *proxygrpc.SandboxResumeRequest) (*proxygrpc.SandboxResumeResponse, error) {
+	s.calls.Add(1)
+	s.entered <- struct{}{}
+
+	select {
+	case <-s.release:
+		return &proxygrpc.SandboxResumeResponse{}, nil
+	case <-ctx.Done():
+		return nil, status.FromContextError(ctx.Err()).Err()
+	}
+}
+
+func TestNewGRPCServerWithMaxConnectionAge(t *testing.T) {
+	t.Parallel()
+
+	// The age is short so the connection rotates during the held call. The
+	// grace is long so only the rotation, never the forced close, is exercised.
+	service := &heldService{entered: make(chan struct{}, 2), release: make(chan struct{})}
+	server, conn := startSandboxServer(t, service, WithMaxConnectionAge(100*time.Millisecond, time.Minute))
+	client := proxygrpc.NewSandboxServiceClient(conn)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+
+	held := make(chan error, 1)
+	go func() {
+		_, err := client.ResumeSandbox(ctx, &proxygrpc.SandboxResumeRequest{})
+		held <- err
+	}()
+	receive(ctx, t, service.entered)
+
+	// GOAWAY takes the connection out of service while the call still runs on it.
+	for conn.GetState() == connectivity.Ready {
+		require.True(t, conn.WaitForStateChange(ctx, connectivity.Ready), "the aged connection was never closed")
+	}
+
+	service.release <- struct{}{}
+	require.NoError(t, receive(ctx, t, held), "a call in flight at rotation completes")
+	require.EqualValues(t, 1, service.calls.Load(), "rotation does not run the call again")
+
+	// A new call opens a fresh connection. Shutdown with that call still held
+	// falls back to a forced stop within its timeout instead of hanging.
+	go func() {
+		_, err := client.ResumeSandbox(ctx, &proxygrpc.SandboxResumeRequest{})
+		held <- err
+	}()
+	receive(ctx, t, service.entered)
+
+	start := time.Now()
+	require.False(t, GracefulStopWithTimeout(server, 200*time.Millisecond), "the held call prevents a graceful stop")
+	require.Less(t, time.Since(start), 5*time.Second)
+	require.Equal(t, codes.Unavailable, status.Code(receive(ctx, t, held)))
+	require.EqualValues(t, 2, service.calls.Load())
+}
+
+func receive[T any](ctx context.Context, t *testing.T, values <-chan T) T {
+	t.Helper()
+
+	select {
+	case value := <-values:
+		return value
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for the server")
+
+		var zero T
+
+		return zero
+	}
+}
+
 func serveSandboxService(t *testing.T, service proxygrpc.SandboxServiceServer, opts ...ServerOption) proxygrpc.SandboxServiceClient {
+	t.Helper()
+
+	_, conn := startSandboxServer(t, service, opts...)
+
+	return proxygrpc.NewSandboxServiceClient(conn)
+}
+
+func startSandboxServer(t *testing.T, service proxygrpc.SandboxServiceServer, opts ...ServerOption) (*grpc.Server, *grpc.ClientConn) {
 	t.Helper()
 
 	server := NewGRPCServer(&telemetry.Client{
@@ -106,7 +196,7 @@ func serveSandboxService(t *testing.T, service proxygrpc.SandboxServiceServer, o
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 
-	return proxygrpc.NewSandboxServiceClient(conn)
+	return server, conn
 }
 
 func captureLogs(t *testing.T) *observer.ObservedLogs {

@@ -27,6 +27,8 @@ type serverOptions struct {
 	recoveryHandler          recovery.RecoveryHandlerFunc
 	unaryDeadline            grpc.UnaryServerInterceptor
 	unaryInterceptors        []grpc.UnaryServerInterceptor
+	maxConnectionAge         time.Duration
+	maxConnectionAgeGrace    time.Duration
 }
 
 // WithMaxMessageSize sets both send and receive message limits in bytes.
@@ -65,6 +67,19 @@ func WithUnaryDeadline(timeout time.Duration) ServerOption {
 
 			return handler(ctx, req)
 		}
+	}
+}
+
+// WithMaxConnectionAge gracefully closes every connection after about age,
+// which gRPC jitters by up to 10%, and forcibly closes it grace later. A client
+// that resolves its target again when a connection closes uses the rotation to
+// find servers added after it connected. Calls in flight at rotation keep
+// running on the old connection until they finish or grace ends. Without this
+// option connections have no age limit.
+func WithMaxConnectionAge(age, grace time.Duration) ServerOption {
+	return func(o *serverOptions) {
+		o.maxConnectionAge = age
+		o.maxConnectionAgeGrace = grace
 	}
 }
 
@@ -122,8 +137,11 @@ func NewGRPCServer(tel *telemetry.Client, opts ...ServerOption) *grpc.Server {
 			PermitWithoutStream: true,
 		}),
 		grpc.KeepaliveParams(keepalive.ServerParameters{
-			Time:    15 * time.Second,
-			Timeout: 5 * time.Second,
+			// Zero age and grace are gRPC's defaults: no age limit.
+			MaxConnectionAge:      cfg.maxConnectionAge,
+			MaxConnectionAgeGrace: cfg.maxConnectionAgeGrace,
+			Time:                  15 * time.Second,
+			Timeout:               5 * time.Second,
 		}),
 		grpc.StatsHandler(
 			NewStatsWrapper(
