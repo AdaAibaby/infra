@@ -20,8 +20,8 @@ func TestOOMWatcher(t *testing.T) {
 
 	var logs bytes.Buffer
 	l := zerolog.New(&logs)
-	w := NewOOMWatcher()
-	add := func(record []byte) { w.add(&l, record) }
+	w := NewOOMWatcher(&l)
+	add := w.add
 
 	log := &fakeKernelLog{reads: []read{
 		{record: "6,1,100,-;Linux version 6.1.102"},

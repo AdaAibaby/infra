@@ -101,9 +101,9 @@ func startWatcher(t *testing.T) *OOMWatcher {
 	ctx, cancel := context.WithCancel(t.Context())
 	t.Cleanup(cancel)
 
-	w := NewOOMWatcher()
 	l := zerolog.Nop()
-	go w.Watch(ctx, &l)
+	w := NewOOMWatcher(&l)
+	go w.Watch(ctx)
 
 	return w
 }

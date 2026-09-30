@@ -53,6 +53,8 @@ type OOMKill struct {
 
 // OOMWatcher keeps the latest OOM kills since the guest booted, read from the kernel log.
 type OOMWatcher struct {
+	logger *zerolog.Logger
+
 	mu       sync.Mutex
 	kills    []OOMKill
 	caughtUp bool
@@ -60,22 +62,22 @@ type OOMWatcher struct {
 	lastUnnamed int64
 }
 
-func NewOOMWatcher() *OOMWatcher {
-	return &OOMWatcher{}
+func NewOOMWatcher(l *zerolog.Logger) *OOMWatcher {
+	return &OOMWatcher{logger: l}
 }
 
 // Watch collects kills until ctx is done. After a read error it reopens the log and reads it
 // again from the start. If it gives up, it tries again every kmsgRecoveryDelay, so a watcher that
 // failed doesn't stay off in every snapshot taken after it.
-func (w *OOMWatcher) Watch(ctx context.Context, l *zerolog.Logger) {
+func (w *OOMWatcher) Watch(ctx context.Context) {
 	gaveUp := false
 	for {
-		msg, quiet, err := w.watchRound(ctx, l, gaveUp)
+		msg, quiet, err := w.watchRound(ctx, gaveUp)
 		if ctx.Err() != nil {
 			return
 		}
 		if !quiet {
-			l.Error().Err(err).Str("path", kmsgPath).Dur("retry_in", kmsgRecoveryDelay).Msg(msg)
+			w.logger.Error().Err(err).Str("path", kmsgPath).Dur("retry_in", kmsgRecoveryDelay).Msg(msg)
 		}
 		gaveUp = true
 
@@ -90,12 +92,12 @@ func (w *OOMWatcher) Watch(ctx context.Context, l *zerolog.Logger) {
 // watchRound reads the kernel log until it gives up, then returns why. After an earlier give-up it
 // logs only a recovery, not each failure again, and returns quiet until a read lasts
 // kmsgHealthyRead.
-func (w *OOMWatcher) watchRound(ctx context.Context, l *zerolog.Logger, recovering bool) (string, bool, error) {
+func (w *OOMWatcher) watchRound(ctx context.Context, recovering bool) (string, bool, error) {
 	caughtUp := func() {
 		// Once it says kills are reported again, a later failure is worth logging.
 		if recovering {
 			recovering = false
-			l.Info().Str("path", kmsgPath).Msg("Reading the kernel log again, out-of-memory kills are reported")
+			w.logger.Info().Str("path", kmsgPath).Msg("Reading the kernel log again, out-of-memory kills are reported")
 		}
 		w.markCaughtUp()
 	}
@@ -108,7 +110,7 @@ func (w *OOMWatcher) watchRound(ctx context.Context, l *zerolog.Logger, recoveri
 		}
 
 		start := time.Now()
-		err = followKernelLog(ctx, log, func(record []byte) { w.add(l, record) }, caughtUp)
+		err = followKernelLog(ctx, log, w.add, caughtUp)
 		log.Close()
 		// Later kills would be missed, so stop reporting the list until it's read again.
 		w.markStopped()
@@ -126,7 +128,7 @@ func (w *OOMWatcher) watchRound(ctx context.Context, l *zerolog.Logger, recoveri
 		}
 
 		if !recovering {
-			l.Warn().Err(err).Str("path", kmsgPath).Msg("Failed to read the kernel log, reopening it")
+			w.logger.Warn().Err(err).Str("path", kmsgPath).Msg("Failed to read the kernel log, reopening it")
 		}
 		select {
 		case <-ctx.Done():
@@ -186,7 +188,7 @@ func (w *OOMWatcher) markStopped() {
 	w.kills = nil
 }
 
-func (w *OOMWatcher) add(l *zerolog.Logger, record []byte) {
+func (w *OOMWatcher) add(record []byte) {
 	// Skip non-kill records cheaply.
 	if !bytes.Contains(record, []byte(oomKillMarker)) {
 		return
@@ -202,7 +204,7 @@ func (w *OOMWatcher) add(l *zerolog.Logger, record []byte) {
 
 	if err != nil && kill.Seq > w.lastUnnamed {
 		w.lastUnnamed = kill.Seq
-		l.Error().Err(err).Str("record", string(record)).Msg("Failed to find the process name of an out-of-memory kill")
+		w.logger.Error().Err(err).Str("record", string(record)).Msg("Failed to find the process name of an out-of-memory kill")
 	}
 
 	w.kills = append(w.kills, kill)

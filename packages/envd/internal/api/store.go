@@ -143,7 +143,7 @@ func New(l *zerolog.Logger, defaults *execcontext.Defaults, mmdsChan chan *host.
 
 	var oomKills *host.OOMWatcher
 	if !isNotFC {
-		oomKills = host.NewOOMWatcher()
+		oomKills = host.NewOOMWatcher(l)
 	}
 
 	return &API{
@@ -179,7 +179,7 @@ func (a *API) GetHealth(w http.ResponseWriter, r *http.Request) {
 // WatchOOMKills collects OOM kills for /metrics until ctx is done.
 func (a *API) WatchOOMKills(ctx context.Context) {
 	if a.oomKills != nil {
-		a.oomKills.Watch(ctx, a.logger)
+		a.oomKills.Watch(ctx)
 	}
 }
 
