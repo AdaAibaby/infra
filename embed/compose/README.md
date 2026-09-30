@@ -3,7 +3,7 @@
 Runs the whole of Embed, the control plane and a real Firecracker
 orchestrator alike, directly on one Linux host you own: no Terraform, no cloud
 account, no wrapper scripts, and `docker compose up` as the whole interface.
-It is a single-machine evaluation package rather than a deployment pattern;
+It is a single-machine package rather than a deployment pattern;
 the hub is [`../README.md`](../README.md).
 
 ## Requirements

@@ -1,9 +1,10 @@
 # E2B Embed reference
 
-The [hub README](../README.md) says what E2B Embed is and how to pick a
-shape. This page holds the rest: what runs where, logs and telemetry, the
-secrets, how images and pins are released, building templates, and the
-developer tooling. The 4 guides cover what differs per shape.
+The [hub README](../README.md) says what E2B Embed is and how to run it.
+This page holds the rest: what runs where and on which ports, logs and
+telemetry, the secrets, how images and pins are released, building templates,
+and the developer tooling. The 4 guides cover what differs on Compose,
+Terraform and Kubernetes.
 
 ## What runs where
 
@@ -36,9 +37,41 @@ dashboard-api starts once `db-migrator` and `api-secrets` are done and reaches
 the same stores as the api; the dashboard starts once api and dashboard-api
 are healthy.
 
+### Ports on the host network
+
+13 ports listen on every interface of the machine. The SDK needs 3000 and
+3002; a browser needs 3001 for the dashboard. The other 10 must not be
+reachable on any address the machine holds: give it no public address of its
+own, or firewall those 10 ports for that address as well, not only at the
+network edge.
+
+| Port | Service | Reachable from | Purpose |
+|------|---------|----------------|---------|
+| 3000 | api | trusted clients | the REST API the SDK calls |
+| 3001 | dashboard | trusted clients | the web dashboard, for a browser |
+| 3002 | client-proxy | trusted clients | sandbox traffic (header routing) |
+| 3003 | client-proxy | the machine only | health |
+| 3010 | dashboard-api | the machine only | the dashboard's backend |
+| 5007 | orchestrator | the machine only | the orchestrator's proxy into sandboxes, behind 3002 |
+| 5008 | orchestrator | the machine only | **unauthenticated** gRPC control API |
+| 5009 | api | the machine only | internal gRPC |
+| 5010 | orchestrator | the machine only | sandbox egress: hyperloop proxy |
+| 5016 | orchestrator | the machine only | sandbox egress: TCP firewall proxy (HTTP) |
+| 5017 | orchestrator | the machine only | sandbox egress: TCP firewall proxy (TLS) |
+| 5018 | orchestrator | the machine only | sandbox egress: TCP firewall proxy (other) |
+| 5109 | api | the machine only | edge gRPC |
+
+Port 5008 is the one to guard most. It creates and kills sandboxes and starts
+template builds; nothing authenticates it, the api dials it directly as
+`LOCAL_ORCHESTRATOR_ADDRESS`, and anyone who reaches it has the whole
+orchestrator. The 4 egress-proxy ports (5010 and 5016 to 5018) take the
+sandbox traffic the orchestrator redirects inside each sandbox's network
+namespace. They expect no client from outside the machine and have no
+authentication of their own.
+
 ### Ports on loopback
 
-Everything outside the hub's ports table stays on loopback. Postgres is on
+Everything outside the table above stays on loopback. Postgres is on
 5432, Redis on 6379, ClickHouse on 8123 and 9000. On Kubernetes ClickHouse
 also listens on 9004, 9005 and 9009, its MySQL and PostgreSQL wire protocols
 and its interserver port, since the pod shares the node's network. Vector's
@@ -46,15 +79,8 @@ log listener is on 30006 (20006 on Kubernetes, for the reason that guide
 gives) and its API on 44313, on Kubernetes only. The 2 pprof endpoints are
 6060 for api and 6061 for the orchestrator. The built-in collector, when it
 runs, listens on 4317 and 13133 ([Observability](#observability)).
-`sudo ss -ltnp` on the machine confirms the split: the 13 ports in the hub's
-table show a `*:` address, everything here shows `127.0.0.1:`.
-
-Port 5008 creates and kills sandboxes and starts template builds. Nothing
-authenticates it; the api dials it directly as `LOCAL_ORCHESTRATOR_ADDRESS`,
-and anyone who reaches it has the whole orchestrator. The 4 egress-proxy
-ports (5010 and 5016 to 5018) take the sandbox traffic the orchestrator
-redirects inside each sandbox's network namespace. They expect no client from
-outside the machine and have no authentication of their own.
+`sudo ss -ltnp` on the machine confirms the split: the 13 ports in the table
+above show a `*:` address, everything here shows `127.0.0.1:`.
 
 ## Observability
 
@@ -138,10 +164,11 @@ same endpoints, so they stay empty until the built-in collector runs, or a
 collector of your own writes those metrics into this ClickHouse. Sandbox and
 build logs do not depend on it: they reach ClickHouse through Vector.
 
-### Ports and the other shapes
+### Ports, Kubernetes and Terraform
 
 4317 and 13133 bind `127.0.0.1` only, so they are not among the 13 ports in
-the hub's table, and no firewall needs to change for them.
+[the host-network table](#ports-on-the-host-network), and no firewall needs
+to change for them.
 
 Kubernetes carries the same setting as the `OTEL_COLLECTOR_GRPC_ENDPOINT`
 literal of the `e2b-settings` ConfigMap, and the built-in collector as one
@@ -155,8 +182,8 @@ instance's `.env`; the [GCP](../terraform/gcp/README.md#variables) and
 ## Secrets
 
 The team API key is per install. The seed generates it on the first start and
-keeps it beside the databases, so a shape never has a key without its
-database or a database without its key. Every shape prints it with the 2 SDK
+keeps it beside the databases, so an install never has a key without its
+database or a database without its key. Every install prints it with the SDK
 URLs and the dashboard URL. Each guide's Secrets section says where its copy
 lives and how to pin or rotate it. A rotation revokes the old key, which keeps
 working for up to 5 minutes: the api caches team lookups in Redis for that
@@ -169,13 +196,13 @@ is not marked Secure (`DASHBOARD_COOKIE_SECURE=false`); a browser on a
 plain-http address would otherwise drop it and the key form would loop.
 
 `ADMIN_TOKEN` and `SANDBOX_ACCESS_TOKEN_HASH_SEED` are the api's own 2, and
-every shape generates them per install too. Compose writes them on the first
+every install generates them too. Compose writes them on the first
 start into the volume that holds the team key (`/run/e2b/api.env` in
 `seed-state`). Terraform writes generated ones into the instance's `.env` at
 first boot. Kubernetes reads the Secret the install creates. On Compose,
 setting either one in `.env` pins it and leaves the other generated; each
-guide's Secrets section says how to rotate what its shape holds. dashboard-api
-reads the admin token the same way on each shape, so rotating it means
+guide's Secrets section says how to rotate what it holds. dashboard-api
+reads the admin token the same way everywhere, so rotating it means
 recreating dashboard-api as well as the api.
 
 Both are worth guarding. The admin token is admin over the seeded team on
@@ -241,7 +268,8 @@ ready-made, is not drawn.
 
 ## Beyond the first sandbox
 
-`Template.build` builds your own template through the same API, on any shape:
+`Template.build` builds your own template through the same API, whichever way
+you run the stack:
 
 ```python
 from e2b import Template, Sandbox
@@ -252,9 +280,11 @@ print(sbx.commands.run("python3 -c 'import requests; print(requests.__version__)
 sbx.kill()
 ```
 
-The build runs inside a Firecracker VM on the machine and pulls the image
+The build runs in a sandbox of its own on the machine and pulls the image
 from Docker Hub; no Docker daemon is involved. How long it takes depends on
 how much of the base image is already cached.
+
+### Reaching a port inside a sandbox
 
 `sandbox.get_host(port)` returns `{port}-{id}.e2b.app`, which does not resolve
 here. Reach a port inside a sandbox through client-proxy's header routing

@@ -2,8 +2,8 @@
 
 Creates one Ubuntu 24.04 VM with nested virtualization, in a managed instance
 group of one, which installs Docker, writes the two files Embed ships and runs
-`docker compose up -d --wait`. It is a single-machine evaluation
-package rather than a deployment pattern; the hub is
+`docker compose up -d --wait`. It is a single-machine package rather
+than a deployment pattern; the hub is
 [`../../README.md`](../../README.md).
 
 ## Requirements
@@ -239,7 +239,7 @@ takes the replace under Upgrading; the reference's
 | `machine_type` | `n4-standard-4` | 12 GiB RAM recommended; the default has 16 |
 | `boot_disk_size_gb` | `50` | 20 GiB has to stay free after the OS and Docker |
 | `boot_disk_type` | `hyperdisk-balanced` | n4 machine types support only Hyperdisk |
-| `image` | Ubuntu 24.04 LTS | the stack needs apt, a writable `/etc` and glibc 2.34 or newer; x86-64 only (this template is a nested-virtualization VM with Docker's amd64 repository in its startup script; GCE's arm64 machine types have no nested virtualization, metal included; the metal types run the stack on their bare `/dev/kvm`, so an arm64 shape would be a metal instance, not this nested-virt VM template) |
+| `image` | Ubuntu 24.04 LTS | the stack needs apt, a writable `/etc` and glibc 2.34 or newer; x86-64 only (this template is a nested-virtualization VM with Docker's amd64 repository in its startup script; GCE's arm64 machine types have no nested virtualization, metal included; the metal types run the stack on their bare `/dev/kvm`, so an arm64 install would be a metal instance, not this nested-virt VM template) |
 | `hugepages` | `2048` | 2 MiB hugepages reserved for sandboxes; 2048 is 4 GiB |
 | `team_api_key` | generated | `e2b_` plus an even number of lowercase hex characters, at least 32 |
 | `compose_base_url` | the shipped files | a directory URL to fetch the two files from at first boot |

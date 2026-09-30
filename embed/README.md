@@ -5,132 +5,148 @@
 
 # E2B Embed
 
-**A complete E2B, sandboxes included, on one machine you own.** Four ways to
-get that machine running, all of them the same stack.
+**E2B Embed runs the whole E2B stack, every feature included, on a single
+machine in the environment of your choice.** Ship it inside your product, or
+run it inside a customer's own environment, and bring E2B sandboxes to
+customers whose data has to stay put, in government and in regulated
+industries such as finance and healthcare. Same SDK, same API as E2B Cloud.
+Open source, Apache-2.0.
 
-[Docker Compose](compose/README.md)
-| [Terraform on GCP](terraform/gcp/README.md)
-| [Terraform on AWS](terraform/aws/README.md)
-| [Kubernetes](kubernetes/README.md)
+[Docker Compose](#docker-compose)
+| [Terraform on GCP](#terraform-on-gcp)
+| [Terraform on AWS](#terraform-on-aws)
+| [Kubernetes](#kubernetes)
 | [Reference](docs/REFERENCE.md)
-| [Releasing](../docs/RELEASING.md)
 
-![Overview: the running stack on one machine](docs/overview.svg)
+## How to run
 
-## Pick a shape
+Choose the setup that fits what you already have.
 
-| Shape | What you need | The install | Guide |
-|-------|---------------|-------------|-------|
-| Docker Compose | a Linux host with KVM that you may mutate | `docker compose up -d --wait` | [`compose/README.md`](compose/README.md) |
-| Terraform on GCP | a GCP project and credentials | `terraform apply` | [`terraform/gcp/README.md`](terraform/gcp/README.md) |
-| Terraform on AWS | an AWS account and credentials | `terraform apply` | [`terraform/aws/README.md`](terraform/aws/README.md) |
-| Kubernetes | a cluster with one KVM node | `kubectl apply -k` | [`kubernetes/README.md`](kubernetes/README.md) |
+| Run it with | You need | The command | Install |
+|-------------|----------|-------------|---------|
+| Docker Compose | a Linux host you own | `docker compose up -d --wait` | [Docker Compose](#docker-compose) |
+| Terraform on GCP | a Google Cloud project | `terraform apply` | [Terraform on GCP](#terraform-on-gcp) |
+| Terraform on AWS | an AWS account | `terraform apply` | [Terraform on AWS](#terraform-on-aws) |
+| Kubernetes | one node in your cluster | `kubectl apply -k` | [Kubernetes](#kubernetes) |
 
-Compose and Terraform run [`compose/compose.yaml`](compose/compose.yaml) and
-[`compose/.env`](compose/.env) as shipped. Kubernetes runs a StatefulSet
-translated from them, with the same pins in
-[`kubernetes/kustomization.yaml`](kubernetes/kustomization.yaml). All 4 are
-single-machine evaluation packages, not deployment patterns. For a production
-deployment see [e2b.dev/enterprise](https://e2b.dev/enterprise).
+Every guide ends with your first sandbox, a few minutes after you start. If
+you'd like to scale in production, please talk with us at
+[e2b.dev/enterprise](https://e2b.dev/enterprise).
+
+## What runs on the node
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/overview-dark.png">
+  <img alt="E2B Embed: the complete E2B runtime on one node, and that node run with Docker Compose, on AWS or GCP, or on Kubernetes" src="docs/overview-light.png" width="100%">
+</picture>
+
+One node holds the complete E2B runtime. Your application talks to it
+through the SDK, your team through the dashboard. The control plane is the
+same API as E2B Cloud, the data plane runs the same E2B sandboxes, storage
+keeps your templates and snapshots, and telemetry keeps your logs and
+metrics. Nothing leaves the node. It is the same node wherever you run it,
+on a Linux host you own with Docker Compose, on one VM on Google Cloud or
+one instance on AWS with Terraform, or on one node in your Kubernetes
+cluster.
 
 ## What you get
 
-- **Real Firecracker sandboxes on the machine.** Everything they need stays
-  there: the databases, the templates you build and the logs all live on its
-  disk.
-- **A team API key per install.** The first start generates it and prints it
-  with the 2 SDK URLs and the dashboard URL. Each guide's Secrets section says
-  where its copy lives and how to rotate it.
-- **Your own templates.** `Template.build` builds through the same API on any
-  shape. The build runs inside a Firecracker VM on the machine; no Docker
-  daemon is involved.
-- **Any port inside a sandbox.** `sandbox.get_host(port)` returns an `e2b.app`
-  name that does not resolve here. Reach the port through client-proxy's
-  header routing instead:
+- **The same sandboxes as E2B Cloud.** Isolated, paused and resumed on
+  demand.
+- **The same SDK and API.** Moving your application over from E2B Cloud is a
+  configuration change.
+- **Everything stays on one single machine.** Templates, sandbox logs and data live
+  on its disk and go nowhere else.
+- **Private by design.** Only your application and your dashboard users need
+  to reach the node, and the Terraform installs let in only the addresses you
+  name. The [reference](docs/REFERENCE.md#ports-on-the-host-network) lists
+  what to open.
+- **Your own templates.** Build custom sandbox templates through the same API
+  and start sandboxes from them right away.
+- **The dashboard.** Your sandboxes, templates and logs in the browser, with a
+  terminal and a file browser for every sandbox.
+- **Open source.** Apache-2.0, in the public
+  [E2B runtime repository](https://github.com/e2b-dev/runtime). No E2B
+  account and no license key needed.
 
-  ```bash
-  curl -H "E2b-Sandbox-Id: $SANDBOX_ID" -H "E2b-Sandbox-Port: 8080" http://localhost:3002/
-  ```
+### Docker Compose
 
-- **A dashboard in the browser.** Port 3001 serves the open-source E2B
-  dashboard: paste the team API key into its key form to see the sandboxes
-  and templates the SDK sees, with a terminal and a filesystem inspector on
-  each one. Those reach the sandbox through the header routing above, at
-  the address in `E2B_DASHBOARD_HOST` (default `localhost`); set it when a
-  browser on another machine opens the dashboard without a tunnel.
-- **OpenTelemetry out.** One setting sends the E2B services' metrics, traces
-  and logs to your collector. Point it at the built-in one, a second line
-  away, to keep the metrics the dashboard's charts draw. The
-  [reference](docs/REFERENCE.md#observability) says what each choice gives
-  you.
-- **One version everywhere.** Embed is released at the platform version once
-  that release is tagged, and that release moves every platform pin in
-  [`compose/.env`](compose/.env) and the kustomization. To pin an install, pin
-  the commit: put it in place of `main` in the raw URLs, or add
-  `?ref=<commit>` to the git URLs.
-- **Public images, pulled anonymously.** The released E2B images, the 3 stack
-  images Embed builds itself and the Firecracker binaries are all public. The
-  stores come from Docker Hub.
+Run it on a Linux machine you already have. [Full guide](compose/README.md#install).
 
-## Ports
+```bash
+mkdir e2b && cd e2b
+curl -fsSL --remote-name-all "https://raw.githubusercontent.com/e2b-dev/runtime/main/embed/compose/{compose.yaml,.env}"
+docker compose up -d --wait
+```
 
-13 ports listen on every interface of the machine. The SDK needs 3000 and
-3002; a browser needs 3001 for the dashboard. The other 10 must not be
-reachable on any address the machine holds: give it no public address of its
-own, or firewall those 10 ports for that address as well, not only at the
-network edge.
+### Terraform on GCP
 
-| Port | Service | Reachable from | Purpose |
-|------|---------|----------------|---------|
-| 3000 | api | trusted clients | the REST API the SDK calls |
-| 3001 | dashboard | trusted clients | the web dashboard, for a browser |
-| 3002 | client-proxy | trusted clients | sandbox traffic (header routing) |
-| 3003 | client-proxy | the machine only | health |
-| 3010 | dashboard-api | the machine only | the dashboard's backend |
-| 5007 | orchestrator | the machine only | sandbox proxy |
-| 5008 | orchestrator | the machine only | **unauthenticated** gRPC control API |
-| 5009 | api | the machine only | internal gRPC |
-| 5010 | orchestrator | the machine only | sandbox egress: hyperloop proxy |
-| 5016 | orchestrator | the machine only | sandbox egress: TCP firewall proxy (HTTP) |
-| 5017 | orchestrator | the machine only | sandbox egress: TCP firewall proxy (TLS) |
-| 5018 | orchestrator | the machine only | sandbox egress: TCP firewall proxy (other) |
-| 5109 | api | the machine only | edge gRPC |
+Create the machine in your Google Cloud project. [Full guide](terraform/gcp/README.md#install).
 
-Port 5008 is the one to guard most: nothing authenticates it, and anyone who
-reaches it has the whole orchestrator. The stores, Vector, the built-in
-collector and the pprof endpoints stay on loopback;
-[What runs where](docs/REFERENCE.md#what-runs-where) lists them.
+```hcl
+module "e2b" {
+  source       = "github.com/e2b-dev/runtime//embed/terraform/gcp?ref=main"
+  project_id   = "my-project"
+  client_cidrs = ["203.0.113.0/24"]   # where your SDK clients connect from
+}
+```
 
-## Not supported
+```bash
+terraform init && terraform apply
+```
 
-- **macOS and Windows as the host.** The stack needs a Linux machine with KVM
-  and a 4 KiB-page kernel, x86-64 or arm64. On Apple silicon that is a Linux
-  VM with nested virtualization (M3 or newer, macOS 15 or newer). arm64 is
-  verified end to end on bare metal and needs kernel 6.10 or newer; the
-  Compose guide's Requirements say why.
-- **Container-Optimized OS.** The machine needs apt, a writable `/etc` and
-  glibc 2.34 or newer.
-- **No wildcard DNS and no TLS.**
+### Terraform on AWS
 
-## Developing
+Create the machine in your AWS account. [Full guide](terraform/aws/README.md#install).
 
-`make` is a developer convenience; the operator path is only `docker compose`,
-`terraform` or `kubectl`.
+```hcl
+module "e2b" {
+  source       = "github.com/e2b-dev/runtime//embed/terraform/aws?ref=main"
+  client_cidrs = ["203.0.113.0/24"]   # where your SDK clients connect from
+}
+```
 
-- `make images` builds the 3 stack images locally under their pinned tags.
-- `make lint` renders the compose file and the kustomization, validates the
-  Vector config and the 2 Terraform modules, and shellchecks the scripts and
-  the tests.
-- `make test` runs the bats suite in `tests/`.
-- `make stores-check` runs the store-level integration check.
-- `make sync-configs` re-inlines the 3 configs into the compose file.
+```bash
+terraform init && terraform apply
+```
 
-What each target needs, and when the stack images have to be rebuilt, is in
-[Developing](docs/REFERENCE.md#developing).
+### Kubernetes
+
+Run it on a node in your existing cluster. [Full guide](kubernetes/README.md#install).
+
+```bash
+kubectl create namespace e2b
+kubectl -n e2b create secret generic e2b-api --from-literal=ADMIN_TOKEN="$(openssl rand -hex 32)" --from-literal=SANDBOX_ACCESS_TOKEN_HASH_SEED="$(openssl rand -hex 32)"
+kubectl apply -k "https://github.com/e2b-dev/runtime//embed/kubernetes?ref=main"
+```
+
+## When one node is not enough
+
+Embed is one machine, by design. When you need more, E2B runs three other
+ways, with the same SDK and API, so moving is a configuration change.
+
+- **Private cloud**, in development. The whole platform inside your boundary,
+  built for networks nothing may leave. Design partners welcome.
+- **[Bring Your Own Cloud](https://e2b.dev/enterprise).** Your cloud account,
+  operated by E2B.
+- **[E2B Cloud](https://e2b.dev).** Managed by E2B, nothing to host.
+
+[See E2B for enterprise](https://e2b.dev/enterprise) for private cloud and
+Bring Your Own Cloud.
+
+## Limitations
+
+- **Runs on Linux.** Embed needs a Linux machine with hardware
+  virtualization, and the Terraform installs create one for you. On a Mac, it
+  runs inside a Linux virtual machine (Apple silicon M3 or newer, macOS 15 or
+  newer).
+- **Plain HTTP.** Embed answers over HTTP at the machine's own address, with
+  no TLS of its own, which is why it belongs inside your network. A port
+  inside a sandbox is reached at that same address. The
+  [reference](docs/REFERENCE.md#reaching-a-port-inside-a-sandbox) shows how.
 
 ## Reference
 
-[`docs/REFERENCE.md`](docs/REFERENCE.md) has the rest: what runs where and in
-which order, how logs and metrics reach ClickHouse, the secrets each shape
-holds, how images and pins are released, building templates, and the
-developer tooling.
+For whoever operates the machine, [`docs/REFERENCE.md`](docs/REFERENCE.md)
+has the detail on networking, logs and metrics, secrets, releases, building
+templates and the developer tooling.

@@ -2,8 +2,8 @@
 
 Creates one Ubuntu 24.04 instance with nested virtualization, in an Auto
 Scaling group of one, which installs Docker, writes the two files Embed ships
-and runs `docker compose up -d --wait`. It is a single-machine evaluation
-package rather than a deployment pattern; the hub is
+and runs `docker compose up -d --wait`. It is a single-machine package
+rather than a deployment pattern; the hub is
 [`../../README.md`](../../README.md).
 
 ## Requirements
@@ -321,7 +321,7 @@ takes the replacement under Upgrading; the reference's
 - x86-64 only. Graviton instances offer no nested virtualization. A Graviton
   `.metal` instance has a bare `/dev/kvm` and would run the stack on kernel
   6.10 or newer (the Compose guide's Requirements say why), but this module
-  does not build that shape.
+  does not build an arm64 instance.
 - A public subnet only. The instance needs a public address for its
   downloads and for its Elastic IP. In a private subnet it would need a NAT
   gateway, and a restricted egress would have to allow the hosts the Compose

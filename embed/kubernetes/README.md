@@ -4,7 +4,7 @@ One StatefulSet that translates [`../compose/compose.yaml`](../compose/compose.y
 the stores, Vector, the orchestrator, api and client-proxy run as sidecar init
 containers in the compose start order, the one-shots as init containers
 between them, and the pod is Ready once the `base` template exists. It is a
-single-node evaluation package rather than a Kubernetes deployment pattern;
+single-node package rather than a Kubernetes deployment pattern;
 the hub is [`../README.md`](../README.md).
 
 ## Requirements
@@ -15,7 +15,7 @@ the hub is [`../README.md`](../README.md).
   another host with kernel 6.8 or newer, glibc 2.34 or newer, cgroup v2 and
   the `iptables`, `rsync`, `e2fsprogs` and `iproute2` tools; 12 GiB RAM and
   20 GiB free on `/`. No Container-Optimized OS. arm64 is verified end to
-  end on a bare-metal arm64 host with the Compose shape (2026-09-14, kernel
+  end on a bare-metal arm64 host with Docker Compose (2026-09-14, kernel
   7.0); no arm64 node has run this StatefulSet yet. arm64 needs kernel 6.10
   or newer (userfaultfd write-protect, see the Compose guide). The nine
   pinned images are published for both architectures, and the `fetch-artifacts`
@@ -155,7 +155,7 @@ node keeps what `host-setup` wrote until it is recycled: the files under
 `/etc`, the rest of `/var/lib/e2b` (its `storage` holds the built templates and
 their cache, about 2 GiB after one install), `/fc-*`, the hugepage reservation
 and the iptables rule.
-There is no Kubernetes teardown one-shot; the compose shape's `host-teardown`
+There is no Kubernetes teardown one-shot; Compose's `host-teardown`
 has no counterpart here.
 
 ## Reference
@@ -208,7 +208,7 @@ the pod's own loopback log traffic away from Vector.
 
 The api's two secrets, `ADMIN_TOKEN` and `SANDBOX_ACCESS_TOKEN_HASH_SEED`,
 come from the `e2b-api` Secret created during the install; nothing in the
-manifest carries them. The compose shape generates them per install in an
+manifest carries them. Compose generates them per install in an
 `api-secrets` one-shot, which has no counterpart here: rotate them by
 replacing the Secret and restarting the pod. dashboard-api takes `ADMIN_TOKEN`
 from the same Secret.
