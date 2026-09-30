@@ -84,7 +84,7 @@ type API struct {
 	// cgroups after envd started.
 	memory cgroups.MemoryProtection
 
-	// oomKills is nil outside Firecracker.
+	// oomKills is nil when OOM kills aren't watched, as outside Firecracker.
 	oomKills *host.OOMWatcher
 
 	// initialized flips true on the first authenticated /init. It gates the
@@ -135,15 +135,10 @@ func (a *API) SetHandoverResult(failed bool, procs, procsFailed, retained, retai
 	}
 }
 
-func New(l *zerolog.Logger, defaults *execcontext.Defaults, mmdsChan chan *host.MMDSOpts, isNotFC bool, workloadFreezer *cgroups.WorkloadFreezer, logFlushers ...LogFlusher) *API {
+func New(l *zerolog.Logger, defaults *execcontext.Defaults, mmdsChan chan *host.MMDSOpts, isNotFC bool, workloadFreezer *cgroups.WorkloadFreezer, oomKills *host.OOMWatcher, logFlushers ...LogFlusher) *API {
 	logFlusher := NewNoopLogFlusher()
 	if len(logFlushers) > 0 && logFlushers[0] != nil {
 		logFlusher = logFlushers[0]
-	}
-
-	var oomKills *host.OOMWatcher
-	if !isNotFC {
-		oomKills = host.NewOOMWatcher(l)
 	}
 
 	return &API{
@@ -174,13 +169,6 @@ func (a *API) GetHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "")
 
 	w.WriteHeader(http.StatusNoContent)
-}
-
-// WatchOOMKills collects OOM kills for /metrics until ctx is done.
-func (a *API) WatchOOMKills(ctx context.Context) {
-	if a.oomKills != nil {
-		a.oomKills.Watch(ctx)
-	}
 }
 
 func (a *API) GetMetrics(w http.ResponseWriter, r *http.Request) {
