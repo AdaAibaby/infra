@@ -47,9 +47,13 @@ func (c *Client) AcquireAdvisoryLock(ctx context.Context, key string) (*Advisory
 	if _, err := conn.Exec(ctx,
 		"SELECT pg_advisory_lock(hashtextextended($1, 0))", key,
 	); err != nil {
-		// The server may have granted the lock before cancellation reached the
-		// client, so an ambiguous session must not return to the pool.
-		discard(ctx, conn)
+		if isLockTimeout(err) {
+			conn.Release()
+		} else {
+			// The server may have granted the lock before cancellation reached
+			// the client, so an ambiguous session must not return to the pool.
+			discard(ctx, conn)
+		}
 
 		return nil, fmt.Errorf("acquire an advisory lock: %w", err)
 	}
@@ -101,6 +105,65 @@ func InSerializableTxReturn1[T any](
 	lock *AdvisoryLock,
 	fn func(context.Context, pgx.Tx) (T, error),
 ) (T, error) {
+	return replaySerializable(ctx, lock, func(ctx context.Context) (T, error) {
+		return runInTxReturn1(ctx, lock.conn, fn)
+	})
+}
+
+// InSerializableTxUnderAdvisoryLockReturn1 runs fn like InSerializableTxReturn1
+// and holds a second session lock, derived from key, around each attempt. The
+// session that holds lock takes key before the attempt's transaction begins and
+// releases it after its commit or rollback, so no backoff between attempts
+// holds it. Waiting for key counts against the budget the attempts and backoff
+// share. Configure lock_timeout on the client to bound server waits even when
+// cancellation cannot be delivered. A confirmed lock timeout preserves the
+// session and outer lock for the caller to release. If acquiring or releasing
+// key has an unknown result, or fn panics, the session is destroyed.
+//
+// Waiting here while holding lock can deadlock with a session that holds key
+// and waits for lock, so callers must take their locks in one fixed order.
+func InSerializableTxUnderAdvisoryLockReturn1[T any](
+	ctx context.Context,
+	lock *AdvisoryLock,
+	key string,
+	fn func(context.Context, pgx.Tx) (T, error),
+) (T, error) {
+	return replaySerializable(ctx, lock, func(ctx context.Context) (T, error) {
+		var zero T
+		if _, err := lock.conn.Exec(ctx,
+			"SELECT pg_advisory_lock(hashtextextended($1, 0))", key,
+		); err != nil {
+			if !isLockTimeout(err) {
+				lock.destroy(ctx)
+			}
+
+			return zero, fmt.Errorf("acquire an advisory lock on a held session: %w", err)
+		}
+
+		finished := false
+		defer func() {
+			if !finished {
+				lock.destroy(ctx)
+			}
+		}()
+		value, err := runInTxReturn1(ctx, lock.conn, fn)
+		finished = true
+
+		if unlockErr := lock.unlock(ctx, key); unlockErr != nil {
+			return zero, errors.Join(err, unlockErr)
+		}
+
+		return value, err
+	})
+}
+
+// replaySerializable runs attempt until it commits, replaying serialization
+// failures and deadlocks with backoff under one budget.
+func replaySerializable[T any](
+	ctx context.Context,
+	lock *AdvisoryLock,
+	run func(context.Context) (T, error),
+) (T, error) {
 	var zero T
 	if lock.conn == nil {
 		return zero, errLockReleased
@@ -115,11 +178,12 @@ func InSerializableTxReturn1[T any](
 			return zero, errors.Join(err, conflict)
 		}
 
-		value, err := runInTxReturn1(ctx, lock.conn, fn)
+		value, err := run(ctx)
 		switch {
 		case err == nil:
 			return value, nil
-		case isSerializationConflict(err):
+		// A destroyed session cannot replay anything.
+		case isSerializationConflict(err) && lock.conn != nil:
 			conflict = err
 		default:
 			return zero, err
@@ -175,6 +239,12 @@ func isSerializationConflict(err error) bool {
 	return pgErr.Code == pgerrcode.SerializationFailure || pgErr.Code == pgerrcode.DeadlockDetected
 }
 
+func isLockTimeout(err error) bool {
+	var pgErr *pgconn.PgError
+
+	return errors.As(err, &pgErr) && pgErr.Code == pgerrcode.LockNotAvailable
+}
+
 func waitToReplay(ctx context.Context, attempt int) error {
 	timer := time.NewTimer(serializableRetryDelay(attempt))
 	defer timer.Stop()
@@ -203,30 +273,45 @@ func (l *AdvisoryLock) Release(ctx context.Context) error {
 	if conn == nil {
 		return nil
 	}
+	if err := l.unlock(ctx, l.key); err != nil {
+		return err
+	}
 	l.conn = nil
+	conn.Release()
 
+	return nil
+}
+
+// unlock releases one key held by the session. If the result is unknown, it
+// destroys the session and leaves the lock without a connection.
+func (l *AdvisoryLock) unlock(ctx context.Context, key string) error {
 	releaseCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), sessionReleaseTimeout)
 	defer cancel()
 
 	var unlocked bool
-	err := conn.QueryRow(releaseCtx,
-		"SELECT pg_advisory_unlock(hashtextextended($1, 0))", l.key,
+	err := l.conn.QueryRow(releaseCtx,
+		"SELECT pg_advisory_unlock(hashtextextended($1, 0))", key,
 	).Scan(&unlocked)
 
 	switch {
 	case err != nil:
-		discard(ctx, conn)
+		l.destroy(ctx)
 
 		return fmt.Errorf("release an advisory lock: %w", err)
 	case !unlocked:
-		discard(ctx, conn)
+		l.destroy(ctx)
 
 		return errLockNotHeld
 	}
 
-	conn.Release()
-
 	return nil
+}
+
+// destroy closes the session, which releases every lock it holds.
+func (l *AdvisoryLock) destroy(ctx context.Context) {
+	conn := l.conn
+	l.conn = nil
+	discard(ctx, conn)
 }
 
 func discard(ctx context.Context, conn *pgxpool.Conn) {

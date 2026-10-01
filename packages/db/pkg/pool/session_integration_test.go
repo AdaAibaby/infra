@@ -4,16 +4,21 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/url"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
+
+	"github.com/e2b-dev/infra/packages/db/pkg/retry"
 )
 
 const testPostgresImage = "postgres:18-alpine"
@@ -294,6 +299,228 @@ func TestAdvisoryLockDiscardsSessionWithUnknownState(t *testing.T) {
 	regained, err := client.AcquireAdvisoryLock(t.Context(), "discarded")
 	require.NoError(t, err)
 	require.NoError(t, regained.Release(t.Context()))
+}
+
+func TestAdvisoryLockHoldsASecondKeyAroundEachAttempt(t *testing.T) {
+	t.Parallel()
+
+	client := testClient(t)
+	// busy may run inside Eventually or fn, so it reports rather than stops.
+	busy := func(key string) bool {
+		probe, err := client.TryAcquireAdvisoryLock(t.Context(), key)
+		if err == nil {
+			assert.NoError(t, probe.Release(t.Context()))
+
+			return false
+		}
+		assert.ErrorIs(t, err, ErrAdvisoryLockBusy)
+
+		return true
+	}
+	backend := func(ctx context.Context, tx pgx.Tx) int {
+		var pid int
+		require.NoError(t, tx.QueryRow(ctx, "SELECT pg_backend_pid()").Scan(&pid))
+
+		return pid
+	}
+	conflict := &pgconn.PgError{Code: pgerrcode.SerializationFailure}
+	nothing := func(context.Context, pgx.Tx) error { return nil }
+
+	outer, err := client.AcquireAdvisoryLock(t.Context(), "outer")
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = outer.Release(context.WithoutCancel(t.Context())) })
+	session, err := InSerializableTxReturn1(t.Context(), outer, func(ctx context.Context, tx pgx.Tx) (int, error) {
+		return backend(ctx, tx), nil
+	})
+	require.NoError(t, err)
+
+	contender, err := client.Pool().Acquire(t.Context())
+	require.NoError(t, err)
+	defer contender.Release()
+
+	// A queued competitor must acquire between attempts, even when the
+	// final attempt refuses. Keeping the key across retries would block it.
+	refused := errors.New("refused")
+	for _, returned := range []error{nil, refused} {
+		attempts := 0
+		competed := make(chan error, 1)
+		value, err := InSerializableTxUnderAdvisoryLockReturn1(t.Context(), outer, "inner", func(ctx context.Context, tx pgx.Tx) (int, error) {
+			attempts++
+			assert.True(t, busy("inner"))
+			assert.Equal(t, session, backend(ctx, tx))
+			if attempts == 1 {
+				go func() {
+					_, err := contender.Exec(ctx, `SELECT pg_advisory_lock(hashtextextended('inner', 0));
+						SELECT pg_advisory_unlock(hashtextextended('inner', 0))`)
+					competed <- err
+				}()
+				require.Eventually(t, func() bool {
+					var waiting bool
+					err := client.Pool().QueryRow(ctx,
+						"SELECT wait_event = 'advisory' FROM pg_stat_activity WHERE pid = $1",
+						contender.Conn().PgConn().PID()).Scan(&waiting)
+
+					return err == nil && waiting
+				}, time.Second, time.Millisecond)
+
+				return 0, conflict
+			}
+			select {
+			case err := <-competed:
+				require.NoError(t, err)
+			case <-ctx.Done():
+				t.Error("the competitor could not acquire between attempts")
+			}
+
+			return 7, returned
+		})
+		require.ErrorIs(t, err, returned)
+		assert.Equal(t, 2, attempts)
+		if returned == nil {
+			assert.Equal(t, 7, value)
+		}
+		assert.False(t, busy("inner"), "the second key outlived the attempts")
+		assert.True(t, busy("outer"), "releasing the second key released the first")
+		assert.EqualValues(t, 2, client.Pool().Stat().AcquiredConns())
+	}
+	contender.Release()
+
+	require.NoError(t, outer.Release(t.Context()))
+
+	// An unlock that finds the key already gone destroys the session, and a
+	// conflict of that attempt is not replayed on it.
+	outer, err = client.AcquireAdvisoryLock(t.Context(), "outer")
+	require.NoError(t, err)
+	attempts := 0
+	_, err = InSerializableTxUnderAdvisoryLockReturn1(t.Context(), outer, "inner", func(ctx context.Context, tx pgx.Tx) (int, error) {
+		attempts++
+		if _, err := tx.Exec(ctx, "SELECT pg_advisory_unlock_all()"); err != nil {
+			return 0, err
+		}
+
+		return 0, conflict
+	})
+	require.ErrorIs(t, err, errLockNotHeld)
+	assert.Equal(t, 1, attempts)
+	require.ErrorIs(t, outer.InSerializableTx(t.Context(), nothing), errLockReleased)
+
+	// So does a panic, which leaves the second key's state unknown.
+	outer, err = client.AcquireAdvisoryLock(t.Context(), "outer")
+	require.NoError(t, err)
+	require.PanicsWithValue(t, "panic", func() {
+		_, _ = InSerializableTxUnderAdvisoryLockReturn1(t.Context(), outer, "inner", func(context.Context, pgx.Tx) (int, error) {
+			panic("panic")
+		})
+	})
+	require.ErrorIs(t, outer.InSerializableTx(t.Context(), nothing), errLockReleased)
+	require.Eventually(t, func() bool { return !busy("outer") && !busy("inner") }, 10*time.Second, 5*time.Millisecond)
+	assert.Zero(t, client.Pool().Stat().AcquiredConns())
+}
+
+// Keep the holder locked through cleanup. A failed CancelRequest must not
+// leave the backend queued, even after it disappears from local pool accounting.
+func TestAdvisoryLockWaitHasServerTimeout(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name        string
+		timeout     string
+		cancelEarly bool
+	}{
+		{name: "confirmed timeout reuses session", timeout: "25ms"},
+		{name: "lost cancellation still ends wait", timeout: "1s", cancelEarly: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			url := testDatabaseURL(t)
+			holder, err := pgxpool.New(t.Context(), url)
+			require.NoError(t, err)
+			t.Cleanup(holder.Close)
+			_, err = holder.Exec(t.Context(), "SELECT pg_advisory_lock(hashtextextended('inner', 0))")
+			require.NoError(t, err)
+
+			var blockDial atomic.Bool
+			var blocked atomic.Int32
+			client, err := Connect(t.Context(), url, "lock-timeout-test", WithMaxConnections(1),
+				WithRuntimeParam("lock_timeout", tc.timeout),
+				func(config *pgxpool.Config, _ *retry.Config) {
+					dial := config.ConnConfig.DialFunc
+					config.ConnConfig.DialFunc = func(ctx context.Context, network, address string) (net.Conn, error) {
+						if blockDial.Load() {
+							blocked.Add(1)
+
+							return nil, errors.New("cancel connection unavailable")
+						}
+
+						return dial(ctx, network, address)
+					}
+				})
+			require.NoError(t, err)
+			t.Cleanup(func() { closeBounded(t, client) })
+			outer, err := client.AcquireAdvisoryLock(t.Context(), "outer")
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = outer.Release(context.WithoutCancel(t.Context())) })
+			pid := outer.conn.Conn().PgConn().PID()
+			blockDial.Store(true)
+
+			ctx, cancel := context.WithCancel(t.Context())
+			result := make(chan error, 1)
+			done := make(chan struct{})
+			t.Cleanup(func() {
+				cancel()
+				<-done
+			})
+			go func() {
+				defer close(done)
+				_, err := InSerializableTxUnderAdvisoryLockReturn1(ctx, outer, "inner", func(context.Context, pgx.Tx) (int, error) {
+					t.Error("transaction ran without the second lock")
+
+					return 0, nil
+				})
+				result <- err
+			}()
+			if tc.cancelEarly {
+				require.Eventually(t, func() bool {
+					var waiting bool
+					err := holder.QueryRow(t.Context(), "SELECT wait_event = 'advisory' FROM pg_stat_activity WHERE pid = $1", pid).Scan(&waiting)
+
+					return err == nil && waiting
+				}, 5*time.Second, time.Millisecond)
+				cancel()
+				require.ErrorIs(t, <-result, context.Canceled)
+				require.Eventually(t, func() bool {
+					var alive bool
+					err := holder.QueryRow(t.Context(), "SELECT EXISTS (SELECT FROM pg_stat_activity WHERE pid = $1)", pid).Scan(&alive)
+
+					return err == nil && !alive && blocked.Load() > 0
+				}, 10*time.Second, 5*time.Millisecond)
+
+				return
+			}
+
+			var pgErr *pgconn.PgError
+			require.ErrorAs(t, <-result, &pgErr)
+			require.Equal(t, pgerrcode.LockNotAvailable, pgErr.Code)
+			require.NoError(t, outer.Release(t.Context()))
+			// The initial name-lock path must also return a healthy session
+			// after a confirmed timeout, since both paths use the same pool.
+			_, err = client.AcquireAdvisoryLock(t.Context(), "inner")
+			require.ErrorAs(t, err, &pgErr)
+			require.Equal(t, pgerrcode.LockNotAvailable, pgErr.Code)
+			var reused uint32
+			var timeout string
+			require.NoError(t, client.Pool().QueryRow(t.Context(),
+				"SELECT pg_backend_pid(), current_setting('lock_timeout')").Scan(&reused, &timeout))
+			assert.Equal(t, pid, reused)
+			assert.Equal(t, tc.timeout, timeout)
+			assert.Zero(t, blocked.Load())
+			var locks int
+			require.NoError(t, holder.QueryRow(t.Context(),
+				"SELECT count(*) FROM pg_locks WHERE pid = $1 AND locktype = 'advisory'", pid).Scan(&locks))
+			assert.Zero(t, locks, "the returned session still holds a lock")
+		})
+	}
 }
 
 func testClient(t *testing.T) *Client {
