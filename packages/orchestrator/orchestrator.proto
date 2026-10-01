@@ -124,6 +124,18 @@ message SandboxNetworkEgressConfig {
   string egress_proxy_address = 5;
   string egress_proxy_username = 6;
   string egress_proxy_password = 7;
+  optional SandboxNetworkEgressProxyTLS egress_proxy_tls = 8;
+}
+
+// TLS for the hop to the BYOP SOCKS5 proxy. The SOCKS5 negotiation and the
+// tunneled traffic both run inside the session.
+message SandboxNetworkEgressProxyTLS {
+  bool enabled = 1;
+  // Verified against the proxy certificate and sent as SNI. Empty means the
+  // host part of egress_proxy_address.
+  string server_name = 2;
+  // PEM roots to verify the proxy against. Empty means the system trust store.
+  bytes ca_cert = 3;
 }
 
 message SandboxNetworkIngressConfig {

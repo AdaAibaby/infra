@@ -2,10 +2,18 @@ package sandbox_network
 
 import (
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/x509"
+	"crypto/x509/pkix"
+	"encoding/pem"
 	"errors"
+	"math/big"
 	"net"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -212,6 +220,80 @@ func TestValidateEgressProxy_NilResolverFallsBackToDefault(t *testing.T) {
 	got, err := ValidateEgressProxy(t.Context(), &EgressProxyConfig{Address: "203.0.113.5:1080"}, nil)
 	require.NoError(t, err)
 	assert.Equal(t, "203.0.113.5:1080", got.Address)
+}
+
+// testCACertPEM builds a self-signed certificate, the shape a private-CA
+// bundle takes. Nothing here verifies a chain, only that the bundle parses.
+func testCACertPEM(t *testing.T) string {
+	t.Helper()
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+
+	template := &x509.Certificate{
+		SerialNumber:          big.NewInt(1),
+		Subject:               pkix.Name{CommonName: "sandbox-network test CA"},
+		NotBefore:             time.Now().Add(-time.Hour),
+		NotAfter:              time.Now().Add(time.Hour),
+		KeyUsage:              x509.KeyUsageCertSign,
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+	}
+
+	der, err := x509.CreateCertificate(rand.Reader, template, template, &key.PublicKey, key)
+	require.NoError(t, err)
+
+	return string(pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}))
+}
+
+// Every block pem.Decode reads must be a certificate that parses.
+func TestParseCACertPool(t *testing.T) {
+	t.Parallel()
+
+	good := testCACertPEM(t)
+	second := testCACertPEM(t)
+
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	require.NoError(t, err)
+	keyDER, err := x509.MarshalECPrivateKey(key)
+	require.NoError(t, err)
+	keyPEM := string(pem.EncodeToMemory(&pem.Block{Type: "EC PRIVATE KEY", Bytes: keyDER}))
+
+	accepted := []struct {
+		name   string
+		bundle string
+	}{
+		{name: "one certificate", bundle: good},
+		{name: "a chain", bundle: good + second},
+		{name: "comments around the blocks", bundle: "# root\n" + good + "subject=CN=intermediate\n" + second + "# end\n"},
+	}
+	for _, tt := range accepted {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			pool, err := ParseCACertPool(tt.bundle)
+			require.NoError(t, err)
+			assert.NotNil(t, pool)
+		})
+	}
+
+	rejected := []struct {
+		name   string
+		bundle string
+	}{
+		{name: "empty", bundle: ""},
+		{name: "no PEM at all", bundle: "not a certificate"},
+		{name: "a block that is not DER", bundle: "-----BEGIN CERTIFICATE-----\nnope\n-----END CERTIFICATE-----\n"},
+		{name: "a private key", bundle: good + keyPEM},
+	}
+	for _, tt := range rejected {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			_, err := ParseCACertPool(tt.bundle)
+			require.ErrorIs(t, err, ErrInvalidCACertificates)
+		})
+	}
 }
 
 func TestIsIPInDeniedSandboxCIDRs_Exported(t *testing.T) {

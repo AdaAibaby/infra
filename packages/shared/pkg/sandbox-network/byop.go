@@ -2,6 +2,8 @@ package sandbox_network
 
 import (
 	"context"
+	"crypto/x509"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net"
@@ -85,6 +87,46 @@ type EgressProxyConfig struct {
 // maxSOCKS5CredentialLen is the maximum byte length of a SOCKS5
 // username or password, see RFC 1929.
 const maxSOCKS5CredentialLen = 255
+
+// ErrInvalidCACertificates is returned when a CA bundle is not one or more PEM
+// certificates that all parse.
+var ErrInvalidCACertificates = errors.New("egress proxy caCert must be one or more PEM certificates")
+
+// ParseCACertPool builds a verification pool from a PEM bundle. Text outside
+// the blocks is allowed, as CA bundles carry comments between certificates.
+// Like x509.CertPool.AppendCertsFromPEM, it skips a block pem.Decode cannot
+// read, so a truncated or corrupted certificate fails at the handshake rather
+// than here.
+func ParseCACertPool(caCert string) (*x509.CertPool, error) {
+	pool := x509.NewCertPool()
+	certs := 0
+
+	for rest := []byte(caCert); ; {
+		var block *pem.Block
+		block, rest = pem.Decode(rest)
+		if block == nil {
+			break
+		}
+
+		if block.Type != "CERTIFICATE" {
+			return nil, fmt.Errorf("%w: found a %q block", ErrInvalidCACertificates, block.Type)
+		}
+
+		cert, err := x509.ParseCertificate(block.Bytes)
+		if err != nil {
+			return nil, fmt.Errorf("%w: certificate %d: %w", ErrInvalidCACertificates, certs+1, err)
+		}
+
+		pool.AddCert(cert)
+		certs++
+	}
+
+	if certs == 0 {
+		return nil, fmt.Errorf("%w: no certificate found", ErrInvalidCACertificates)
+	}
+
+	return pool, nil
+}
 
 // ErrEgressProxyInternalEndpoint is returned when a configured BYOP endpoint
 // resolves to an IP in DeniedSandboxCIDRs.
