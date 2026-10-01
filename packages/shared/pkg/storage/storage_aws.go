@@ -36,6 +36,24 @@ type awsStorage struct {
 	presignClient *s3.PresignClient
 	bucketName    string
 	limiter       *limit.Limiter
+	sse           awsSSE
+}
+
+// awsSSE is the server-side encryption every write requests. Policies that
+// deny s3:PutObject without an x-amz-server-side-encryption header are not
+// satisfied by bucket default encryption, so the header must be on the request.
+type awsSSE struct {
+	algorithm types.ServerSideEncryption
+	kmsKeyID  *string
+}
+
+func newAWSSSE(spec Spec) awsSSE {
+	sse := awsSSE{algorithm: types.ServerSideEncryption(spec.ServerSideEncryption)}
+	if spec.SSEKMSKeyID != "" {
+		sse.kmsKeyID = aws.String(spec.SSEKMSKeyID)
+	}
+
+	return sse
 }
 
 var _ StorageProvider = (*awsStorage)(nil)
@@ -45,6 +63,7 @@ type awsObject struct {
 	path       string
 	bucketName string
 	limiter    *limit.Limiter
+	sse        awsSSE
 }
 
 var (
@@ -81,6 +100,7 @@ func newAWSStorage(ctx context.Context, spec Spec, limiter *limit.Limiter) (*aws
 		presignClient: presignClient,
 		bucketName:    spec.Bucket,
 		limiter:       limiter,
+		sse:           newAWSSSE(spec),
 	}, nil
 }
 
@@ -165,8 +185,10 @@ func (s *awsStorage) GetDetails() string {
 
 func (s *awsStorage) UploadSignedURL(ctx context.Context, path string, ttl time.Duration) (UploadURL, error) {
 	input := &s3.PutObjectInput{
-		Bucket: aws.String(s.bucketName),
-		Key:    aws.String(path),
+		Bucket:               aws.String(s.bucketName),
+		Key:                  aws.String(path),
+		ServerSideEncryption: s.sse.algorithm,
+		SSEKMSKeyId:          s.sse.kmsKeyID,
 	}
 	resp, err := s.presignClient.PresignPutObject(ctx, input, func(opts *s3.PresignOptions) {
 		opts.Expires = ttl
@@ -175,7 +197,20 @@ func (s *awsStorage) UploadSignedURL(ctx context.Context, path string, ttl time.
 		return UploadURL{}, fmt.Errorf("failed to presign PUT URL: %w", err)
 	}
 
-	return UploadURL{URL: resp.URL}, nil
+	// Signed headers (the SSE ones stay headers, never hoisted into the query)
+	// are part of the signature, so the client must send them on the PUT.
+	var headers map[string]string
+	for name, values := range resp.SignedHeader {
+		if strings.EqualFold(name, "Host") || len(values) == 0 {
+			continue
+		}
+		if headers == nil {
+			headers = make(map[string]string)
+		}
+		headers[name] = values[0]
+	}
+
+	return UploadURL{URL: resp.URL, Headers: headers}, nil
 }
 
 func (s *awsStorage) OpenSeekable(_ context.Context, path string) (Seekable, error) {
@@ -184,6 +219,7 @@ func (s *awsStorage) OpenSeekable(_ context.Context, path string) (Seekable, err
 		bucketName: s.bucketName,
 		path:       path,
 		limiter:    s.limiter,
+		sse:        s.sse,
 	}, nil
 }
 
@@ -193,6 +229,7 @@ func (s *awsStorage) OpenBlob(_ context.Context, path string) (Blob, error) {
 		bucketName: s.bucketName,
 		path:       path,
 		limiter:    s.limiter,
+		sse:        s.sse,
 	}, nil
 }
 
@@ -231,7 +268,7 @@ func (o *awsObject) StoreFile(ctx context.Context, path string, opts ...PutOptio
 	cfg := CompressConfigFromOpts(p)
 	if cfg.IsCompressionEnabled() {
 		return storeFileCompressed(ctx, path, cfg, o.limiter.MaxUploadTasks(ctx), p, func(metadata ObjectMetadata) (partUploader, error) {
-			return &awsPartUploader{client: o.client, bucketName: o.bucketName, objectName: o.path, metadata: metadata}, nil
+			return &awsPartUploader{client: o.client, bucketName: o.bucketName, objectName: o.path, metadata: metadata, sse: o.sse}, nil
 		})
 	}
 
@@ -260,10 +297,12 @@ func (o *awsObject) StoreFile(ctx context.Context, path string, opts ...PutOptio
 	_, err = uploader.Upload(
 		ctx,
 		&s3.PutObjectInput{
-			Bucket:   &o.bucketName,
-			Key:      &o.path,
-			Body:     f,
-			Metadata: p.Metadata,
+			Bucket:               &o.bucketName,
+			Key:                  &o.path,
+			Body:                 f,
+			Metadata:             p.Metadata,
+			ServerSideEncryption: o.sse.algorithm,
+			SSEKMSKeyId:          o.sse.kmsKeyID,
 		},
 	)
 	if err == nil {
@@ -292,10 +331,12 @@ func (o *awsObject) Put(ctx context.Context, data []byte, opts ...PutOption) err
 	_, err := o.client.PutObject(
 		ctx,
 		&s3.PutObjectInput{
-			Bucket:   &o.bucketName,
-			Key:      &o.path,
-			Body:     bytes.NewReader(data),
-			Metadata: ApplyPutOptions(opts).Metadata,
+			Bucket:               &o.bucketName,
+			Key:                  &o.path,
+			Body:                 bytes.NewReader(data),
+			Metadata:             ApplyPutOptions(opts).Metadata,
+			ServerSideEncryption: o.sse.algorithm,
+			SSEKMSKeyId:          o.sse.kmsKeyID,
 		},
 	)
 	if err != nil {
@@ -417,6 +458,7 @@ type awsPartUploader struct {
 	bucketName string
 	objectName string
 	metadata   ObjectMetadata
+	sse        awsSSE
 
 	mu       sync.Mutex
 	uploadID string
@@ -433,6 +475,10 @@ func (m *awsPartUploader) Start(ctx context.Context) error {
 		Bucket:   aws.String(m.bucketName),
 		Key:      aws.String(m.objectName),
 		Metadata: m.metadata,
+		// Encryption is declared once at initiation; UploadPart and Complete
+		// inherit it (only SSE-C would need it repeated per part).
+		ServerSideEncryption: m.sse.algorithm,
+		SSEKMSKeyId:          m.sse.kmsKeyID,
 		// The SDK's default integrity protections attach CRC32 checksums to
 		// UploadPart requests; S3 requires the algorithm to be declared at
 		// initiation and echoed per part in Complete. Declare it explicitly on
