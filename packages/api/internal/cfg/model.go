@@ -13,6 +13,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	sharedauth "github.com/e2b-dev/infra/packages/auth/pkg/auth"
+	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 )
 
 const (
@@ -31,6 +32,8 @@ const (
 )
 
 type Config struct {
+	featureflags.Config
+
 	AdminToken string `env:"ADMIN_TOKEN"`
 
 	AnalyticsCollectorAPIToken string `env:"ANALYTICS_COLLECTOR_API_TOKEN"`
@@ -151,6 +154,8 @@ type Config struct {
 	// region with several types lacks an explicit default.
 	DefaultPersistentVolumeTypeByRegion map[string]string `env:"DEFAULT_PERSISTENT_VOLUME_TYPE_BY_REGION"`
 
+	// DomainName is the public domain of this deployment. It builds API-facing
+	// URLs, such as the volume token audience. It is not a LaunchDarkly key.
 	DomainName string `env:"DOMAIN_NAME" envDefault:""`
 
 	// BestOfKHugepageMemory includes hugepage-pool load in best-of-K

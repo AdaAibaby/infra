@@ -40,13 +40,17 @@ const (
 	ClusterKind          ldcontext.Kind = "cluster"
 	BatcherKind          ldcontext.Kind = "batcher.name"
 	InstanceGroupKind    ldcontext.Kind = "instance-group"
-	deploymentKind       ldcontext.Kind = "deployment"
 	TierKind             ldcontext.Kind = "tier"
 	ServiceKind          ldcontext.Kind = "service"
 	TemplateKind         ldcontext.Kind = "template"
 	VolumeKind           ldcontext.Kind = "volume"
 	CompressFileTypeKind ldcontext.Kind = "compress-file-type"
 	CompressUseCaseKind  ldcontext.Kind = "compress-use-case"
+
+	// DeploymentEnvironmentKind has the same name and value as the
+	// OpenTelemetry deployment.environment resource attribute, so a flag
+	// rule and a dashboard filter select one place with one string.
+	DeploymentEnvironmentKind ldcontext.Kind = "deployment_environment"
 )
 
 // All flags must be defined here: https://app.launchdarkly.com/projects/default/flags/

@@ -561,13 +561,12 @@ func run(config cfg.Config, opts Options) (success bool) {
 	sandboxes := sandbox.NewSandboxesMap()
 
 	// feature flags
-	featureFlags, err := featureflags.NewClient()
+	featureFlags, err := featureflags.NewClient(config.DeploymentEnvironment, "")
 	if err != nil {
 		logger.L().Fatal(ctx, "failed to create feature flags client", zap.Error(err))
 	}
 	closers = append(closers, closer{"feature flags", featureFlags.Close})
 
-	featureFlags.SetDeploymentName(config.DomainName)
 	featureFlags.RegisterContextProvider(orchestratorContextProvider(nodeID, commitSHA))
 	featureFlags.RegisterContextProvider(instanceGroupContextProvider(config.InstanceGroupName))
 

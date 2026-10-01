@@ -127,8 +127,8 @@ func InstanceGroupContext(instanceGroupName string) ldcontext.Context {
 	return ldcontext.NewWithKind(InstanceGroupKind, instanceGroupName)
 }
 
-func deploymentContext(deploymentName string) ldcontext.Context {
-	return ldcontext.NewWithKind(deploymentKind, deploymentName)
+func DeploymentEnvironmentContext(name string) ldcontext.Context {
+	return ldcontext.NewWithKind(DeploymentEnvironmentKind, name)
 }
 
 func SandboxContext(sandboxID string) ldcontext.Context {

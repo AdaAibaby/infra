@@ -145,15 +145,13 @@ func run() int {
 	}
 	defer authDB.Close()
 
-	featureFlags, err := featureflags.NewClient()
+	featureFlags, err := featureflags.NewClient(config.DeploymentEnvironment, serviceName)
 	if err != nil {
 		l.Error(ctx, "Initializing feature flags client", zap.Error(err))
 
 		return 1
 	}
 	defer featureFlags.Close(ctx)
-	featureFlags.SetServiceName(serviceName)
-	featureFlags.SetDeploymentName(config.DomainName)
 
 	clickhouseClient, err := clickhouse.NewSwitchingClient(
 		ctx,

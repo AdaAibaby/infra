@@ -414,14 +414,11 @@ func run() int {
 		return redisClient.Close()
 	})
 
-	featureFlags, err := featureflags.NewClient()
+	featureFlags, err := featureflags.NewClient(config.DeploymentEnvironment, serviceName)
 	if err != nil {
 		logger.L().Fatal(ctx, "failed to create feature flags client", zap.Error(err))
 	}
 	cleanupFns = append(cleanupFns, featureFlags.Close)
-
-	featureFlags.SetServiceName(serviceName)
-	featureFlags.SetDeploymentName(config.DomainName)
 
 	// External sandbox logger routes through LaunchDarkly (LogsWriteConfigFlag),
 	// falling back to the fixed collector address. Created here so it can use the

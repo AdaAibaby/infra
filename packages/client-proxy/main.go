@@ -100,13 +100,12 @@ func run() int {
 
 	l.Info(ctx, "Starting client proxy", zap.String("commit", commitSHA), zap.String("instance_id", instanceID))
 
-	featureFlagsClient, err := featureflags.NewClient()
+	featureFlagsClient, err := featureflags.NewClient(config.DeploymentEnvironment, serviceName)
 	if err != nil {
 		l.Error(ctx, "Failed to create feature flags client", zap.Error(err))
 
 		return 1
 	}
-	featureFlagsClient.SetServiceName(serviceName)
 
 	redisClient, err := factories.NewRedisClient(ctx, factories.RedisConfig{
 		RedisURL:         config.RedisURL,

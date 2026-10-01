@@ -15,10 +15,13 @@ const (
 	flagName = "demo-feature-flag"
 )
 
+// Not parallel: it updates launchDarklyOfflineStore, which parallel tests read
+// through NewClient and NewClientWithDatasource.
+//
+//nolint:paralleltest
 func TestOfflineDatastore(t *testing.T) {
-	t.Parallel()
 	clientCtx := ldcontext.NewBuilder(flagName).Build()
-	client, err := NewClient()
+	client, err := NewClient("", "")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -48,9 +51,7 @@ func TestOfflineDatastore(t *testing.T) {
 func TestAllContextsIncludesServiceAndDeployment(t *testing.T) {
 	t.Parallel()
 
-	client := &Client{}
-	client.SetDeploymentName("dev")
-	client.SetServiceName("orchestration-api")
+	client := newClient(nil, true, "staging", "orchestration-api")
 
 	merged := mergeContexts(t.Context(), client.allContexts(t.Context(), nil))
 	contexts := merged.GetAllIndividualContexts(nil)
@@ -60,8 +61,38 @@ func TestAllContextsIncludesServiceAndDeployment(t *testing.T) {
 		seen[item.Kind()] = item.Key()
 	}
 
-	require.Equal(t, "dev", seen[deploymentKind])
+	require.Equal(t, "staging", seen[DeploymentEnvironmentKind])
 	require.Equal(t, "orchestration-api", seen[ServiceKind])
+}
+
+// newClient is exercised directly: a real client on launchDarklyOfflineStore
+// would race with the updates in TestOfflineDatastore.
+func TestNewClientPlaceKey(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name  string
+		value string
+		want  string
+	}{
+		{name: "set", value: "staging", want: "staging"},
+		{name: "empty is undefined", value: "", want: undefinedDeploymentEnvironment},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			client := newClient(nil, true, tc.value, "")
+
+			merged := mergeContexts(t.Context(), client.allContexts(t.Context(), nil))
+			seen := map[ldcontext.Kind]string{}
+			for _, item := range merged.GetAllIndividualContexts(nil) {
+				seen[item.Kind()] = item.Key()
+			}
+
+			require.Equal(t, tc.want, seen[DeploymentEnvironmentKind])
+			require.NotContains(t, seen, ServiceKind)
+		})
+	}
 }
 
 func TestAllContextsIncludesRegisteredProviders(t *testing.T) {

@@ -1280,7 +1280,7 @@ func run(ctx context.Context, buildID string, iterations int, coldStart, noPrefe
 	if verbose {
 		logLevel = ldlog.Info
 	}
-	flags, _ := featureflags.NewClientWithLogLevel(logLevel)
+	flags, _ := featureflags.NewClientWithLogLevel(config.DeploymentEnvironment, "", logLevel)
 
 	sandboxes := sandbox.NewSandboxesMap()
 

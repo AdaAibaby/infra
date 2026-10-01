@@ -7,6 +7,7 @@ import (
 	"os"
 	"time"
 
+	envconfig "github.com/caarlos0/env/v11"
 	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 	sdkmetric "go.opentelemetry.io/otel/sdk/metric"
 	"go.uber.org/zap"
@@ -116,7 +117,12 @@ func configure(ctx context.Context) (cleaner.Options, logger.Logger, *telemetry.
 	}
 	opts.Path = args[0]
 
-	ffc, err := featureflags.NewClient()
+	ffConfig, err := envconfig.ParseAs[featureflags.Config]()
+	if err != nil {
+		return opts, nil, nil, nil, nil, fmt.Errorf("could not parse feature flags config: %w", err)
+	}
+
+	ffc, err := featureflags.NewClient(ffConfig.DeploymentEnvironment, serviceName)
 	if err != nil {
 		return opts, nil, nil, nil, nil, err
 	}

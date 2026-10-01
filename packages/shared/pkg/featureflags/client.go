@@ -25,12 +25,33 @@ var launchDarklyApiKey = os.Getenv("LAUNCH_DARKLY_API_KEY")
 
 const waitForInit = 5 * time.Second
 
+// undefinedDeploymentEnvironment is the place key of a process whose
+// configuration names no deployment environment. It keeps the context
+// present, so the gap is visible in LaunchDarkly instead of silent.
+const undefinedDeploymentEnvironment = "undefined"
+
+// Config identifies the place a process runs in. Services embed it in their
+// configuration struct, so the environment parser fills it with the rest.
+type Config struct {
+	// DeploymentEnvironment is the OpenTelemetry deployment.environment value
+	// of this process, for example "staging".
+	DeploymentEnvironment string `env:"DEPLOYMENT_ENVIRONMENT"`
+}
+
 type Client struct {
-	ld               *ldclient.LDClient
-	static           bool
-	deploymentName   string
-	serviceName      string
-	contextProviders []ContextProvider
+	ld                    *ldclient.LDClient
+	static                bool
+	deploymentEnvironment string
+	serviceName           string
+	contextProviders      []ContextProvider
+}
+
+func newClient(ld *ldclient.LDClient, static bool, deploymentEnvironment, serviceName string) *Client {
+	if deploymentEnvironment == "" {
+		deploymentEnvironment = undefinedDeploymentEnvironment
+	}
+
+	return &Client{ld: ld, static: static, deploymentEnvironment: deploymentEnvironment, serviceName: serviceName}
 }
 
 // ContextProvider supplies an additional LD context on every flag evaluation.
@@ -57,15 +78,16 @@ func NewClientWithDatasource(source *ldtestdata.TestDataSource) (*Client, error)
 	return &Client{ld: ldClient}, nil
 }
 
-func NewClient() (*Client, error) {
+// NewClient creates a client that adds a DeploymentEnvironmentKind context and,
+// when serviceName is not empty, a ServiceKind context to every evaluation.
+func NewClient(deploymentEnvironment, serviceName string) (*Client, error) {
 	if launchDarklyApiKey == "" {
 		c, err := NewClientWithDatasource(launchDarklyOfflineStore)
 		if err != nil {
 			return nil, err
 		}
-		c.static = true
 
-		return c, nil
+		return newClient(c.ld, true, deploymentEnvironment, serviceName), nil
 	}
 
 	ldClient, err := ldclient.MakeClient(launchDarklyApiKey, waitForInit)
@@ -73,12 +95,12 @@ func NewClient() (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{ld: ldClient}, nil
+	return newClient(ldClient, false, deploymentEnvironment, serviceName), nil
 }
 
 // NewClientWithLogLevel creates a client with a specific log level.
 // Use ldlog.Error to suppress INFO/WARN logs in CLI tools.
-func NewClientWithLogLevel(logLevel ldlog.LogLevel) (*Client, error) {
+func NewClientWithLogLevel(deploymentEnvironment, serviceName string, logLevel ldlog.LogLevel) (*Client, error) {
 	cfg := ldclient.Config{
 		Logging: ldcomponents.Logging().MinLevel(logLevel),
 	}
@@ -93,7 +115,7 @@ func NewClientWithLogLevel(logLevel ldlog.LogLevel) (*Client, error) {
 			return nil, err
 		}
 
-		return &Client{ld: ldClient, static: true}, nil
+		return newClient(ldClient, true, deploymentEnvironment, serviceName), nil
 	}
 
 	ldClient, err := ldclient.MakeCustomClient(launchDarklyApiKey, cfg, waitForInit)
@@ -101,7 +123,7 @@ func NewClientWithLogLevel(logLevel ldlog.LogLevel) (*Client, error) {
 		return nil, err
 	}
 
-	return &Client{ld: ldClient}, nil
+	return newClient(ldClient, false, deploymentEnvironment, serviceName), nil
 }
 
 // Live reports whether flag values can change at runtime. A client built
@@ -109,14 +131,6 @@ func NewClientWithLogLevel(logLevel ldlog.LogLevel) (*Client, error) {
 // process, and a nil client serves fallbacks.
 func (c *Client) Live() bool {
 	return c != nil && c.ld != nil && !c.static
-}
-
-func (c *Client) SetDeploymentName(deploymentName string) {
-	c.deploymentName = deploymentName
-}
-
-func (c *Client) SetServiceName(serviceName string) {
-	c.serviceName = serviceName
 }
 
 // RegisterContextProvider registers a provider whose contexts are appended to
@@ -234,8 +248,8 @@ func (c *Client) Close(ctx context.Context) error {
 }
 
 func (c *Client) allContexts(ctx context.Context, contexts []ldcontext.Context) []ldcontext.Context {
-	if c.deploymentName != "" {
-		contexts = append(contexts, deploymentContext(c.deploymentName))
+	if c.deploymentEnvironment != "" {
+		contexts = append(contexts, DeploymentEnvironmentContext(c.deploymentEnvironment))
 	}
 	if c.serviceName != "" {
 		contexts = append(contexts, ServiceContext(c.serviceName))

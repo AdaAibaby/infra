@@ -7,9 +7,12 @@ import (
 	"github.com/caarlos0/env/v11"
 
 	sharedauth "github.com/e2b-dev/infra/packages/auth/pkg/auth"
+	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 )
 
 type Config struct {
+	featureflags.Config
+
 	Port                        int                       `env:"PORT"                                         envDefault:"3010"`
 	PostgresConnectionString    string                    `env:"POSTGRES_CONNECTION_STRING,required,notEmpty"`
 	ClickhouseConnectionString  string                    `env:"CLICKHOUSE_CONNECTION_STRING"`
@@ -28,8 +31,6 @@ type Config struct {
 
 	OrySDKURL          string `env:"ORY_SDK_URL"`
 	OryProjectAPIToken string `env:"ORY_PROJECT_API_TOKEN,unset"`
-
-	DomainName string `env:"DOMAIN_NAME" envDefault:""`
 }
 
 type FailureCondition string
