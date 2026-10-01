@@ -61,6 +61,7 @@ func TestPostAdminClustersCreatesImmutableCluster(t *testing.T) {
 
 	conflict := callCreateCluster(t, store, request)
 	require.Equal(t, http.StatusConflict, conflict.Code, conflict.Body.String())
+	requireClusterErrorCode(t, conflict, api.ClusterRegistrationConflict)
 	require.NoError(t, db.SqlcClient.TestsRawSQLQuery(ctx,
 		`SELECT count(*) FROM public.clusters WHERE id = $1 AND name = $2`,
 		func(rows pgx.Rows) error {
@@ -96,6 +97,7 @@ func TestPostAdminClustersReusesStableIDOnlyForIdenticalConfiguration(t *testing
 	request.Token = "different-token"
 	conflict := callCreateCluster(t, store, request)
 	require.Equal(t, http.StatusConflict, conflict.Code, conflict.Body.String())
+	requireClusterErrorCode(t, conflict, api.ClusterRegistrationConflict)
 
 	var storedToken string
 	require.NoError(t, db.SqlcClient.TestsRawSQLQuery(t.Context(),

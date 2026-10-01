@@ -55,7 +55,9 @@ func TestManagementRegisterClusterRejectsDescriptorChange(t *testing.T) {
 
 	require.Equal(t, http.StatusNoContent, callManagementRegisterCluster(t, store, clusterID, registration).Code)
 	registration.Endpoint = "changed.example.test:443"
-	require.Equal(t, http.StatusConflict, callManagementRegisterCluster(t, store, clusterID, registration).Code)
+	response := callManagementRegisterCluster(t, store, clusterID, registration)
+	require.Equal(t, http.StatusConflict, response.Code)
+	requireClusterErrorCode(t, response, api.ClusterRegistrationConflict)
 }
 
 func TestManagementRegisterClusterAcceptsTheClusterDescriptor(t *testing.T) {
@@ -80,6 +82,7 @@ func TestManagementRegisterClusterRejectsReservedClusterID(t *testing.T) {
 	)
 
 	require.Equal(t, http.StatusBadRequest, response.Code)
+	requireClusterErrorCode(t, response, api.ClusterRegistrationInvalid)
 }
 
 func TestManagementAssignProjectClusterRejectsReservedClusterID(t *testing.T) {
@@ -95,6 +98,7 @@ func TestManagementAssignProjectClusterRejectsReservedClusterID(t *testing.T) {
 	)
 
 	require.Equal(t, http.StatusBadRequest, response.Code)
+	requireClusterErrorCode(t, response, api.ClusterAssignmentInvalid)
 }
 
 func TestManagementAssignProjectClusterRejectsDifferentAssignment(t *testing.T) {
@@ -115,7 +119,7 @@ func TestManagementAssignProjectClusterRejectsDifferentAssignment(t *testing.T) 
 	require.Equal(t, http.StatusNoContent, callManagementAssignProjectCluster(t, store, projectID, firstID).Code)
 	response := callManagementAssignProjectCluster(t, store, projectID, secondID)
 	require.Equal(t, http.StatusConflict, response.Code, response.Body.String())
-	require.Contains(t, response.Body.String(), "Team is already assigned to a different cluster")
+	requireClusterErrorCode(t, response, api.ClusterAssignmentAlreadyAssigned)
 	require.Equal(t, []uuid.UUID{projectID}, authService.invalidated)
 }
 
@@ -137,7 +141,7 @@ func TestManagementAssignProjectClusterRejectsNonEnterpriseProjectWithoutMutatio
 
 	response := callManagementAssignProjectCluster(t, store, projectID, clusterID)
 	require.Equal(t, http.StatusConflict, response.Code, response.Body.String())
-	require.Contains(t, response.Body.String(), enterpriseClusterAssignmentPolicyMessage)
+	requireClusterErrorCode(t, response, api.ClusterAssignmentRequiresEnterprise)
 	require.Empty(t, authService.invalidated)
 
 	var assignedClusterID *uuid.UUID
@@ -273,4 +277,35 @@ func callManagementClusterHandler(
 	ginContext.Writer.WriteHeaderNow()
 
 	return recorder
+}
+
+func requireClusterErrorCode(t *testing.T, response *httptest.ResponseRecorder, code api.ErrorCode) {
+	t.Helper()
+	var body api.Error
+	require.NoError(t, json.Unmarshal(response.Body.Bytes(), &body))
+	require.NotNil(t, body.ErrorCode)
+	require.Equal(t, code, *body.ErrorCode)
+	require.EqualValues(t, response.Code, body.Code)
+}
+
+func TestManagementAssignmentMissingResourcesHaveStableCodes(t *testing.T) {
+	t.Parallel()
+	db := testutils.SetupDatabase(t)
+	projectID := createClusterAssignmentTestTeam(t, db)
+	store := &APIStore{db: db.SqlcClient}
+	for _, test := range []struct {
+		name      string
+		projectID uuid.UUID
+		code      api.ErrorCode
+	}{
+		{"project", uuid.New(), api.ClusterAssignmentProjectNotFound},
+		{"cluster", projectID, api.ClusterAssignmentClusterNotFound},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			t.Parallel()
+			response := callManagementAssignProjectCluster(t, store, test.projectID, uuid.New())
+			require.Equal(t, http.StatusNotFound, response.Code)
+			requireClusterErrorCode(t, response, test.code)
+		})
+	}
 }

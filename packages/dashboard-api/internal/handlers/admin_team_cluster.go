@@ -14,6 +14,7 @@ import (
 	"github.com/e2b-dev/infra/packages/dashboard-api/internal/api"
 	dashboardqueries "github.com/e2b-dev/infra/packages/db/pkg/dashboard/queries"
 	"github.com/e2b-dev/infra/packages/db/pkg/dberrors"
+	"github.com/e2b-dev/infra/packages/shared/pkg/apierrors"
 	"github.com/e2b-dev/infra/packages/shared/pkg/ginutils"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 )
@@ -37,7 +38,7 @@ func (s *APIStore) PostAdminClusters(c *gin.Context) {
 
 	body, err := ginutils.ParseBody[api.AdminClusterCreateRequest](ctx, c)
 	if err != nil {
-		s.sendAPIStoreError(c, http.StatusBadRequest, fmt.Sprintf("Error when parsing request: %s", err))
+		apierrors.SendAPIError(c, &apierrors.APIError{Code: http.StatusBadRequest, ErrorCode: string(api.ClusterRegistrationInvalid), ClientMsg: fmt.Sprintf("Error when parsing request: %s", err)})
 
 		return
 	}
@@ -52,13 +53,13 @@ func (s *APIStore) PostAdminClusters(c *gin.Context) {
 		AuthOrgID:          body.AuthOrgId,
 	})
 	if errors.Is(err, errInvalidClusterRegistration) {
-		s.sendAPIStoreError(c, http.StatusBadRequest, "name, endpoint and token are required")
+		apierrors.SendAPIError(c, &apierrors.APIError{Code: http.StatusBadRequest, ErrorCode: string(api.ClusterRegistrationInvalid), ClientMsg: "name, endpoint and token are required"})
 
 		return
 	}
 	if err != nil {
 		if dberrors.IsUniqueConstraintViolation(err) || dberrors.IsNotFoundError(err) {
-			s.sendAPIStoreError(c, http.StatusConflict, "Cluster ID or auth organization is already registered")
+			apierrors.SendAPIError(c, &apierrors.APIError{Code: http.StatusConflict, ErrorCode: string(api.ClusterRegistrationConflict), ClientMsg: "Cluster ID or auth organization is already registered"})
 		} else {
 			s.sendAPIStoreError(c, http.StatusInternalServerError, "Failed to create cluster")
 		}
@@ -157,7 +158,7 @@ func (s *APIStore) GetAdminTeamsTeamIDCluster(c *gin.Context, teamID api.TeamID)
 
 func (s *APIStore) assignTeamCluster(c *gin.Context, teamID, clusterID uuid.UUID, preserveExisting bool) {
 	if clusterID == uuid.Nil {
-		s.sendAPIStoreError(c, http.StatusBadRequest, "cluster_id is required")
+		apierrors.SendAPIError(c, &apierrors.APIError{Code: http.StatusBadRequest, ErrorCode: string(api.ClusterAssignmentInvalid), ClientMsg: "cluster_id is required"})
 
 		return
 	}
@@ -169,13 +170,13 @@ func (s *APIStore) assignTeamCluster(c *gin.Context, teamID, clusterID uuid.UUID
 		PreserveExisting: preserveExisting,
 	})
 	if dberrors.IsNotFoundError(err) {
-		s.sendAPIStoreError(c, http.StatusNotFound, "Team not found")
+		apierrors.SendAPIError(c, &apierrors.APIError{Code: http.StatusNotFound, ErrorCode: string(api.ClusterAssignmentProjectNotFound), ClientMsg: "Team not found"})
 
 		return
 	}
 	if err != nil {
 		if dberrors.IsForeignKeyViolation(err) {
-			s.sendAPIStoreError(c, http.StatusNotFound, "Cluster not found")
+			apierrors.SendAPIError(c, &apierrors.APIError{Code: http.StatusNotFound, ErrorCode: string(api.ClusterAssignmentClusterNotFound), ClientMsg: "Cluster not found"})
 		} else {
 			s.sendAPIStoreError(c, http.StatusInternalServerError, "Failed to assign cluster to team")
 		}
@@ -183,12 +184,12 @@ func (s *APIStore) assignTeamCluster(c *gin.Context, teamID, clusterID uuid.UUID
 		return
 	}
 	if !result.AssignmentEligible {
-		s.sendAPIStoreError(c, http.StatusConflict, enterpriseClusterAssignmentPolicyMessage)
+		apierrors.SendAPIError(c, &apierrors.APIError{Code: http.StatusConflict, ErrorCode: string(api.ClusterAssignmentRequiresEnterprise), ClientMsg: enterpriseClusterAssignmentPolicyMessage})
 
 		return
 	}
 	if !result.Assigned {
-		s.sendAPIStoreError(c, http.StatusConflict, "Team is already assigned to a different cluster")
+		apierrors.SendAPIError(c, &apierrors.APIError{Code: http.StatusConflict, ErrorCode: string(api.ClusterAssignmentAlreadyAssigned), ClientMsg: "Team is already assigned to a different cluster"})
 
 		return
 	}

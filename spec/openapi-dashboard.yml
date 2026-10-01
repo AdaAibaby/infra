@@ -327,9 +327,26 @@ components:
           type: integer
           format: int32
           description: Error code.
+        error_code:
+          $ref: "#/components/schemas/ErrorCode"
         message:
           type: string
           description: Error message.
+
+    ErrorCode:
+      type: string
+      description: >-
+        Stable machine-readable reason for an API error. New codes may be added
+        as other errors adopt this contract. Clients must handle absent or unknown
+        codes without interpreting the human-readable message.
+      enum:
+        - cluster_registration_invalid
+        - cluster_registration_conflict
+        - cluster_assignment_invalid
+        - cluster_assignment_project_not_found
+        - cluster_assignment_cluster_not_found
+        - cluster_assignment_requires_enterprise
+        - cluster_assignment_already_assigned
 
     AdminAuthProviderProfile:
       type: object

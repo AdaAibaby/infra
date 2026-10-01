@@ -382,6 +382,10 @@ it. Replaying the same registration or assignment succeeds, while a changed desc
 assignment, an inexact detach, or deletion of a referenced cluster returns a conflict. A new or
 replacement assignment requires the project's tier identifier to contain `enterprise`,
 case-insensitively; an identical assignment remains replayable after a later tier change.
+The shared error response supports an optional `error_code`, defined by the dashboard OpenAPI
+`ErrorCode` schema. Registration and assignment rejections currently populate it; other errors
+may omit it. Callers use that stable code rather than the human-readable message, and treat
+uncoded or unknown reasons as generic errors.
 
 `DELETE /v1/management/projects/{teamID}` is declared and answers 501. `envs`, `snapshots` and
 `volumes` reference `teams` with `ON DELETE NO ACTION` and templates are only soft-deleted, so a
