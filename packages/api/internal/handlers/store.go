@@ -203,24 +203,31 @@ type APIStore struct {
 	pauseBackendOverride   pauseOrchestrator
 	resumeBackendOverride  resumeWaitOrchestrator
 	connectBackendOverride connectOrchestrator
-	teamSandboxCounter     teamRunningSandboxCounter
-	templateManager        *template_manager.TemplateManager
-	sqlcDB                 *sqlcdb.Client
-	authDB                 *authdb.Client
-	redisClient            redis.UniversalClient
-	templateCache          *templatecache.TemplateCache
-	templateBuildsCache    *templatecache.TemplatesBuildCache
-	snapshotCache          *snapshotcache.SnapshotCache
-	authService            sharedauth.Service
-	templateSpawnCounter   *utils.TemplateSpawnCounter
-	clickhouseStore        clickhouse.Clickhouse
-	sandboxLogsReader      *sandboxlogs.Reader
-	accessTokenGenerator   *sandbox.AccessTokenGenerator
-	featureFlags           *featureflags.Client
-	clusters               *clusters.Pool
-	snapshotUpsertSem      *sharedutils.AdjustableSemaphore
-	sandboxListSem         *sharedutils.AdjustableSemaphore
-	snapshotBuildQuerySem  *sharedutils.AdjustableSemaphore
+	// snapshotBackendOverride does the same for the snapshot-template
+	// handler: the memory:false refusals must land before the sandbox leaves
+	// Running.
+	snapshotBackendOverride snapshotOrchestrator
+	// autoResumeBackendOverride does the same for the client-proxy auto-resume
+	// RPC: a running sandbox is routed before its snapshot kind is consulted.
+	autoResumeBackendOverride autoResumeOrchestrator
+	teamSandboxCounter        teamRunningSandboxCounter
+	templateManager           *template_manager.TemplateManager
+	sqlcDB                    *sqlcdb.Client
+	authDB                    *authdb.Client
+	redisClient               redis.UniversalClient
+	templateCache             *templatecache.TemplateCache
+	templateBuildsCache       *templatecache.TemplatesBuildCache
+	snapshotCache             *snapshotcache.SnapshotCache
+	authService               sharedauth.Service
+	templateSpawnCounter      *utils.TemplateSpawnCounter
+	clickhouseStore           clickhouse.Clickhouse
+	sandboxLogsReader         *sandboxlogs.Reader
+	accessTokenGenerator      *sandbox.AccessTokenGenerator
+	featureFlags              *featureflags.Client
+	clusters                  *clusters.Pool
+	snapshotUpsertSem         *sharedutils.AdjustableSemaphore
+	sandboxListSem            *sharedutils.AdjustableSemaphore
+	snapshotBuildQuerySem     *sharedutils.AdjustableSemaphore
 
 	// secretsConn and secretsManagement are nil when no secrets store backend
 	// address is configured. The routes stay registered either way and answer

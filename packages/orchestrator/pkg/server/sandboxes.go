@@ -90,7 +90,22 @@ const (
 	// so the resume failing is always the lethal step; the full chain is in
 	// the joined error.
 	killReasonResumeFailed = "resume_failed"
+	// killReasonThawFailed: the resume succeeded but the rootfs stayed frozen
+	// through every thaw attempt (ErrSandboxLost tagged ErrRootfsThawFailed),
+	// so the orchestrator tore down a guest that ran but could not write.
+	killReasonThawFailed = "thaw_failed"
 )
+
+// lostSandboxKillReason names the kill behind an ErrSandboxLost from the
+// in-place checkpoint: thaw_failed when the VM resumed but its rootfs stayed
+// frozen, resume_failed for every other lethal step.
+func lostSandboxKillReason(err error) string {
+	if errors.Is(err, sandbox.ErrRootfsThawFailed) {
+		return killReasonThawFailed
+	}
+
+	return killReasonResumeFailed
+}
 
 // filesystemBoot reports whether a snapshot resumes by cold-booting (rebooting)
 // from its rootfs instead of restoring memory: when the artifact has no memory
@@ -1459,7 +1474,7 @@ func (s *Server) checkpointInPlace(ctx context.Context, sbx *sandbox.Sandbox, in
 			// would publish nothing. Emit the terminal surfaces here, like
 			// the seal-failure kill above: without them this death has no
 			// killed event and no kill-counter sample.
-			s.emitSandboxKilled(ctx, sbx, killReasonResumeFailed)
+			s.emitSandboxKilled(ctx, sbx, lostSandboxKillReason(err))
 
 			return nil, false, status.Errorf(codes.Internal, "error snapshotting sandbox '%s': %s", in.GetSandboxId(), err)
 		}

@@ -21,7 +21,9 @@ Two ideas drive the design:
 1. **A sandbox is a resumed snapshot.** Templates are pre-booted VM snapshots (memory + disk +
    VM state) stored in object storage. "Creating" a sandbox means restoring a snapshot, which is
    why startup is fast. Memory pages are loaded lazily on page-fault (userfaultfd) and the root
-   filesystem is a copy-on-write overlay, so only touched data is ever fetched.
+   filesystem is a copy-on-write overlay, so only touched data is ever fetched. A template can
+   also be filesystem-only (rootfs, no memfile), taken by a filesystem-only pause or checkpoint;
+   sandboxes created from it cold-boot from disk instead of resuming.
 2. **Control plane and data plane are separate.** The API decides *where* a sandbox runs and
    tracks *that* it runs (Postgres/Redis); the orchestrator on each node owns *how* it runs
    (Firecracker, networking, storage). Sandbox traffic never passes through the API.
@@ -565,6 +567,20 @@ sequenceDiagram
 - **Fork**: checkpoints the original in place, then starts each fork from that snapshot as a
   new sandbox rather than a resume — like a sandbox created from a snapshot template — so
   placement spreads the forks across nodes instead of preferring the original's node.
+- **Filesystem-only checkpoint**: `memory: false` on snapshot-template creation exports the
+  rootfs and no memfile, resumes the same Firecracker process, and produces a template whose
+  sandboxes cold-boot; the source keeps running. Routed by its own flag,
+  `filesystem-only-checkpoint`, independent of `in-place-checkpoint` (no memory is exported, so
+  the sync-WP tracking, the Firecracker release gate and the balloon gate play no part). The
+  API refuses it before the sandbox leaves Running when the flag is off for the team (400,
+  `snapshot_filesystem_only_disabled`) or when the sandbox's node runs an orchestrator
+  release below the one that reads the request field (409,
+  `snapshot_filesystem_only_unsupported_node`, the placement feature floor
+  `filesystem-only-checkpoint`; a checkpoint cannot move to another node, so the options are a
+  full snapshot or a pause and resume). The request is never downgraded to a memory snapshot.
+  The snapshot row records the kind only once the build is ready, and the pause and fork paths
+  keep the same rule, so a refused or failed request leaves the previous build resumed as what
+  it is.
 - **Explicit filesystem-only resume**: `memory: false` on resume/connect demands a cold boot
   (`RebootSandbox`) even when the snapshot includes memory, as a self-serve rescue when the
   restored memory state is unusable. Gated per team by the `fs-only-resume-api` flag; when off

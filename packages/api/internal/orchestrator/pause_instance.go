@@ -30,7 +30,10 @@ func (o *Orchestrator) pauseSandbox(ctx context.Context, node *nodemanager.Node,
 	ctx, span := tracer.Start(ctx, "pause-sandbox")
 	defer span.End()
 
-	result, err := o.throttledUpsertSnapshot(ctx, buildUpsertSnapshotParams(sbx, node, filesystemOnly))
+	// The requested kind is recorded only once the pause has succeeded: a pause
+	// the node refuses leaves the sandbox running on its previous build, whose
+	// kind the row must keep describing.
+	currentKind, result, err := o.upsertSnapshotKeepingKind(ctx, sbx, node)
 	if err != nil {
 		telemetry.ReportCriticalError(ctx, "error inserting snapshot for env", err)
 
@@ -68,7 +71,7 @@ func (o *Orchestrator) pauseSandbox(ctx context.Context, node *nodemanager.Node,
 		return fmt.Errorf("error pausing sandbox: %w", err)
 	}
 
-	if err := o.finishSnapshotBuild(ctx, result.BuildID, types.BuildStatusSuccess); err != nil {
+	if err := o.finishSnapshotBuildWithKind(ctx, result.BuildID, sbx.SandboxID, currentKind, filesystemOnly, types.BuildStatusSuccess); err != nil {
 		telemetry.ReportCriticalError(ctx, "error pausing sandbox", err)
 
 		return fmt.Errorf("error pausing sandbox: %w", err)

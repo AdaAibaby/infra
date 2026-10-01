@@ -1134,6 +1134,15 @@ components:
         name:
           type: string
           description: Optional name for the snapshot template. If a snapshot template with this name already exists, a new build will be assigned to the existing template instead of creating a new one.
+        memory:
+          type: boolean
+          description: >-
+            Whether to capture a full memory snapshot. When false, only the
+            filesystem is persisted: the snapshot is smaller and faster to take,
+            and sandboxes created from it cold-boot (start fresh from disk)
+            instead of restoring memory, so they begin without the source
+            sandbox's running processes, in-memory state, and open connections.
+            The source sandbox keeps running in both cases. Defaults to true.
 
     SandboxPauseRequest:
       type: object

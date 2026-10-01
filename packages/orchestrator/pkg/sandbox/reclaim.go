@@ -449,6 +449,11 @@ func (s *Sandbox) thawRootfs(ctx context.Context) error {
 	return err
 }
 
+// ErrRootfsThawFailed tags an ErrSandboxLost whose lethal step was the
+// rootfs thaw, not the resume: the VM came back, its rootfs stayed frozen. The
+// RPC layer reads it to name the kill correctly.
+var ErrRootfsThawFailed = errors.New("rootfs thaw failed")
+
 // thawRootfsOrLose treats a rootfs that stays frozen as a lost sandbox: the
 // guest runs but cannot write, and its health check, a read, keeps passing.
 // Same exit as a failed in-place resume, so the API reaps the record.
@@ -460,7 +465,7 @@ func (s *Sandbox) thawRootfsOrLose(ctx context.Context) error {
 	s.SetStopReason(StopReasonKilled)
 
 	return fmt.Errorf("rootfs thaw failed after in-place resume, sandbox torn down: %w",
-		errors.Join(ErrSandboxLost, err, s.Close(context.WithoutCancel(ctx))))
+		errors.Join(ErrSandboxLost, ErrRootfsThawFailed, err, s.Close(context.WithoutCancel(ctx))))
 }
 
 // envdSupportsCgroupFreeze reports whether the sandbox's envd exposes the

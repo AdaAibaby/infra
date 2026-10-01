@@ -43,6 +43,31 @@ var featureGates = []featureGate{
 	},
 }
 
+// FilesystemOnlyCheckpoint is read from SandboxCheckpointRequest.filesystem_only
+// by orchestrators from the release that introduced the field. An older one
+// drops the field, takes a memory checkpoint and answers as if it had not, so
+// the API refuses the request on such a node instead of sending it.
+var FilesystemOnlyCheckpoint = Feature{name: "filesystem-only-checkpoint", minVersion: semver.New(0, 16, 202609301732, "", "")}
+
+// Name identifies the capability in errors and logs.
+func (f Feature) Name() string {
+	return f.name
+}
+
+// Require builds the requirement for capabilities asked for outside sandbox
+// creation, where there is no create request for a gate predicate to read.
+func Require(features ...Feature) FeatureRequirement {
+	var requirement FeatureRequirement
+	for _, feature := range features {
+		requirement.features = append(requirement.features, feature)
+		if requirement.minVersion == nil || requirement.minVersion.LessThan(feature.minVersion) {
+			requirement.minVersion = feature.minVersion
+		}
+	}
+
+	return requirement
+}
+
 // FeatureRequirement is the orchestrator-capability constraint a sandbox puts
 // on a candidate node. The zero value constrains nothing.
 type FeatureRequirement struct {
@@ -61,21 +86,15 @@ func requiredFeatures(req *orchestrator.SandboxCreateRequest) FeatureRequirement
 // featuresFrom takes the gate list as an argument so it can be evaluated
 // against a list other than the package's own.
 func featuresFrom(req *orchestrator.SandboxCreateRequest, gates []featureGate) FeatureRequirement {
-	var requirement FeatureRequirement
+	var features []Feature
 
 	for _, gate := range gates {
-		if !gate.requested(req) {
-			continue
-		}
-
-		requirement.features = append(requirement.features, gate.feature)
-
-		if requirement.minVersion == nil || requirement.minVersion.LessThan(gate.feature.minVersion) {
-			requirement.minVersion = gate.feature.minVersion
+		if gate.requested(req) {
+			features = append(features, gate.feature)
 		}
 	}
 
-	return requirement
+	return Require(features...)
 }
 
 // FeatureNames lists the requested capabilities, for reporting.

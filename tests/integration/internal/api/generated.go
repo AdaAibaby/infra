@@ -487,7 +487,7 @@ type Error struct {
 	// Code Error code
 	Code int32 `json:"code"`
 
-	// ErrorCode Machine-readable semantic error code. Not a closed set; initial values: sandbox_capacity_unavailable, sandbox_placement_timeout, sandbox_no_compatible_node, sandbox_create_failed, internal_server_error.
+	// ErrorCode Machine-readable semantic error code. Not a closed set; initial values: sandbox_capacity_unavailable, sandbox_placement_timeout, sandbox_no_compatible_node, sandbox_create_failed, internal_server_error, secret_limit_reached.
 	ErrorCode *string `json:"error_code,omitempty"`
 
 	// Message Error
@@ -1262,6 +1262,9 @@ type SandboxRefreshRequest struct {
 
 // SandboxSnapshotRequest defines model for SandboxSnapshotRequest.
 type SandboxSnapshotRequest struct {
+	// Memory Whether to capture a full memory snapshot. When false, only the filesystem is persisted: the snapshot is smaller and faster to take, and sandboxes created from it cold-boot (start fresh from disk) instead of restoring memory, so they begin without the source sandbox's running processes, in-memory state, and open connections. The source sandbox keeps running in both cases. Defaults to true.
+	Memory *bool `json:"memory,omitempty"`
+
 	// Name Optional name for the snapshot template. If a snapshot template with this name already exists, a new build will be assigned to the existing template instead of creating a new one.
 	Name *string `json:"name,omitempty"`
 }
@@ -13221,7 +13224,7 @@ type PostSecretsResponse struct {
 	// JSON404 the response for an HTTP 404 `application/json` response
 	JSON404 *N404
 	// JSON409 the response for an HTTP 409 `application/json` response
-	JSON409 *N409
+	JSON409 *Error
 	// JSON429 the response for an HTTP 429 `application/json` response
 	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
@@ -13260,7 +13263,7 @@ func (r PostSecretsResponse) GetJSON404() *N404 {
 }
 
 // GetJSON409 returns the response for an HTTP 409 `application/json` response
-func (r PostSecretsResponse) GetJSON409() *N409 {
+func (r PostSecretsResponse) GetJSON409() *Error {
 	return r.JSON409
 }
 
@@ -20229,7 +20232,7 @@ func ParsePostSecretsResponse(rsp *http.Response) (*PostSecretsResponse, error) 
 		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
-		var dest N409
+		var dest Error
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
 			return nil, err
 		}

@@ -161,3 +161,23 @@ func TestThawRootfs_GivesUpAfterTheRetries(t *testing.T) {
 	require.Error(t, s.thawRootfs(t.Context()))
 	require.Equal(t, int32(fsthawAttempts), thawCalls.Load(), "one call and two retries, then give up")
 }
+
+// Giving up tears the sandbox down as lost, tagged as a thaw failure so the
+// kill is not booked as a failed resume.
+func TestThawRootfsOrLose_TagsTheThawFailure(t *testing.T) {
+	t.Parallel()
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		http.Error(w, "FITHAW /: simulated failure", http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+
+	s := newFsFreezeSandbox(t, srv.URL)
+	s.cleanup = NewCleanup()
+
+	err := s.thawRootfsOrLose(t.Context())
+	require.Error(t, err)
+	require.ErrorIs(t, err, ErrSandboxLost)
+	require.ErrorIs(t, err, ErrRootfsThawFailed)
+	require.Equal(t, StopReasonKilled, s.GetStopReason())
+}

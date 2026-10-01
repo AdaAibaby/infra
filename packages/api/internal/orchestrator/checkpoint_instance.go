@@ -62,9 +62,13 @@ func (o *Orchestrator) CheckpointSandbox(ctx context.Context, teamID uuid.UUID, 
 		return fmt.Errorf("node '%s' not found", sbx.NodeID)
 	}
 
-	upsertResult, err := o.throttledUpsertSnapshot(ctx, buildUpsertSnapshotParams(sbx, node, false))
+	// A fork checkpoint is always a memory snapshot, but the source may hold a
+	// filesystem-only build from an earlier memory:false snapshot: that kind
+	// must survive until this build is ready, or a refused checkpoint would
+	// leave the row claiming memory for a build that has none.
+	currentKind, upsertResult, err := o.upsertSnapshotKeepingKind(ctx, sbx, node)
 	if err != nil {
-		return fmt.Errorf("error upserting snapshot: %w", err)
+		return err
 	}
 
 	// Checkpoint pauses the sandbox, snapshots it, and resumes it on the
@@ -129,7 +133,7 @@ func (o *Orchestrator) CheckpointSandbox(ctx context.Context, teamID uuid.UUID, 
 		return fmt.Errorf("checkpoint failed: %w", err)
 	}
 
-	if err := o.finishSnapshotBuild(ctx, upsertResult.BuildID, types.BuildStatusSuccess); err != nil {
+	if err := o.finishSnapshotBuildWithKind(ctx, upsertResult.BuildID, sandboxID, currentKind, false, types.BuildStatusSuccess); err != nil {
 		return fmt.Errorf("error updating build status: %w", err)
 	}
 
