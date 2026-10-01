@@ -1032,8 +1032,23 @@ type SandboxEgressProxyConfig struct {
 	// Password Optional SOCKS5 password (RFC 1929), max 255 bytes.
 	Password *string `json:"password,omitempty"`
 
+	// Tls TLS for the connection to the SOCKS5 proxy. The SOCKS5 negotiation and the tunneled traffic both run inside the TLS session, so the proxy credentials are not sent in the clear. This secures only the hop to the proxy; what the proxy does onward is its own concern. A half-close from the sandbox reaches the proxy as a TLS close_notify, not a TCP FIN, and a proxy that treats close_notify as a full close cuts the reply short.
+	Tls *SandboxEgressProxyTLSConfig `json:"tls,omitempty"`
+
 	// Username Optional SOCKS5 username (RFC 1929), max 255 bytes.
 	Username *string `json:"username,omitempty"`
+}
+
+// SandboxEgressProxyTLSConfig TLS for the connection to the SOCKS5 proxy. The SOCKS5 negotiation and the tunneled traffic both run inside the TLS session, so the proxy credentials are not sent in the clear. This secures only the hop to the proxy; what the proxy does onward is its own concern. A half-close from the sandbox reaches the proxy as a TLS close_notify, not a TCP FIN, and a proxy that treats close_notify as a full close cuts the reply short.
+type SandboxEgressProxyTLSConfig struct {
+	// CaCert One or more PEM-encoded certificates to verify the proxy against, for a proxy fronted by a private CA. These replace the system trust store, which is what is used when this is omitted. The system trust store depends on the host the orchestrator runs on, so set this to get the same verification everywhere.
+	CaCert *string `json:"caCert,omitempty"`
+
+	// Enabled Connect to the proxy over TLS. When false, no other field in this object may be set.
+	Enabled bool `json:"enabled"`
+
+	// ServerName Name to verify the proxy certificate against, and to send as SNI. Defaults to the host part of address. Set this only when the certificate does not match the address the proxy is reached at.
+	ServerName *string `json:"serverName,omitempty"`
 }
 
 // SandboxEvent Sandbox event

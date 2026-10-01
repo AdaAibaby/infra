@@ -304,11 +304,7 @@ func (a *APIStore) createSandbox(c *gin.Context, body api.NewSandbox, defaultTim
 				return
 			}
 
-			canonical, err := sandbox_network.ValidateEgressProxy(ctx, &sandbox_network.EgressProxyConfig{
-				Address:  ep.Address,
-				Username: sharedUtils.DerefOrDefault(ep.Username, ""),
-				Password: sharedUtils.DerefOrDefault(ep.Password, ""),
-			}, nil)
+			canonical, err := sandbox_network.ValidateEgressProxy(ctx, apiEgressProxyToConfig(ep), nil)
 			if err != nil {
 				telemetry.ReportError(ctx, "invalid egress proxy config", err, telemetry.WithSandboxID(sandboxID))
 				a.sendAPIStoreError(c, http.StatusBadRequest, fmt.Sprintf("Invalid egress proxy config: %s", err))
@@ -316,9 +312,7 @@ func (a *APIStore) createSandbox(c *gin.Context, body api.NewSandbox, defaultTim
 				return
 			}
 
-			network.Egress.EgressProxyAddress = canonical.Address
-			network.Egress.EgressProxyUsername = canonical.Username
-			network.Egress.EgressProxyPassword = canonical.Password
+			apiorch.ApplyValidatedEgressProxy(network.Egress, canonical)
 		}
 
 		// Make sure envd seucre access is enforced when public access is disabled,
@@ -744,6 +738,30 @@ func apiRulesToDBRules(apiRules *map[string][]api.SandboxNetworkRule) map[string
 	}
 
 	return dbRules
+}
+
+// apiEgressProxyToConfig maps the API egress proxy object onto the validation
+// input. It does no checking of its own; ValidateEgressProxy owns that.
+func apiEgressProxyToConfig(ep *api.SandboxEgressProxyConfig) *sandbox_network.EgressProxyConfig {
+	if ep == nil {
+		return nil
+	}
+
+	cfg := &sandbox_network.EgressProxyConfig{
+		Address:  ep.Address,
+		Username: sharedUtils.DerefOrDefault(ep.Username, ""),
+		Password: sharedUtils.DerefOrDefault(ep.Password, ""),
+	}
+
+	if t := ep.Tls; t != nil {
+		cfg.TLS = &sandbox_network.EgressProxyTLSConfig{
+			Enabled:    t.Enabled,
+			ServerName: sharedUtils.DerefOrDefault(t.ServerName, ""),
+			CACert:     sharedUtils.DerefOrDefault(t.CaCert, ""),
+		}
+	}
+
+	return cfg
 }
 
 func validateNetworkConfig(ctx context.Context, featureFlags featureFlagsClient, teamID uuid.UUID, envdVersion string, maxDomains int, network *api.SandboxNetworkConfig) *api.APIError {

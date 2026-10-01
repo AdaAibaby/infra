@@ -142,6 +142,35 @@ func applyEgressProxy(dst *orchestrator.SandboxNetworkEgressConfig, src *types.S
 	dst.EgressProxyAddress = src.EgressProxyAddress
 	dst.EgressProxyUsername = src.EgressProxyUsername
 	dst.EgressProxyPassword = src.EgressProxyPassword
+
+	if t := src.EgressProxyTLS; t != nil && t.Enabled {
+		dst.EgressProxyTls = &orchestrator.SandboxNetworkEgressProxyTLS{
+			Enabled:    true,
+			ServerName: t.ServerName,
+			CaCert:     []byte(t.CACert),
+		}
+	}
+}
+
+// ApplyValidatedEgressProxy copies a validated BYOP config onto its stored
+// form. A nil src leaves dst untouched; on the PUT path that clears a proxy,
+// dst is already a fresh config carrying none.
+func ApplyValidatedEgressProxy(dst *types.SandboxNetworkEgressConfig, src *sandbox_network.EgressProxyConfig) {
+	if dst == nil || src == nil {
+		return
+	}
+
+	dst.EgressProxyAddress = src.Address
+	dst.EgressProxyUsername = src.Username
+	dst.EgressProxyPassword = src.Password
+
+	if t := src.TLS; t != nil && t.Enabled {
+		dst.EgressProxyTLS = &types.SandboxEgressProxyTLSConfig{
+			Enabled:    true,
+			ServerName: t.ServerName,
+			CACert:     t.CACert,
+		}
+	}
 }
 
 // buildNetworkConfig constructs the orchestrator network configuration from the input parameters

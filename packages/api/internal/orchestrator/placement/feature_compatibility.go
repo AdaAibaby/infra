@@ -41,6 +41,25 @@ var featureGates = []featureGate{
 			return len(req.GetSandbox().GetNetwork().GetIngress().GetHttpsPorts()) > 0
 		},
 	},
+	{
+		// An older orchestrator drops egress_proxy_tls and dials the proxy in
+		// the clear. The floor is the auto-deploy version that added it.
+		feature: Feature{name: "egress-proxy-tls", minVersion: semver.New(0, 16, 202610011012, "", "")},
+		requested: func(req *orchestrator.SandboxCreateRequest) bool {
+			return req.GetSandbox().GetNetwork().GetEgress().GetEgressProxyTls().GetEnabled()
+		},
+	},
+}
+
+// EgressUpdateFeatures reports the capabilities a live network update needs
+// from the node already running the sandbox. An update skips placement, so it
+// is checked against the same gates on that node instead.
+func EgressUpdateFeatures(egress *orchestrator.SandboxNetworkEgressConfig) FeatureRequirement {
+	return requiredFeatures(&orchestrator.SandboxCreateRequest{
+		Sandbox: &orchestrator.SandboxConfig{
+			Network: &orchestrator.SandboxNetworkConfig{Egress: egress},
+		},
+	})
 }
 
 // FilesystemOnlyCheckpoint is read from SandboxCheckpointRequest.filesystem_only
