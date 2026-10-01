@@ -718,57 +718,6 @@ components:
         limits:
           $ref: "#/components/schemas/UserTeamLimits"
 
-    UserTeam:
-      type: object
-      required:
-        - id
-        - name
-        - slug
-        - tier
-        - email
-        - isBlocked
-        - isBanned
-        - blockedReason
-        - isDefault
-        - limits
-        - createdAt
-      properties:
-        id:
-          type: string
-          format: uuid
-        name:
-          type: string
-        slug:
-          type: string
-        tier:
-          type: string
-        email:
-          type: string
-        isBlocked:
-          type: boolean
-        isBanned:
-          type: boolean
-        blockedReason:
-          type: string
-          nullable: true
-        isDefault:
-          type: boolean
-        limits:
-          $ref: "#/components/schemas/UserTeamLimits"
-        createdAt:
-          type: string
-          format: date-time
-
-    UserTeamsResponse:
-      type: object
-      required:
-        - teams
-      properties:
-        teams:
-          type: array
-          items:
-            $ref: "#/components/schemas/UserTeam"
-
     TeamStatusResponse:
       type: object
       required:
@@ -1563,25 +1512,6 @@ paths:
           $ref: "#/components/responses/403"
         "404":
           $ref: "#/components/responses/404"
-        "500":
-          $ref: "#/components/responses/500"
-
-  /teams:
-    get:
-      summary: List user teams
-      description: Returns all teams the authenticated user belongs to, with limits and default flag.
-      tags: [teams]
-      security:
-        - AuthProviderBearerAuth: []
-      responses:
-        "200":
-          description: Successfully returned user teams.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/UserTeamsResponse"
-        "401":
-          $ref: "#/components/responses/401"
         "500":
           $ref: "#/components/responses/500"
 
