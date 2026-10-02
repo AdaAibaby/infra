@@ -775,7 +775,7 @@ func envdWarmTargets(ctx context.Context, ff *featureflags.Client, hostEnvdPath 
 			continue
 		}
 
-		candidate, _ := featureflags.EnvdUpgradeCandidate(target, hostEnvdPath)
+		candidate, _ := featureflags.EnvdUpgradeCandidate(ctx, target, hostEnvdPath)
 		if candidate == "" {
 			continue
 		}
@@ -973,7 +973,9 @@ func (f *Factory) CreateSandbox(
 			return nil, fmt.Errorf("failed to get rootfs path for pre-boot hook: %w", pathErr)
 		}
 
-		if hookErr := preBootFn(ctx, rootfsPath); hookErr != nil {
+		if hookErr := telemetry.Observe0(ctx, tracer, "pre-boot hook", func(ctx context.Context) error {
+			return preBootFn(ctx, rootfsPath)
+		}); hookErr != nil {
 			return nil, fmt.Errorf("pre-boot hook failed: %w", hookErr)
 		}
 	}

@@ -2148,7 +2148,8 @@ func resolvePhaseResult(path, reason string) (string, bool) {
 		return "", false
 	default:
 		// same_version, downgrade, getversion_failed all probed; binary_not_cached
-		// consulted the cache and deliberately did not.
+		// consulted the cache and deliberately did not; source_stalled waited on the
+		// mount up to its stat budget.
 		return reason, true
 	}
 }
@@ -2296,14 +2297,19 @@ func (s *Server) maybeUpgradeEnvd(ctx context.Context, sbx *sandbox.Sandbox) (up
 	resolveStart := time.Now()
 	getVersion := buildenvd.GetEnvdVersion
 	var binCache *envdbin.Resolver
+	cache := s.sandboxFactory.EnvdBinCache()
+	// The candidate checks stat the mount before any version probe, so they are
+	// bounded whether or not the cache is engaged.
+	stat := cache.BoundedStat
 	// The nil check is not redundant with the flag: a Factory built as a struct
 	// literal (as tests do) has no cache.
-	if cache := s.sandboxFactory.EnvdBinCache(); cache != nil && s.featureFlags.BoolFlag(ctx, featureflags.EnvdBinaryCacheFlag) {
+	if cache != nil && s.featureFlags.BoolFlag(ctx, featureflags.EnvdBinaryCacheFlag) {
 		binCache = envdbin.NewResolver(cache, envdbin.OpLive)
 		getVersion = binCache.Version
+		stat = binCache.Stat
 	}
 
-	path, tv, reason := featureflags.ResolveEnvdUpgrade(ctx, target, from, s.config.HostEnvdPath, getVersion)
+	path, tv, reason := featureflags.ResolveEnvdUpgrade(ctx, target, from, s.config.HostEnvdPath, getVersion, stat)
 	reason = envdbin.GatedReason(reason, binCache.DeferralOutcome())
 	// Labelled by the resolver's own reason, not by success/no_upgrade, and skipped
 	// entirely where the resolver returned before probing anything.
@@ -2323,10 +2329,12 @@ func (s *Server) maybeUpgradeEnvd(ctx context.Context, sbx *sandbox.Sandbox) (up
 		switch reason {
 		case "off", "same_version":
 			// expected no-op — not counted
-		case envdbin.ReasonNotCached:
+		case envdbin.ReasonNotCached, featureflags.ReasonSourceStalled:
 			// Counted, because it is the cost side of gating on the cache, but not
 			// warned: on a node that has just booted this is the expected state for
-			// one resume, and the background warm clears it.
+			// one resume, and the background warm clears it. A stall is counted
+			// under its own reason and warned once per path per window by the
+			// cache, not here on every resume.
 			s.envdUpgradeGated.Add(ctx, 1, metric.WithAttributes(attribute.String("reason", reason)))
 		default:
 			s.envdUpgradeGated.Add(ctx, 1, metric.WithAttributes(attribute.String("reason", reason)))

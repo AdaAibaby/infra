@@ -250,6 +250,8 @@ const (
 	//	    already on the target
 	//	not_staged | downgrade | invalid_target | getversion_failed | binary_not_cached
 	//	    the resolver refused or deferred the configured target
+	//	source_stalled
+	//	    the host mount did not answer the target's stat in time
 	//	copy_vanished
 	//	    a version was resolved and the copy carrying it was then retired, before
 	//	    anything was written to the rootfs
@@ -440,6 +442,12 @@ const (
 	// pathological rewrites; the swap runs in the cold-boot PreBootFn, so it adds
 	// directly to resume latency.
 	OrchestratorEnvdOfflineUpgradeDurationName HistogramType = "orchestrator.envd.offline_upgrade.duration"
+
+	// OrchestratorEnvdBinaryCacheSourceStatDurationName is the wall-time of the
+	// resume path's stat of the host envd binary on its mount, recorded when the
+	// stat returns -- healthy or not, and including stats every lookup had already
+	// given up on. Its tail is what the lookup's stat budget is set against.
+	OrchestratorEnvdBinaryCacheSourceStatDurationName HistogramType = "orchestrator.envd.binary_cache.source_stat.duration"
 
 	// OrchestratorFsRecoveryDurationName is the wall-time of the jailed pre-boot
 	// journal-replay run on a cold boot, recorded for every outcome the run reaches
@@ -714,7 +722,7 @@ var counterDesc = map[CounterType]string{
 	TemplateBuildCmdlineArgs:                     "Template builds by the guest kernel cmdline parameters applied",
 	TemplateBuildCPUTemplate:                     "Template builds by the digest of the custom Firecracker CPU template applied and by result (result=applied|rejected|none|malformed)",
 	OrchestratorEnvdUpgradeGated:                 "Resumes where the envd-upgrade-target flag named a target but a gate declined the upgrade, by reason",
-	OrchestratorEnvdBinaryCacheReads:             "Host envd binary cache lookups on the resume path, by what the lookup found (hit|miss) and upgrade path",
+	OrchestratorEnvdBinaryCacheReads:             "Host envd binary cache lookups on the resume path, by what the lookup found (hit|miss), upgrade path, and on a miss its cause (not_warmed|stalled|cancelled|unreadable|no_cache)",
 	OrchestratorEnvdBinaryCacheDeliveries:        "Host envd binary reads at delivery time, by outcome (copy|stale) and upgrade path",
 	OrchestratorEnvdBinaryCacheWarms:             "Host envd binary cache warms, by result (ok|superseded|suppressed|pinned|already_warming|bad_target|failed)",
 	OrchestratorEnvdUpgradeHandover:              "Live-upgrade handover items by item (proc|retained|watcher) and result (ok|failed)",
@@ -1021,6 +1029,7 @@ var histogramDesc = map[HistogramType]string{
 	OrchestratorSandboxMemfileDedupDurationName:       "Background memfile dedup latency, from the provisional header's creation at pause to the durable-header swap",
 	OrchestratorSandboxPauseAdmissionWaitDurationName: "Time snapshot admission waited on the durable parent header whenever it waited, labeled by outcome (ready_after_wait/refused)",
 	OrchestratorEnvdOfflineUpgradeDurationName:        "Wall-time of the offline cold-boot envd rootfs swap (jailed debugfs)",
+	OrchestratorEnvdBinaryCacheSourceStatDurationName: "Wall-time of the resume path's stat of the host envd binary on its mount, by result (ok|error)",
 	OrchestratorFsRecoveryDurationName:                "Wall-time of the jailed pre-boot e2fsck run on a cold boot",
 
 	PauseResumePrefetchHarvestDurationName:     "Time the resume prefetch harvest held a start slot (throwaway resume, trace collection, reap), by result and path",
@@ -1088,6 +1097,7 @@ var histogramUnits = map[HistogramType]string{
 	OrchestratorEnvdUpgradeDurationName:               "ms",
 	OrchestratorEnvdUpgradePhaseDurationName:          "ms",
 	OrchestratorEnvdOfflineUpgradeDurationName:        "ms",
+	OrchestratorEnvdBinaryCacheSourceStatDurationName: "ms",
 	OrchestratorFsRecoveryDurationName:                "ms",
 	WaitForEnvdDurationHistogramName:                  "ms",
 	EnvdCollapseDurationHistogramName:                 "ms",

@@ -14,6 +14,7 @@ import (
 	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/block"
@@ -142,7 +143,9 @@ func (f *Factory) RebootSandbox(
 	// only in the guest page cache (restored on a memory resume), so cold-booting
 	// it serves a crash-consistent disk at best. Refuse unless the snapshot is
 	// marked fs-only or the request explicitly demanded the filesystem boot.
-	meta, err := t.Metadata()
+	meta, err := telemetry.Observe1(ctx, tracer, "get template metadata", func(context.Context) (metadata.Template, error) {
+		return t.Metadata()
+	})
 	if err != nil {
 		return nil, fmt.Errorf("get template metadata: %w", err)
 	}
@@ -381,6 +384,11 @@ func decideOfflineSwap(resolverPath, reason string, fsQuiesced bool) offlineSwap
 			// property of the snapshot and is still there to report on the next cold
 			// boot, once a warm has landed and a target has actually been resolved.
 			return offlineSwapDecision{countResult: reason}
+		case featureflags.ReasonSourceStalled:
+			// The mount did not answer in time. Counted so a stall is visible apart
+			// from warm-up, not logged per boot: the cache already warns once per
+			// path per window, and a stall recurs on every boot until it clears.
+			return offlineSwapDecision{countResult: reason}
 		default:
 			// not_staged / downgrade / invalid_target / getversion_failed, and anything
 			// the resolver's vocabulary grows: an operator error, so log each one.
@@ -442,6 +450,11 @@ func (f *Factory) fsRecoverPreBoot(
 	requestFilesystemBoot bool,
 	record func(rootfs.RecoverOutcome),
 ) PreBootFn {
+	ctx, span := tracer.Start(ctx, "resolve fs recovery", trace.WithAttributes(
+		attribute.Bool("sandbox.fs_quiesced", fsQuiesced),
+	))
+	defer span.End()
+
 	// Flag gate first: with the flag off, behavior is exactly today's (no metric,
 	// no recovery) so nothing dilutes the ramp's result ratios. Every emission
 	// below is therefore within the flag-on population.
@@ -449,8 +462,11 @@ func (f *Factory) fsRecoverPreBoot(
 		featureflags.SandboxContext(runtime.SandboxID),
 		featureflags.TemplateContext(runtime.TemplateID),
 	) {
+		span.SetAttributes(attribute.Bool("fs_recovery.enabled", false))
+
 		return nil
 	}
+	span.SetAttributes(attribute.Bool("fs_recovery.enabled", true))
 
 	// Once per process: flag a host whose e2fsck rejects -E journal_only, so an
 	// unsupported image is visible on a dashboard. Boots are unaffected either way
@@ -482,9 +498,13 @@ func (f *Factory) fsRecoverPreBoot(
 		return nil
 	}
 
-	return func(ctx context.Context, rootfsPath string) error {
+	recoverFS := func(ctx context.Context, rootfsPath string) error {
 		start := time.Now()
 		outcome, reason, err := rootfs.RecoverFilesystem(ctx, rootfsPath)
+		telemetry.SetAttributes(ctx,
+			attribute.String("fs_recovery.outcome", string(outcome)),
+			attribute.String("fs_recovery.reason", string(reason)),
+		)
 		record(outcome)
 		attrs := metric.WithAttributes(
 			attribute.String("result", string(outcome)),
@@ -519,6 +539,12 @@ func (f *Factory) fsRecoverPreBoot(
 
 		return nil
 	}
+
+	return func(ctx context.Context, rootfsPath string) error {
+		return telemetry.Observe0(ctx, tracer, "fs-recover", func(ctx context.Context) error {
+			return recoverFS(ctx, rootfsPath)
+		}, trace.WithAttributes(attribute.String("fs_recovery.trigger", trigger)))
+	}
 }
 
 // resolveOfflineTarget resolves the offline upgrade target and returns the
@@ -534,19 +560,34 @@ func (f *Factory) resolveOfflineTarget(
 	from string,
 	sbCtx, tmplCtx ldcontext.Context,
 ) (path, toVersion, reason string, binCache *envdbin.Resolver) {
+	ctx, span := tracer.Start(ctx, "resolve offline envd upgrade", trace.WithAttributes(
+		attribute.String("envd.from_version", from),
+	))
+	defer span.End()
+
 	getVersion := buildenvd.GetEnvdVersion
+	// The candidate checks stat the mount before any version probe, so they are
+	// bounded whether or not the cache is engaged.
+	stat := f.envdBinCache.BoundedStat
 	// The nil check is not redundant with the flag: a Factory built as a struct
 	// literal (as tests do) has no cache.
 	if f.envdBinCache != nil && f.featureFlags.BoolFlag(ctx, featureflags.EnvdBinaryCacheFlag, sbCtx, tmplCtx) {
 		binCache = envdbin.NewResolver(f.envdBinCache, envdbin.OpOffline)
 		getVersion = binCache.Version
+		stat = binCache.Stat
 	}
 
 	path, toVersion, reason = featureflags.ResolveEnvdOfflineUpgrade(
-		ctx, f.featureFlags, from, f.config.HostEnvdPath, getVersion, sbCtx, tmplCtx,
+		ctx, f.featureFlags, from, f.config.HostEnvdPath, getVersion, stat, sbCtx, tmplCtx,
+	)
+	reason = envdbin.GatedReason(reason, binCache.DeferralOutcome())
+	span.SetAttributes(
+		attribute.String("envd.to_version", toVersion),
+		attribute.String("envd.upgrade_reason", reason),
+		attribute.Bool("envd.binary_cache", binCache != nil),
 	)
 
-	return path, toVersion, envdbin.GatedReason(reason, binCache.DeferralOutcome()), binCache
+	return path, toVersion, reason, binCache
 }
 
 // envdOfflineUpgradePreBoot returns a PreBootFn that rewrites the rootfs envd

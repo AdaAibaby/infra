@@ -2,6 +2,7 @@ package featureflags
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/url"
 	"os"
@@ -1502,18 +1503,43 @@ func ResolveFirecrackerVersion(ctx context.Context, ff *Client, buildVersion str
 // comparing by git SHA.
 // It returns the target binary's path and baked version ("" path = no upgrade),
 // plus a reason for the no-upgrade case — off | not_staged | invalid_target |
-// getversion_failed | same_version | downgrade, and "" when an upgrade IS returned
-// — so the caller can tell a benign no-op (off / same_version) from a
-// misconfigured target (not_staged from a bad SHA, a target that is not a bare
-// identifier, getversion_failed, a refused downgrade).
+// getversion_failed | same_version | downgrade | source_stalled, and "" when an
+// upgrade IS returned — so the caller can tell a benign no-op (off / same_version)
+// from a misconfigured target (not_staged from a bad SHA, a target that is not a
+// bare identifier, getversion_failed, a refused downgrade) and from a mount that
+// did not answer in time (source_stalled).
+//
+// stat is how the candidate paths are checked; nil means os.Stat. The mount can
+// stall a metadata lookup indefinitely, so a caller on the resume path passes a
+// bounded stat.
 func ResolveEnvdUpgrade(
 	ctx context.Context,
 	target string,
 	builtWithVersion string,
 	hostEnvdPath string,
 	getVersion func(context.Context, string) (string, error),
+	stat EnvdStatFunc,
 ) (path, version, reason string) {
-	return resolveEnvdUpgradePath(ctx, target, builtWithVersion, hostEnvdPath, getVersion)
+	return resolveEnvdUpgradePath(ctx, target, builtWithVersion, hostEnvdPath, getVersion, stat)
+}
+
+// ReasonSourceStalled is the no-upgrade reason for a resume whose candidate on the
+// host mount did not answer in time: neither a misconfigured target nor a cold
+// cache, but a slow or stuck mount, which clears on its own.
+const ReasonSourceStalled = "source_stalled"
+
+// ErrEnvdSourceStalled is what an injected stat or version probe wraps when the
+// source did not answer in time. The resolver maps it to ReasonSourceStalled.
+var ErrEnvdSourceStalled = errors.New("envd source did not answer in time")
+
+// EnvdStatFunc stats an envd upgrade candidate on the host mount.
+type EnvdStatFunc func(ctx context.Context, path string) (os.FileInfo, error)
+
+// sourceStalled reports whether a stat or probe error means the source did not
+// answer in time, as opposed to answering that it is missing or unreadable. A
+// caller deadline or cancellation counts: the resume was waiting on the mount.
+func sourceStalled(err error) bool {
+	return errors.Is(err, ErrEnvdSourceStalled) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 }
 
 // EnvdUpgradeTarget reads the live-upgrade target flag. Split from ResolveEnvdUpgrade so a
@@ -1545,9 +1571,10 @@ func ResolveEnvdOfflineUpgrade(
 	builtWithVersion string,
 	hostEnvdPath string,
 	getVersion func(context.Context, string) (string, error),
+	stat EnvdStatFunc,
 	evalContexts ...ldcontext.Context,
 ) (path, version, reason string) {
-	return resolveEnvdUpgradePath(ctx, ff.StringFlag(ctx, EnvdOfflineUpgradeTargetFlag, evalContexts...), builtWithVersion, hostEnvdPath, getVersion)
+	return resolveEnvdUpgradePath(ctx, ff.StringFlag(ctx, EnvdOfflineUpgradeTargetFlag, evalContexts...), builtWithVersion, hostEnvdPath, getVersion, stat)
 }
 
 // resolveEnvdUpgradePath is the pure decision, split out so it can be unit-tested
@@ -1569,13 +1596,17 @@ func resolveEnvdUpgradePath(
 	builtWithVersion string,
 	hostEnvdPath string,
 	getVersion func(context.Context, string) (string, error),
+	stat EnvdStatFunc,
 ) (path, version, reason string) {
-	candidate, reason := EnvdUpgradeCandidate(target, hostEnvdPath)
+	candidate, reason := envdUpgradeCandidate(ctx, target, hostEnvdPath, stat)
 	if reason != "" {
 		return "", "", reason
 	}
 
 	targetVersion, err := getVersion(ctx, candidate)
+	if err != nil && sourceStalled(err) {
+		return "", "", ReasonSourceStalled
+	}
 	if err != nil || targetVersion == "" {
 		return "", "", "getversion_failed"
 	}
@@ -1603,13 +1634,32 @@ func resolveEnvdUpgradePath(
 // resolveEnvdUpgradePath reports -- and (candidate, "") when there is a binary to
 // probe. Everything past this point costs an exec of that binary, which is what
 // the caller may want to keep off its critical path.
-func EnvdUpgradeCandidate(target, hostEnvdPath string) (candidate, reason string) {
+func EnvdUpgradeCandidate(ctx context.Context, target, hostEnvdPath string) (candidate, reason string) {
+	return envdUpgradeCandidate(ctx, target, hostEnvdPath, nil)
+}
+
+// envdUpgradeCandidate is EnvdUpgradeCandidate with the stat injected; nil means
+// os.Stat. A stat that did not answer in time yields ReasonSourceStalled.
+func envdUpgradeCandidate(ctx context.Context, target, hostEnvdPath string, stat EnvdStatFunc) (candidate, reason string) {
+	if stat == nil {
+		stat = func(_ context.Context, path string) (os.FileInfo, error) { return os.Stat(path) }
+	}
+
 	if EnvdUpgradeTargetDisabled(target) {
 		return "", "off"
 	}
 
 	switch target {
 	case "promoted":
+		if _, err := stat(ctx, hostEnvdPath); err != nil {
+			if sourceStalled(err) {
+				return "", ReasonSourceStalled
+			}
+
+			// The promoted binary is absent (e.g. a version-free central mount
+			// with no unversioned object).
+			return "", "not_staged"
+		}
 		candidate = hostEnvdPath
 	default:
 		// A concrete version id -> the staged binary next to the promoted one,
@@ -1625,10 +1675,14 @@ func EnvdUpgradeCandidate(target, hostEnvdPath string) (candidate, reason string
 		}
 		dir := filepath.Dir(hostEnvdPath)
 		for _, c := range []string{filepath.Join(dir, "envd."+target), filepath.Join(dir, target, "envd")} {
-			if _, err := os.Stat(c); err == nil {
+			_, err := stat(ctx, c)
+			if err == nil {
 				candidate = c
 
 				break
+			}
+			if sourceStalled(err) {
+				return "", ReasonSourceStalled
 			}
 		}
 	}
@@ -1636,12 +1690,6 @@ func EnvdUpgradeCandidate(target, hostEnvdPath string) (candidate, reason string
 	if candidate == "" {
 		// Not staged on this node in either layout — e.g. a bad target /
 		// rubbish flag value, or a node that has not fetched the target yet.
-		return "", "not_staged"
-	}
-
-	if _, err := os.Stat(candidate); err != nil {
-		// The promoted binary is absent (e.g. a version-free central mount
-		// with no unversioned object).
 		return "", "not_staged"
 	}
 
