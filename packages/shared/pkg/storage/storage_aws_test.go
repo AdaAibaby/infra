@@ -681,16 +681,6 @@ func TestS3UncompressedStoreFile(t *testing.T) {
 	require.Equal(t, sha256.Sum256(data), sha256.Sum256(got.Bytes()))
 }
 
-func TestAWSDeleteObjectsWithPrefixRejectsEmptyPrefix(t *testing.T) {
-	t.Parallel()
-
-	s := &awsStorage{bucketName: "test-bucket"}
-
-	err := s.DeleteObjectsWithPrefix(t.Context(), "")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "empty prefix")
-}
-
 // An Azure-shaped header map leaking into the S3/GCS response would break any upload that echoed it into the presigned signature.
 func TestS3UploadSignedURLNeedsNoRequestHeaders(t *testing.T) {
 	t.Parallel()

@@ -59,6 +59,16 @@ func (s *ServerStore) TemplateCreate(ctx context.Context, templateRequest *templ
 		return nil, status.Error(codes.InvalidArgument, "template build requires either fromImage or fromTemplate")
 	}
 
+	for _, step := range cfg.GetSteps() {
+		if step.FilesHash == nil { //nolint:protogetter // we need the nil check too
+			continue
+		}
+
+		if err := templates.ValidateFilesHash(step.GetFilesHash()); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+	}
+
 	metadata := storage.Paths{
 		BuildID: cfg.GetBuildID(),
 	}

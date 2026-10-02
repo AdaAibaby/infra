@@ -79,9 +79,9 @@ func TestRejectedWebhookRequestNeverRevealsTheSigningSecret(t *testing.T) {
 }
 
 // newValidatingRouter serves the spec's own request validation, authenticating
-// every caller, and returns the errors each request recorded. The webhook
-// routes are registered so a rejected request is answered by the validator
-// rather than by gin's own not-found.
+// every caller, and returns the errors each request recorded. The webhook and
+// template build routes are registered so a rejected request is answered by the
+// validator rather than by gin's own not-found.
 func newValidatingRouter(t *testing.T) (*gin.Engine, *[]error) {
 	t.Helper()
 
@@ -123,6 +123,7 @@ func newValidatingRouter(t *testing.T) (*gin.Engine, *[]error) {
 	reached := func(c *gin.Context) { c.Status(http.StatusOK) }
 	router.POST("/events/webhooks", reached)
 	router.PATCH("/events/webhooks/:webhookID", reached)
+	router.POST("/v2/templates/:templateID/builds/:buildID", reached)
 
 	return router, recorded
 }

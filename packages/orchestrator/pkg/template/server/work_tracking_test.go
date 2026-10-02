@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 
@@ -99,6 +100,13 @@ func TestTemplateCreateRejectionReleasesWork(t *testing.T) {
 	emptyImage := func(req *templatemanager.TemplateCreateRequest) {
 		req.Template.Source = &templatemanager.TemplateConfig_FromImage{FromImage: ""}
 	}
+	malformedFilesHash := func(req *templatemanager.TemplateCreateRequest) {
+		req.Template.Steps = []*templatemanager.TemplateStep{{
+			Type:      "COPY",
+			Args:      []string{"src", "/dst"},
+			FilesHash: new("../" + strings.Repeat("0", 64)),
+		}}
+	}
 
 	for _, tc := range []struct {
 		name, fcVersion, message string
@@ -111,6 +119,7 @@ func TestTemplateCreateRejectionReleasesWork(t *testing.T) {
 		{"duplicate build", featureflags.DefaultFirecrackerVersion, "already exists in cache", true, nil, codes.OK, ""},
 		{"no source", featureflags.DefaultFirecrackerVersion, "requires either fromImage or fromTemplate", false, noSource, codes.InvalidArgument, ""},
 		{"empty fromImage", featureflags.DefaultFirecrackerVersion, "requires either fromImage or fromTemplate", false, emptyImage, codes.InvalidArgument, ""},
+		{"malformed files hash", featureflags.DefaultFirecrackerVersion, "invalid files hash", false, malformedFilesHash, codes.InvalidArgument, ""},
 		{"malformed cpu template", featureflags.DefaultFirecrackerVersion, "invalid build configuration", false, nil, codes.Internal, `{"x86_tsc_khx":1}`}, // a misspelled key passes LaunchDarkly's JSON check
 	} {
 		t.Run(tc.name, func(t *testing.T) {

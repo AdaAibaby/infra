@@ -315,7 +315,7 @@ func TestAzureIntegration(t *testing.T) {
 			putBlob(path)
 		}
 
-		require.NoError(t, provider.DeleteObjectsWithPrefix(ctx, "prefix-del/"))
+		require.NoError(t, provider.DeleteObjectsWithPrefix(ctx, "prefix-del"))
 
 		for _, path := range doomed {
 			blob, err := provider.OpenBlob(ctx, path)
@@ -333,7 +333,7 @@ func TestAzureIntegration(t *testing.T) {
 		}
 
 		// An empty prefix would delete the entire container; it must error out.
-		require.ErrorContains(t, provider.DeleteObjectsWithPrefix(ctx, ""), "empty prefix")
+		require.ErrorIs(t, provider.DeleteObjectsWithPrefix(ctx, ""), errInvalidObjectPath)
 	})
 
 	t.Run("UploadSignedURLRequiresTheReturnedHeaders", func(t *testing.T) {

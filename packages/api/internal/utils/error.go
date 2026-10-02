@@ -70,6 +70,11 @@ func ErrorHandler(c *gin.Context, message string, statusCode int) {
 		// account of what it refused is kept: the spec documents these 400s,
 		// and the message names the field rather than quoting its value.
 		errMsg = fmt.Errorf("OpenAPI validation error: %s", message)
+	case strings.HasPrefix(c.Request.URL.Path, "/v2/templates/") && strings.Contains(c.Request.URL.Path, "/builds/"):
+		// A template build start body can carry the caller's private registry
+		// credentials (fromImageRegistry), so it is not read into the error
+		// either; the validator's message names the refused field.
+		errMsg = fmt.Errorf("OpenAPI validation error: %s", message)
 	default:
 		data, err := c.GetRawData()
 		if err == nil {

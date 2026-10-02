@@ -1612,7 +1612,7 @@ type TemplateStep struct {
 	// Args Arguments for the step
 	Args *[]string `json:"args,omitempty"`
 
-	// FilesHash Hash of the files used in the step
+	// FilesHash Hash of the files used in the step (lowercase hex SHA-256)
 	FilesHash *string `json:"filesHash,omitempty"`
 
 	// Force Whether the step should be forced to run regardless of the cache

@@ -194,7 +194,9 @@ func TestFSStoreFileSameInodeDoesNotEmptyObject(t *testing.T) {
 			_, _, err = obj.StoreFile(ctx, srcPath)
 			require.NoError(t, err)
 
-			_, _, err = obj.StoreFile(ctx, tc.source(t, p.getPath(objectKey)))
+			objectPath, err := p.getPath(objectKey)
+			require.NoError(t, err)
+			_, _, err = obj.StoreFile(ctx, tc.source(t, objectPath))
 			require.NoError(t, err)
 
 			size, err := obj.Size(ctx)
@@ -300,7 +302,9 @@ func TestFSUncompressedReplacementClearsCompressedSizeSidecar(t *testing.T) {
 			_, _, err = obj.StoreFile(ctx, compressedSrcPath, WithCompressConfig(compression))
 			require.NoError(t, err)
 
-			sidecarPath := SizeSidecar(p.getPath(objectPath))
+			fullPath, err := p.getPath(objectPath)
+			require.NoError(t, err)
+			sidecarPath := SizeSidecar(fullPath)
 			_, err = os.Stat(sidecarPath)
 			require.NoError(t, err)
 
@@ -371,6 +375,51 @@ func TestDeleteObjectsWithPrefix(t *testing.T) {
 		full := filepath.Join(p.GetDetails()[len("[Local file storage, base path set to "):len(p.GetDetails())-1], pth) // derive basePath
 		_, err := os.Stat(full)
 		require.True(t, os.IsNotExist(err))
+	}
+}
+
+func TestFSRejectsObjectPathsOutsideBase(t *testing.T) {
+	t.Parallel()
+
+	ops := map[string]func(ctx context.Context, p *fsStorage, key string) error{
+		"open_blob": func(ctx context.Context, p *fsStorage, key string) error {
+			_, err := p.OpenBlob(ctx, key)
+
+			return err
+		},
+		"open_seekable": func(ctx context.Context, p *fsStorage, key string) error {
+			_, err := p.OpenSeekable(ctx, key)
+
+			return err
+		},
+		"delete_prefix": func(ctx context.Context, p *fsStorage, key string) error {
+			return p.DeleteObjectsWithPrefix(ctx, key)
+		},
+	}
+	keys := map[string]string{
+		"empty":         "",
+		"parent":        "../outside/object",
+		"nested_parent": "nested/../../outside/object",
+	}
+
+	for opName, op := range ops {
+		for keyName, key := range keys {
+			t.Run(opName+"/"+keyName, func(t *testing.T) {
+				t.Parallel()
+
+				parent := t.TempDir()
+				p := newFileSystemStorage(filepath.Join(parent, "base"), "", nil)
+				require.NoError(t, os.MkdirAll(p.basePath, 0o755))
+				outside := filepath.Join(parent, "outside", "object")
+				require.NoError(t, os.MkdirAll(filepath.Dir(outside), 0o755))
+				require.NoError(t, os.WriteFile(outside, []byte("keep"), 0o600))
+
+				require.Error(t, op(t.Context(), p, key))
+
+				assert.FileExists(t, outside)
+				assert.DirExists(t, p.basePath)
+			})
+		}
 	}
 }
 

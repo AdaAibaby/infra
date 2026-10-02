@@ -105,8 +105,8 @@ func newAWSStorage(ctx context.Context, spec Spec, limiter *limit.Limiter) (*aws
 }
 
 func (s *awsStorage) DeleteObjectsWithPrefix(ctx context.Context, prefix string) error {
-	if prefix == "" {
-		return errors.New("refusing to delete objects with an empty prefix")
+	if err := validateObjectPath(prefix); err != nil {
+		return err
 	}
 
 	// A large prefix spans many pages, so scope the timeout per round-trip
@@ -184,6 +184,10 @@ func (s *awsStorage) GetDetails() string {
 }
 
 func (s *awsStorage) UploadSignedURL(ctx context.Context, path string, ttl time.Duration) (UploadURL, error) {
+	if err := validateObjectPath(path); err != nil {
+		return UploadURL{}, err
+	}
+
 	input := &s3.PutObjectInput{
 		Bucket:               aws.String(s.bucketName),
 		Key:                  aws.String(path),
@@ -214,6 +218,10 @@ func (s *awsStorage) UploadSignedURL(ctx context.Context, path string, ttl time.
 }
 
 func (s *awsStorage) OpenSeekable(_ context.Context, path string) (Seekable, error) {
+	if err := validateObjectPath(path); err != nil {
+		return nil, err
+	}
+
 	return &awsObject{
 		client:     s.client,
 		bucketName: s.bucketName,
@@ -224,6 +232,10 @@ func (s *awsStorage) OpenSeekable(_ context.Context, path string) (Seekable, err
 }
 
 func (s *awsStorage) OpenBlob(_ context.Context, path string) (Blob, error) {
+	if err := validateObjectPath(path); err != nil {
+		return nil, err
+	}
+
 	return &awsObject{
 		client:     s.client,
 		bucketName: s.bucketName,

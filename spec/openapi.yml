@@ -1543,7 +1543,8 @@ components:
             type: string
         filesHash:
           type: string
-          description: Hash of the files used in the step
+          pattern: "^[0-9a-f]{64}$"
+          description: Hash of the files used in the step (lowercase hex SHA-256)
         force:
           default: false
           type: boolean
@@ -3853,7 +3854,8 @@ paths:
           required: true
           schema:
             type: string
-            description: Hash of the files
+            pattern: "^[0-9a-f]{64}$"
+            description: Hash of the files (lowercase hex SHA-256)
 
       responses:
         "201":

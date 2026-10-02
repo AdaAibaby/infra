@@ -49,7 +49,10 @@ func newFileSystemStorage(basePath, uploadBaseURL string, hmacKey []byte) *fsSto
 }
 
 func (s *fsStorage) DeleteObjectsWithPrefix(_ context.Context, prefix string) error {
-	filePath := s.getPath(prefix)
+	filePath, err := s.getPath(prefix)
+	if err != nil {
+		return err
+	}
 
 	return os.RemoveAll(filePath)
 }
@@ -59,6 +62,10 @@ func (s *fsStorage) GetDetails() string {
 }
 
 func (s *fsStorage) UploadSignedURL(_ context.Context, path string, ttl time.Duration) (UploadURL, error) {
+	if err := validateObjectPath(path); err != nil {
+		return UploadURL{}, err
+	}
+
 	if s.uploadURL == "" || s.hmacKey == nil {
 		return UploadURL{}, errors.New("file system storage does not support signed URLs (no local upload endpoint configured)")
 	}
@@ -73,32 +80,46 @@ func (s *fsStorage) UploadSignedURL(_ context.Context, path string, ttl time.Dur
 }
 
 func (s *fsStorage) OpenSeekable(_ context.Context, path string) (Seekable, error) {
-	dir := filepath.Dir(s.getPath(path))
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	fullPath, err := s.getPath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 		return nil, err
 	}
 
 	objType, _ := seekableObjectType(path)
 
 	return &fsObject{
-		path:    s.getPath(path),
+		path:    fullPath,
 		objType: objType,
 	}, nil
 }
 
 func (s *fsStorage) OpenBlob(_ context.Context, path string) (Blob, error) {
-	dir := filepath.Dir(s.getPath(path))
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	fullPath, err := s.getPath(path)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := os.MkdirAll(filepath.Dir(fullPath), 0o755); err != nil {
 		return nil, err
 	}
 
 	return &fsObject{
-		path: s.getPath(path),
+		path: fullPath,
 	}, nil
 }
 
-func (s *fsStorage) getPath(path string) string {
-	return filepath.Join(s.basePath, path)
+// getPath resolves an object path under basePath, refusing any path
+// validateObjectPath rejects, so none can climb out of basePath.
+func (s *fsStorage) getPath(path string) (string, error) {
+	if err := validateObjectPath(path); err != nil {
+		return "", err
+	}
+
+	return filepath.Join(s.basePath, path), nil
 }
 
 func (o *fsObject) WriteTo(ctx context.Context, dst io.Writer) (n int64, err error) {
