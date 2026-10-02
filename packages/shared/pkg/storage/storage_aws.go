@@ -272,14 +272,9 @@ func (o *awsObject) StoreFile(ctx context.Context, path string, opts ...PutOptio
 		})
 	}
 
-	// Inherit the caller's context for the multipart upload. The AWS SDK's
-	// manager.Uploader reuses the same ctx for CreateMultipartUpload, every
-	// UploadPart, and the final Complete/Abort —
-	// a tight static timeout here would cancel an in-flight multi-GB snapshot
-	// upload and surface as "S3: UploadPart ... StatusCode: 0, canceled,
-	// context deadline exceeded". The caller (pkg/server/sandboxes.go) already
-	// scopes a per-attempt deadline (uploadTimeout = 20m) with retry budget on
-	// top, matching the GCP path which also inherits the caller's ctx.
+	// The uploader uses ctx for the whole multipart upload, so a fixed timeout
+	// here would cancel a large upload mid-transfer. The caller sets the
+	// deadline for each attempt.
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, [32]byte{}, fmt.Errorf("failed to open file %s: %w", path, err)
