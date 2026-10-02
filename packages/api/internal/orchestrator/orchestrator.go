@@ -27,7 +27,6 @@ import (
 	sqlcdb "github.com/e2b-dev/infra/packages/db/client"
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
-	e2bcatalog "github.com/e2b-dev/infra/packages/shared/pkg/sandbox-catalog"
 	"github.com/e2b-dev/infra/packages/shared/pkg/servicediscovery"
 	"github.com/e2b-dev/infra/packages/shared/pkg/smap"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
@@ -64,7 +63,6 @@ type Orchestrator struct {
 	featureFlagsClient            *featureflags.Client
 	analytics                     *analyticscollector.Analytics
 	posthogClient                 *analyticscollector.PosthogClient
-	routingCatalog                restorableCatalog
 	sqlcDB                        *sqlcdb.Client
 	tel                           *telemetry.Client
 	clusters                      *clusters.Pool
@@ -149,8 +147,6 @@ func New(
 	}
 	analyticsInstance.Init(ctx)
 
-	routingCatalog := e2bcatalog.NewRedisSandboxCatalog(redisClient)
-
 	// We will need to either use Redis or Consul's KV for storing active sandboxes to keep everything in sync,
 	// right now we load them from Orchestrator
 	meter := tel.MeterProvider.Meter("github.com/e2b-dev/infra/packages/api/internal/orchestrator")
@@ -192,7 +188,6 @@ func New(
 		scoreHugepages:       config.BestOfKHugepageMemory,
 		featureFlagsClient:   featureFlags,
 		accessTokenGenerator: accessTokenGenerator,
-		routingCatalog:       routingCatalog,
 		sqlcDB:               sqlcDB,
 		snapshotCache:        snapshotCache,
 		tel:                  tel,
@@ -212,7 +207,6 @@ func New(
 		redisStorage,
 		redisreservations.NewReservationStorage(redisClient, redisStorage.Notifier()),
 		sandbox.Callbacks{
-			AddSandboxToRoutingTable: o.addSandboxToRoutingTableOrLog,
 			AsyncNewlyCreatedSandbox: o.handleNewlyCreatedSandbox,
 			KillOrphanSandbox:        o.killOrphanSandbox,
 		},
@@ -385,10 +379,6 @@ func (o *Orchestrator) Close(ctx context.Context) error {
 	}
 
 	if err := o.analytics.Close(); err != nil {
-		errs = append(errs, err)
-	}
-
-	if err := o.routingCatalog.Close(ctx); err != nil {
 		errs = append(errs, err)
 	}
 

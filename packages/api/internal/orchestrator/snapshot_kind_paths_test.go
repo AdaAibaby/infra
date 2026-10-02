@@ -101,7 +101,6 @@ func newKindFixture(t *testing.T, checkpointErr error) kindFixture {
 			storage,
 			redisreservations.NewReservationStorage(redisClient, storage.Notifier()),
 			sandbox.Callbacks{
-				AddSandboxToRoutingTable: func(context.Context, sandbox.Sandbox) {},
 				AsyncNewlyCreatedSandbox: func(context.Context, sandbox.Sandbox, sandbox.CreationMetadata) {},
 			},
 		),

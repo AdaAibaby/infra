@@ -530,7 +530,6 @@ func (o *Orchestrator) CreateSandbox(
 			sandbox.StateActionKill,
 			sandbox.KillReasonUnknown,
 			false, // kill: no snapshot
-			false,
 		)
 		if killErr != nil {
 			logger.L().Error(ctx, "Error removing memory-restored sandbox after unhonored filesystem-boot demand",
@@ -561,7 +560,6 @@ func (o *Orchestrator) CreateSandbox(
 				sandbox.StateActionKill,
 				sandbox.KillReasonUnknown,
 				false, // kill: no snapshot
-				false,
 			)
 			if killErr != nil {
 				logger.L().Error(ctx, "Error removing sandbox",

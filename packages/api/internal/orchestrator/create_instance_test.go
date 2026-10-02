@@ -26,7 +26,6 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/machineinfo"
 	redis_utils "github.com/e2b-dev/infra/packages/shared/pkg/redis"
-	e2bcatalog "github.com/e2b-dev/infra/packages/shared/pkg/sandbox-catalog"
 	sandbox_network "github.com/e2b-dev/infra/packages/shared/pkg/sandbox-network"
 	"github.com/e2b-dev/infra/packages/shared/pkg/smap"
 )
@@ -70,7 +69,6 @@ func newCreateSandboxTestOrchestratorWithFlags(t *testing.T, flagSource *ldtestd
 		storage,
 		redisreservations.NewReservationStorage(client, storage.Notifier()),
 		sandbox.Callbacks{
-			AddSandboxToRoutingTable: func(context.Context, sandbox.Sandbox) {},
 			AsyncNewlyCreatedSandbox: func(context.Context, sandbox.Sandbox, sandbox.CreationMetadata) {},
 		},
 	)
@@ -92,7 +90,6 @@ func newCreateSandboxTestOrchestratorWithFlags(t *testing.T, flagSource *ldtestd
 		placementAlgorithm:      algo,
 		featureFlagsClient:      ffClient,
 		createdSandboxesCounter: counter,
-		routingCatalog:          e2bcatalog.NewRedisSandboxCatalog(client),
 	}
 
 	o.registerNode(node)

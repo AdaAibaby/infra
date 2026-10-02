@@ -47,7 +47,7 @@ func TestPauseSandbox_RefusedPauseKeepsSnapshotKind(t *testing.T) {
 	o, _, node, sbx := newPauseFixture(t, errors.New("node exploded"))
 	seedFilesystemOnlyBuild(t, o, node, sbx)
 
-	require.Error(t, o.pauseSandbox(t.Context(), node, sbx, false, true))
+	require.Error(t, o.pauseSandbox(t.Context(), node, sbx, false))
 
 	kind, err := o.sqlcDB.GetSnapshotFilesystemOnly(t.Context(), sbx.SandboxID)
 	require.NoError(t, err)
@@ -64,14 +64,14 @@ func TestPauseSandbox_SuccessRecordsRequestedKind(t *testing.T) {
 	o.snapshotCache = noopSnapshotCache{}
 	seedFilesystemOnlyBuild(t, o, node, sbx)
 
-	require.NoError(t, o.pauseSandbox(t.Context(), node, sbx, false, true))
+	require.NoError(t, o.pauseSandbox(t.Context(), node, sbx, false))
 	kind, err := o.sqlcDB.GetSnapshotFilesystemOnly(t.Context(), sbx.SandboxID)
 	require.NoError(t, err)
 	assert.False(t, kind, "a memory pause records a memory build")
 	buildStatus, _ := snapshotBuildStatus(t, db, sbx.SandboxID)
 	assert.Equal(t, string(types.BuildStatusSuccess), buildStatus)
 
-	require.NoError(t, o.pauseSandbox(t.Context(), node, sbx, true, true))
+	require.NoError(t, o.pauseSandbox(t.Context(), node, sbx, true))
 	kind, err = o.sqlcDB.GetSnapshotFilesystemOnly(t.Context(), sbx.SandboxID)
 	require.NoError(t, err)
 	assert.True(t, kind, "a filesystem-only pause records a filesystem-only build")

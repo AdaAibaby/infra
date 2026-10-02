@@ -20,7 +20,6 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/orchestrator"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 	sbxlogger "github.com/e2b-dev/infra/packages/shared/pkg/logger/sandbox"
-	e2bcatalog "github.com/e2b-dev/infra/packages/shared/pkg/sandbox-catalog"
 )
 
 // refusalRetryAfter is how long every API replica's eviction sweep leaves a
@@ -132,8 +131,7 @@ func (o *Orchestrator) RemoveSandbox(ctx context.Context, teamID uuid.UUID, sand
 	}
 
 	// Team and cluster contexts travel explicitly: the evictor's sweep has
-	// no request context, and a per-cluster rule is how a cluster whose edge
-	// is not yet rolled stays off.
+	// no request context.
 	restoreOnRefusal := opts.Action == sandbox.StateActionPause &&
 		o.featureFlagsClient.BoolFlag(ctx, featureflags.PauseRefusalRestoreFlag,
 			featureflags.TeamContext(teamID.String()), featureflags.ClusterContext(sbx.ClusterID))
@@ -146,7 +144,7 @@ func (o *Orchestrator) RemoveSandbox(ctx context.Context, teamID uuid.UUID, sand
 		o.sandboxStore.Remove(context.WithoutCancel(ctx), teamID, sandboxID)
 		go o.analyticsRemove(context.WithoutCancel(ctx), sbx, opts.Action)
 	}()
-	err = o.removeSandboxFromNode(ctx, sbx, opts.Action, opts.Reason, opts.FilesystemOnly, restoreOnRefusal)
+	err = o.removeSandboxFromNode(ctx, sbx, opts.Action, opts.Reason, opts.FilesystemOnly)
 	if err != nil {
 		if errors.Is(err, PauseQueueExhaustedError{}) {
 			if restoreOnRefusal {
@@ -170,26 +168,15 @@ func (o *Orchestrator) RemoveSandbox(ctx context.Context, teamID uuid.UUID, sand
 			)
 
 			if !preserveRecord {
-				if restoreOnRefusal {
-					// The edge put the route back on the node's refusal; the
-					// record is going away, so the VM and its route go now.
-					o.killRefusedSandbox(ctx, sbx)
-				}
+				// The node refused before it stopped the sandbox, so its route
+				// is still live; the record is going away, so the VM goes now
+				// rather than waiting for the orphan reconciler.
+				o.killRefusedSandbox(ctx, sbx)
 
 				return ErrSandboxOperationFailed
 			}
 
 			return PauseQueueExhaustedError{}
-		}
-
-		if errors.Is(err, ErrRefusedRouteLost) {
-			// The record is going and the route is already gone: kill the VM
-			// now rather than leaving it to the orphan reconciler.
-			o.recordRefusalRestore(ctx, restoreOutcomeRouteRestoreFailed, opts.Eviction)
-			logger.L().Error(ctx, "Pause refused by the node but the edge lost its route; removing the sandbox", logger.WithSandboxID(sbx.SandboxID))
-			o.killRefusedSandbox(ctx, sbx)
-
-			return ErrSandboxOperationFailed
 		}
 
 		fields := []zap.Field{
@@ -212,10 +199,9 @@ func (o *Orchestrator) RemoveSandbox(ctx context.Context, teamID uuid.UUID, sand
 type restoreOutcome string
 
 const (
-	restoreOutcomeRestored           restoreOutcome = "restored"
-	restoreOutcomeRestoreFailed      restoreOutcome = "restore_failed"
-	restoreOutcomeRouteRestoreFailed restoreOutcome = "route_restore_failed"
-	restoreOutcomeSuperseded         restoreOutcome = "superseded"
+	restoreOutcomeRestored      restoreOutcome = "restored"
+	restoreOutcomeRestoreFailed restoreOutcome = "restore_failed"
+	restoreOutcomeSuperseded    restoreOutcome = "superseded"
 )
 
 func (o *Orchestrator) recordRefusalRestore(ctx context.Context, outcome restoreOutcome, eviction bool) {
@@ -244,13 +230,12 @@ func (o *Orchestrator) killRefusedSandbox(ctx context.Context, sbx sandbox.Sandb
 	}
 }
 
-// Record first, routing second: a routing entry must never outlive its record.
-// On a cluster node the routing helper is a no-op by design: the edge owns
-// that catalog and puts the entry back itself on a refusal, failing the RPC
-// if it cannot, so the fail-closed check below covers local nodes only.
+// restoreRefusedPause puts the record back to Running after the node refused
+// the pause. Routing needs no repair: the node refuses before it stops the
+// sandbox, so its route was never removed.
 func (o *Orchestrator) restoreRefusedPause(ctx context.Context, transition sandbox.StateTransition) restoreOutcome {
 	sbx := transition.Sandbox
-	restoredSbx, err := o.sandboxStore.RestoreRunning(ctx, transition, refusalRetryAfter)
+	_, err := o.sandboxStore.RestoreRunning(ctx, transition, refusalRetryAfter)
 	if err != nil {
 		if errors.Is(err, sandbox.ErrExecutionMismatch) || errors.Is(err, sandbox.ErrRestoreConflict) {
 			logger.L().Warn(ctx, "Pause restore superseded", zap.Error(err), logger.WithSandboxID(sbx.SandboxID))
@@ -266,28 +251,10 @@ func (o *Orchestrator) restoreRefusedPause(ctx context.Context, transition sandb
 		return restoreOutcomeRestoreFailed
 	}
 
-	if err := o.writeSandboxToRoutingTable(ctx, restoredSbx, o.routingCatalog.RestoreSandbox); err != nil {
-		if errors.Is(err, e2bcatalog.ErrSandboxExecutionMismatch) {
-			return restoreOutcomeSuperseded
-		}
-
-		logger.L().Error(ctx, "Failed to restore the refused pause's route; falling back to removal",
-			zap.Error(err),
-			logger.WithSandboxID(sbx.SandboxID),
-		)
-
-		return restoreOutcomeRouteRestoreFailed
-	}
-
-	// Record and route use different Redis slots; Add publishes the record first.
+	// Add is lockless: a resume can install a new incarnation right after the
+	// restore, so the ownership check reads the record back.
 	current, err := o.sandboxStore.Get(ctx, sbx.TeamID, sbx.SandboxID)
 	if errors.Is(err, sandbox.ErrNotFound) || (err == nil && current.ExecutionID != sbx.ExecutionID) {
-		if node := o.GetNode(sbx.ClusterID, sbx.NodeID); node != nil && !node.IsClusterNode() {
-			if err := o.routingCatalog.DeleteSandbox(ctx, sbx.SandboxID, sbx.ExecutionID); err != nil {
-				logger.L().Error(ctx, "Failed to remove superseded pause route", zap.Error(err), logger.WithSandboxID(sbx.SandboxID))
-			}
-		}
-
 		return restoreOutcomeSuperseded
 	}
 	if err != nil {
@@ -303,7 +270,6 @@ func (o *Orchestrator) removeSandboxFromNode(
 	stateAction sandbox.StateAction,
 	reason sandbox.KillReason,
 	filesystemOnly bool,
-	restoreOnRefusal bool,
 ) error {
 	ctx, span := tracer.Start(ctx, "remove-sandbox-from-node")
 	defer span.End()
@@ -322,23 +288,6 @@ func (o *Orchestrator) removeSandboxFromNode(
 		return fmt.Errorf("node '%s' not found", sbx.NodeID)
 	}
 
-	// For remote cluster nodes we are using gPRC metadata for routing registration instead
-	if !node.IsClusterNode() {
-		// Remove the sandbox resources after the sandbox is deleted
-		err := o.routingCatalog.DeleteSandbox(ctx, sbx.SandboxID, sbx.ExecutionID)
-		if err != nil {
-			fields := []zap.Field{
-				zap.Error(err),
-				logger.WithSandboxID(sbx.SandboxID),
-			}
-			if stateAction == sandbox.StateActionKill {
-				fields = append(fields, zap.String("kill_reason", reason.String()))
-			}
-
-			logger.L().Error(ctx, "error removing routing record from catalog", fields...)
-		}
-	}
-
 	sbxlogger.I(sbx).Debug(ctx, "Removing sandbox",
 		zap.Bool("auto_pause", sbx.AutoPause),
 		zap.String("state_action", stateAction.Name),
@@ -346,7 +295,7 @@ func (o *Orchestrator) removeSandboxFromNode(
 
 	switch stateAction {
 	case sandbox.StateActionPause:
-		err := o.pauseSandbox(ctx, node, sbx, filesystemOnly, restoreOnRefusal)
+		err := o.pauseSandbox(ctx, node, sbx, filesystemOnly)
 		if err != nil {
 			if dberrors.IsForeignKeyViolation(err) {
 				killErr := o.killSandboxOnNode(ctx, node, sbx.ToNodeSandbox(), sandbox.KillReasonBaseTemplateMissing)
@@ -407,7 +356,7 @@ func (o *Orchestrator) killSandboxOnNode(
 		KillReason: &killReason,
 	}
 
-	client, ctx := node.GetSandboxDeleteCtx(ctx, sbx.SandboxID, sbx.ExecutionID, false)
+	client, ctx := node.GetClient(ctx)
 	_, err := client.Sandbox.Delete(ctx, req)
 	st, ok := status.FromError(err)
 	if ok && st.Code() == codes.NotFound {

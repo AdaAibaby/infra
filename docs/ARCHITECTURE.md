@@ -146,10 +146,10 @@ The control-plane entry point (Gin, OpenAPI-generated from `spec/openapi.yml`, p
   is on by default (`BEST_OF_K_HUGEPAGE_MEMORY`); set it false to rank on
   CPU alone. K, overcommit ratio, and alpha are tunable live via feature
   flags.
-- **State**: writes sandbox records to Redis (source of truth for *running* sandboxes) and a
-  legacy sandbox→node **routing catalog** (`sandbox:catalog:{id}`) in Redis. client-proxy no
-  longer reads it; it reads the orchestrator-written `sandbox:routing:{id}` (see "Sandbox routing
-  records"). Persistent entities (templates, builds, snapshots, teams) live in Postgres.
+- **State**: writes sandbox records to Redis (source of truth for *running* sandboxes). It does
+  not write routing: client-proxy reads the orchestrator-written `sandbox:routing:{id}` (see
+  "Sandbox routing records"). Persistent entities (templates, builds, snapshots, teams) live in
+  Postgres.
 - **Secrets**: `/secrets` is the only public surface for secret management (create, list, get,
   update, delete). The API authenticates the caller with the customer alternatives above, converts
   the authenticated team UUID to the project UUID the backend knows, checks the `customer-secrets`
@@ -438,7 +438,7 @@ sequenceDiagram
     O->>E: POST /init (env vars, access token) — retried until ready
     E-->>O: 204
     O-->>API: Create OK
-    API->>R: store running sandbox + routing catalog entry
+    API->>R: store running sandbox
     API-->>C: 201 sandbox {sandboxID, domain}
 ```
 
@@ -483,7 +483,7 @@ today; client-proxy reads only the orchestrator-owned one. Both have the same JS
 
 | Record | Key | Writer | Written | Deleted |
 |---|---|---|---|---|
-| API-owned (legacy, unread) | `sandbox:catalog:{sandboxID}` | API (cloud) or the cluster edge from gRPC metadata (BYOC) | after `Create` returns | before `Pause`/`Kill` is sent to the node |
+| API-owned (legacy, unread) | `sandbox:catalog:{sandboxID}` | none: the API no longer writes it; the cluster edge (BYOC) keeps a legacy write path until a follow-up removes it | — | — |
 | Orchestrator-owned | `sandbox:routing:{sandboxID}` | orchestrator, `packages/orchestrator/pkg/routing` | on `MarkRunning` (sandbox enters the live map, envd is ready) | on `MarkStopping` (kill, pause, checkpoint, crash) |
 
 **The orchestrator-owned record is the routing source.** The orchestrator writes
@@ -493,8 +493,9 @@ sandboxes are skipped. The delete is guarded by `execution_id` in a Lua script, 
 lifecycle never removes the record of a newer execution. client-proxy has no fallback to the
 API-owned record on a miss: a miss goes to the auto-resume path (`ResumeSandbox` gRPC to the API).
 
-The API-owned record is still written but no longer read. It is kept until the writers in the API
-and the cluster edge are removed.
+The API-owned record is no longer read or written by the API. The API also sends no
+`sandbox-catalog-create` / `sandbox-catalog-delete` gRPC metadata events to the cluster edge, so
+the edge writes nothing either. The edge's legacy write path is removed in a follow-up.
 
 Deploy order: every orchestrator on a cluster must run a build that publishes the record for one
 maximum sandbox length before client-proxy is upgraded past the flag-gated builds. Otherwise
@@ -546,8 +547,8 @@ sequenceDiagram
 - **Pause**: API records a snapshot row in Postgres, then gRPC `Pause` to the node. The
   orchestrator pauses the VM, snapshots it, diffs memory (dirty-page tracking) and rootfs (COW
   cache) against the template, caches the snapshot locally, and uploads asynchronously to object
-  storage (with a retry budget). The sandbox leaves the Redis catalog.
-  Once the API acquires the pause transition, routing cleanup, snapshot DB upsert, and the node
+  storage (with a retry budget). The orchestrator deletes the sandbox's routing record on
+  `MarkStopping`. Once the API acquires the pause transition, the snapshot DB upsert and the node
   RPC share a detached 80-second budget; the Redis transition key has a 95-second TTL.
   The node inherits that deadline for admission and snapshotting. Caller cancellation cannot
   abandon the snapshot or its RPC result; terminal build-status writes have a separate detached
@@ -599,10 +600,9 @@ sequenceDiagram
   refusal, negative never degrades), the evictor requests a filesystem-only snapshot instead, so
   the sandbox stops overstaying its expiry; the next resume of that snapshot is a cold boot. The
   degrade is only ever decided on a refusal in the same sweep, so eviction lag alone never
-  degrades anything, and refusals only survive with `pause-refusal-restore` on. On a
-  BYOC cluster that flag also needs every edge replica on a release that restores the route
-  after a refusal: roll the edge fully first, and turn the flag off for the cluster before any
-  edge rollback — nothing in the cluster model can check the edge's version.
+  degrades anything, and refusals only survive with `pause-refusal-restore` on. The node
+  refuses before `MarkStopping`, so its routing record stays live and nothing needs to restore
+  it; with the flag off the refused sandbox is killed on the node together with its record.
 - **Pre-boot filesystem recovery**: every cold boot of a rootfs that was not frozen at pause
   (`fs_quiesced` false/absent) runs a jailed `e2fsck -p -E journal_only` before the VM starts —
   journal replay only, the same recovery the guest kernel would do at mount — so a `memory: false`
