@@ -127,7 +127,7 @@ func run() int {
 		}
 	}()
 
-	catalog := e2bcatalog.NewRedisSandboxRoutingCatalog(redisClient)
+	catalog := e2bcatalog.NewRedisSandboxCatalog(redisClient)
 
 	info := &internal.ServiceInfo{}
 	info.SetStatus(ctx, internal.Healthy)

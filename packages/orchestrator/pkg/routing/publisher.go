@@ -26,11 +26,10 @@ import (
 
 var _ sandbox.MapSubscriber = (*Publisher)(nil)
 
-// Store is the subset of the Redis catalog the publisher needs. DeleteSandboxStrict
-// returns the Redis error, so the delete counter reports real failures.
+// Store is the subset of the Redis catalog the publisher needs.
 type Store interface {
 	StoreSandbox(ctx context.Context, sandboxID string, info *catalog.SandboxInfo, expiration time.Duration) error
-	DeleteSandboxStrict(ctx context.Context, sandboxID string, executionID string) error
+	DeleteSandbox(ctx context.Context, sandboxID string, executionID string) error
 }
 
 var _ Store = (*catalog.RedisSandboxCatalog)(nil)
@@ -179,7 +178,7 @@ func (p *Publisher) OnStopping(ctx context.Context, sbx *sandbox.Sandbox) {
 	}
 
 	err := telemetry.Observe0(ctx, tracer, "routing-delete", func(ctx context.Context) error {
-		return p.store.DeleteSandboxStrict(ctx, sbx.Runtime.SandboxID, sbx.Runtime.ExecutionID)
+		return p.store.DeleteSandbox(ctx, sbx.Runtime.SandboxID, sbx.Runtime.ExecutionID)
 	})
 	if err != nil {
 		p.deleteCounter.Add(ctx, 1, metric.WithAttributes(attribute.String("result", "error")))

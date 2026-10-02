@@ -702,7 +702,7 @@ func run(config cfg.Config, opts Options) (success bool) {
 	if redisClient != nil {
 		routingPublisher, err := routing.New(
 			tel.MeterProvider,
-			sandboxcatalog.NewRedisSandboxRoutingCatalog(redisClient),
+			sandboxcatalog.NewRedisSandboxCatalog(redisClient),
 			serviceInstanceID,
 			config.NodeIP,
 		)

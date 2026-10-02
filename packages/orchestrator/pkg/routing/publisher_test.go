@@ -66,7 +66,7 @@ func (c *memoryCatalog) StoreSandbox(_ context.Context, sandboxID string, info *
 	return nil
 }
 
-func (c *memoryCatalog) DeleteSandboxStrict(_ context.Context, sandboxID string, executionID string) error {
+func (c *memoryCatalog) DeleteSandbox(_ context.Context, sandboxID string, executionID string) error {
 	if c.deleteErr != nil {
 		return c.deleteErr
 	}

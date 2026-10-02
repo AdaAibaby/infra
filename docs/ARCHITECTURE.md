@@ -476,34 +476,28 @@ sequenceDiagram
 
 ### Sandbox routing records
 
-client-proxy resolves the node IP of a sandbox from a routing record in Redis. Two records exist
-today; client-proxy reads only the orchestrator-owned one. Both have the same JSON shape (`sandbox_catalog.SandboxInfo` in
-`packages/shared/pkg/sandbox-catalog`): `orchestrator_id`, `orchestrator_ip`, `execution_id`,
-`sandbox_started_at`, `sandbox_max_length_in_hours`.
+client-proxy resolves the node IP of a sandbox from one routing record in Redis, written by the
+orchestrator. Its JSON shape (`sandbox_catalog.SandboxInfo` in `packages/shared/pkg/sandbox-catalog`):
+`orchestrator_id`, `orchestrator_ip`, `execution_id`, `sandbox_started_at`,
+`sandbox_max_length_in_hours`.
 
 | Record | Key | Writer | Written | Deleted |
 |---|---|---|---|---|
-| API-owned (legacy) | `sandbox:catalog:{sandboxID}` | none: no service writes or reads it; existing keys expire with their TTL | — | — |
 | Orchestrator-owned | `sandbox:routing:{sandboxID}` | orchestrator, `packages/orchestrator/pkg/routing` | on `MarkRunning` (sandbox enters the live map, envd is ready) | on `MarkStopping` (kill, pause, checkpoint, crash) |
 
 **The orchestrator-owned record is the routing source.** The orchestrator writes
 `sandbox:routing:{id}` on `MarkRunning` and deletes it on `MarkStopping`. A failed write is logged
 and counted (`orchestrator.routing.publish.total{result=error}`); the sandbox keeps running. Build
 sandboxes are skipped. The delete is guarded by `execution_id` in a Lua script, so a stale
-lifecycle never removes the record of a newer execution. client-proxy has no fallback to the
-API-owned record on a miss: a miss goes to the auto-resume path (`ResumeSandbox` gRPC to the API).
-
-The API-owned record has no writer and no reader left. The API sends no
-`sandbox-catalog-create` / `sandbox-catalog-delete` gRPC metadata events, and the cluster edge no
-longer handles them. Existing keys expire with their TTL. The code for the record type is removed
-in a follow-up.
+lifecycle never removes the record of a newer execution. On a miss client-proxy goes to the
+auto-resume path (`ResumeSandbox` gRPC to the API).
 
 Deploy order: every orchestrator on a cluster must run a build that publishes the record for one
 maximum sandbox length before client-proxy is upgraded past the flag-gated builds. Otherwise
 requests for sandboxes started before the orchestrator upgrade miss the record and go to the
 resume path.
 
-The TTL of both records is `sandbox_max_length_in_hours` from the write time. The record is
+The TTL of the record is `sandbox_max_length_in_hours` from the write time. The record is
 deleted earlier in every normal stop path.
 
 ### Volume content
