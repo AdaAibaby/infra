@@ -552,8 +552,9 @@ var (
 	// Running. Off (default), a refused pause still ends today's way — the
 	// record is removed, the live sandbox is reaped as an orphan shortly
 	// after, and the pause endpoint answers today's generic error rather than
-	// a 503 whose retry could not succeed.
-	PauseRefusalRestoreFlag       = NewBoolFlag("pause-refusal-restore", false)
+	// a 503 whose retry could not succeed. The fallback reads
+	// PAUSE_REFUSAL_RESTORE so a deployment without LaunchDarkly can turn it on.
+	PauseRefusalRestoreFlag       = NewBoolFlag("pause-refusal-restore", envBoolOr("PAUSE_REFUSAL_RESTORE", false))
 	MaxCacheWriterConcurrencyFlag = NewIntFlag("max-cache-writer-concurrency", 10)
 
 	// BuildCacheMaxUsagePercentage the maximum percentage of the cache disk storage

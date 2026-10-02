@@ -595,7 +595,9 @@ sequenceDiagram
   refusal, negative never degrades), the evictor requests a filesystem-only snapshot instead, so
   the sandbox stops overstaying its expiry; the next resume of that snapshot is a cold boot. The
   degrade is only ever decided on a refusal in the same sweep, so eviction lag alone never
-  degrades anything, and refusals only survive with `pause-refusal-restore` on. The node
+  degrades anything, and refusals only survive with `pause-refusal-restore` on (its fallback
+  reads the `PAUSE_REFUSAL_RESTORE` environment variable, which is how E2B Embed, with no flag
+  service, turns it on). The node
   refuses before `MarkStopping`, so its routing record stays live and nothing needs to restore
   it; with the flag off the refused sandbox is killed on the node together with its record.
 - **Pre-boot filesystem recovery**: every cold boot of a rootfs that was not frozen at pause

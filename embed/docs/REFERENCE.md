@@ -98,6 +98,11 @@ the api's `logs-read-config` flag, since there is no LaunchDarkly here to set
 it. Retention is the table's 7 days. There is no Loki in this stack, and the
 api needs no `LOKI_URL`.
 
+`PAUSE_REFUSAL_RESTORE=true` sets the api's `pause-refusal-restore` flag the
+same way, in an api release that reads it: a pause the node refuses — it is
+still persisting the sandbox's parent — keeps the sandbox running and
+answers 503 to retry, instead of killing it.
+
 Every service also writes its own log to stdout, which is what
 `docker compose logs <service>` and `kubectl -n e2b logs e2b-0 -c <container>`
 print. None of this needs a collector.

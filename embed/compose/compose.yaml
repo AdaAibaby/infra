@@ -360,6 +360,13 @@ services:
       # Both arrived with api v0.11.0; v0.8.0 exits on the missing
       # LOKI_URL, and tests/pins.bats refuses that pin.
       LOGS_READ_CONFIG: "true"
+      # A pause the node refuses — it is still persisting the sandbox's parent
+      # — keeps the sandbox running and answers 503 to retry, instead of
+      # killing it. This is the api's
+      # pause-refusal-restore flag, which has no LaunchDarkly to come from
+      # here; api releases that predate the knob ignore it, so this takes
+      # effect with the first api pin that reads it.
+      PAUSE_REFUSAL_RESTORE: "true"
       LOGS_COLLECTOR_ADDRESS: http://127.0.0.1:30006
       OTEL_COLLECTOR_GRPC_ENDPOINT: ${E2B_OTEL_COLLECTOR_GRPC_ENDPOINT:-}
       API_INTERNAL_GRPC_PORT: "5009"

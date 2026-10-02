@@ -388,6 +388,12 @@ restarts; a single machine has nowhere to drain them to.
 - The team API key rotates only through the seed (set `TEAM_API_KEY`, or
   remove the key file, then `up`), not through an API call, and the old key
   keeps working for up to five minutes afterwards.
+- With an api release that reads `PAUSE_REFUSAL_RESTORE` (the pin here
+  predates it), a pause the node refuses — it is still persisting the
+  sandbox's parent — leaves the sandbox running and answers 503; retry it.
+  Until then a refused pause ends the old way, with the sandbox killed and a
+  500. A full disk is not a refusal in the pinned orchestrator: that pause
+  fails after it has started and ends the same old way.
 - Container logs are capped: every service keeps at most five 50 MiB log
   files (`x-logging` in `compose.yaml`), so `docker compose logs` shows about
   the last 250 MiB per service and older lines are gone. Without the cap a
