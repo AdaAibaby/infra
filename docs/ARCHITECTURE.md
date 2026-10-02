@@ -483,7 +483,7 @@ today; client-proxy reads only the orchestrator-owned one. Both have the same JS
 
 | Record | Key | Writer | Written | Deleted |
 |---|---|---|---|---|
-| API-owned (legacy, unread) | `sandbox:catalog:{sandboxID}` | none: the API no longer writes it; the cluster edge (BYOC) keeps a legacy write path until a follow-up removes it | — | — |
+| API-owned (legacy) | `sandbox:catalog:{sandboxID}` | none: no service writes or reads it; existing keys expire with their TTL | — | — |
 | Orchestrator-owned | `sandbox:routing:{sandboxID}` | orchestrator, `packages/orchestrator/pkg/routing` | on `MarkRunning` (sandbox enters the live map, envd is ready) | on `MarkStopping` (kill, pause, checkpoint, crash) |
 
 **The orchestrator-owned record is the routing source.** The orchestrator writes
@@ -493,9 +493,10 @@ sandboxes are skipped. The delete is guarded by `execution_id` in a Lua script, 
 lifecycle never removes the record of a newer execution. client-proxy has no fallback to the
 API-owned record on a miss: a miss goes to the auto-resume path (`ResumeSandbox` gRPC to the API).
 
-The API-owned record is no longer read or written by the API. The API also sends no
-`sandbox-catalog-create` / `sandbox-catalog-delete` gRPC metadata events to the cluster edge, so
-the edge writes nothing either. The edge's legacy write path is removed in a follow-up.
+The API-owned record has no writer and no reader left. The API sends no
+`sandbox-catalog-create` / `sandbox-catalog-delete` gRPC metadata events, and the cluster edge no
+longer handles them. Existing keys expire with their TTL. The code for the record type is removed
+in a follow-up.
 
 Deploy order: every orchestrator on a cluster must run a build that publishes the record for one
 maximum sandbox length before client-proxy is upgraded past the flag-gated builds. Otherwise
