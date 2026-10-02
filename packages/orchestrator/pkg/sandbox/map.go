@@ -20,15 +20,18 @@ import (
 // MapSubscriber receives lifecycle notifications from the sandbox Map.
 //
 // Callbacks are invoked synchronously from the goroutine that performed the
-// state change. Implementations must be non-blocking; if async work is needed,
-// the subscriber is responsible for dispatching it.
+// state change and complete before that operation returns. Subscribers must
+// finish work required by the transition before returning; they may dispatch
+// independent work asynchronously.
 type MapSubscriber interface {
 	// OnInsert is triggered when a sandbox transitions to the running state.
 	OnInsert(ctx context.Context, sandbox *Sandbox)
 	// OnStopping is triggered when a sandbox leaves the live registry (MarkStopping).
 	OnStopping(ctx context.Context, sandbox *Sandbox)
 	// OnNetworkRelease is triggered when a sandbox's network slot is released.
-	OnNetworkRelease(ctx context.Context, sbx *Sandbox)
+	// It may wait for the subscriber to let go of the slot. An error keeps the
+	// slot allocated and out of reuse.
+	OnNetworkRelease(ctx context.Context, sbx *Sandbox) error
 }
 
 // Map tracks live sandboxes, outstanding lifecycle cleanup, and network assignments.
@@ -395,8 +398,9 @@ func (m *Map) notifyLifecycleChangeLocked() {
 }
 
 // NetworkReleased unregisters a sandbox's IP and notifies OnNetworkRelease
-// subscribers after a successful removal.
-func (m *Map) NetworkReleased(ctx context.Context, ip string) {
+// subscribers after a successful removal. Every subscriber is notified, and
+// their errors are joined.
+func (m *Map) NetworkReleased(ctx context.Context, ip string) error {
 	var sbx *Sandbox
 	removed := m.network.RemoveCb(ip, func(_ string, v *Sandbox, exists bool) bool {
 		if !exists {
@@ -409,7 +413,7 @@ func (m *Map) NetworkReleased(ctx context.Context, ip string) {
 	})
 
 	if !removed {
-		return
+		return nil
 	}
 
 	sbx.log().Info(ctx, "sandbox network map entry removed",
@@ -417,7 +421,10 @@ func (m *Map) NetworkReleased(ctx context.Context, ip string) {
 		logger.WithSandboxIP(ip),
 	)
 
+	var errs []error
 	m.trigger(ctx, func(ctx context.Context, s MapSubscriber) {
-		s.OnNetworkRelease(ctx, sbx)
+		errs = append(errs, s.OnNetworkRelease(ctx, sbx))
 	})
+
+	return errors.Join(errs...)
 }

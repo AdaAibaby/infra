@@ -514,6 +514,12 @@ func NewIntFlag(name string, fallback int) IntFlag {
 }
 
 var (
+	// EgressRetirementTimeoutMsFlag sets the wait for retiring egress connections
+	// at network release. Callers accept positive milliseconds that fit in a
+	// time.Duration, otherwise using the one-minute fallback. Updates affect
+	// future retirements.
+	EgressRetirementTimeoutMsFlag = NewIntFlag("egress-retirement-timeout-ms", 60000)
+
 	MaxSandboxesPerNode = NewIntFlag("max-sandboxes-per-node", 200)
 	// The LD keys keep the legacy "gcloud-" prefix, but the limits apply to uploads on all storage providers.
 	StorageConcurrentUploadLimit  = NewIntFlag("gcloud-concurrent-upload-limit", 8)

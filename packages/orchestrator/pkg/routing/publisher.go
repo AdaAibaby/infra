@@ -196,7 +196,7 @@ func (p *Publisher) OnStopping(ctx context.Context, sbx *sandbox.Sandbox) {
 }
 
 // OnNetworkRelease is not used by the publisher.
-func (p *Publisher) OnNetworkRelease(_ context.Context, _ *sandbox.Sandbox) {}
+func (p *Publisher) OnNetworkRelease(_ context.Context, _ *sandbox.Sandbox) error { return nil }
 
 func (p *Publisher) getOrCreate(key string) *routeState {
 	p.mu.Lock()

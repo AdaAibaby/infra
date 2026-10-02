@@ -274,7 +274,7 @@ func (p *V2Pool) Get(ctx context.Context, netConfig *orchestrator.SandboxNetwork
 
 	if err := p.configureSlot(ctx, slot, netConfig, class); err != nil {
 		// Never handed out, so nobody listens for the release notification.
-		if rerr := p.ReturnAsync(context.WithoutCancel(ctx), slot, func(context.Context, string) {}, 0); rerr != nil {
+		if rerr := p.ReturnAsync(context.WithoutCancel(ctx), slot, func(context.Context, string) error { return nil }, 0); rerr != nil {
 			logger.L().Error(ctx, "failed to return v2 slot to pool", zap.Error(rerr), zap.Int("slot_index", slot.Idx))
 		}
 
@@ -325,6 +325,8 @@ func (p *V2Pool) ReturnAsync(ctx context.Context, slot *network.Slot, releasedFn
 		err := p.returnSlot(ctx, slot, releasedFn, returnDelay)
 		switch {
 		case err == nil:
+		case errors.Is(err, network.ErrSlotRetained):
+			logger.L().Error(ctx, "v2 network slot retained and unavailable for reuse", zap.Error(err), zap.Int("slot_index", slot.Idx))
 		case errors.Is(err, network.ErrClosed), errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
 			logger.L().Warn(ctx, "v2 network slot returned during pool shutdown", zap.Error(err), zap.Int("slot_index", slot.Idx))
 		default:
@@ -339,22 +341,24 @@ func (p *V2Pool) ReturnAsync(ctx context.Context, slot *network.Slot, releasedFn
 // before making the slot reusable to let inflight requests on the previous
 // sandbox drain.
 func (p *V2Pool) returnSlot(ctx context.Context, slot *network.Slot, releasedFn network.ReleaseNotify, returnDelay time.Duration) error {
-	notifyNetworkRelease := sync.OnceFunc(func() {
-		releasedFn(ctx, slot.HostIPString())
-	})
-	defer notifyNetworkRelease()
-
 	// If the pool is closed or the context is cancelled during the delay we
 	// still fall through and clean up the slot to avoid leaking it.
+	var cause error
 	select {
 	case <-ctx.Done():
-		return p.cleanupWith(ctx, slot, ctx.Err())
+		cause = ctx.Err()
 	case <-p.done:
-		return p.cleanupWith(ctx, slot, network.ErrClosed)
+		cause = network.ErrClosed
 	case <-time.After(returnDelay):
 	}
 
-	notifyNetworkRelease()
+	// Every path notifies before the slot can be torn down or reused.
+	if err := releasedFn(ctx, slot.HostIPString()); err != nil {
+		return errors.Join(cause, fmt.Errorf("%w: v2 slot '%d': %w", network.ErrSlotRetained, slot.Idx, err))
+	}
+	if cause != nil {
+		return p.cleanupWith(ctx, slot, cause)
+	}
 
 	return p.recycle(ctx, slot)
 }

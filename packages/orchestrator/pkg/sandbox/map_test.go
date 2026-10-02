@@ -4,6 +4,8 @@ package sandbox
 
 import (
 	"context"
+	"errors"
+	"net"
 	"sync"
 	"testing"
 	"testing/synctest"
@@ -39,8 +41,10 @@ type insertRecorder struct {
 func (r *insertRecorder) OnInsert(_ context.Context, sbx *Sandbox) {
 	r.inserts = append(r.inserts, sbx)
 }
-func (r *insertRecorder) OnStopping(context.Context, *Sandbox)       {}
-func (r *insertRecorder) OnNetworkRelease(context.Context, *Sandbox) {}
+func (r *insertRecorder) OnStopping(context.Context, *Sandbox) {}
+func (r *insertRecorder) OnNetworkRelease(context.Context, *Sandbox) error {
+	return nil
+}
 
 // A second lifecycle under a live sandbox ID is refused and left out of every
 // index: not routable, not tracked for cleanup, not announced. The live one is
@@ -959,4 +963,43 @@ func testMapSandbox(t *testing.T, lifecycleID string) *Sandbox {
 		},
 		Resources: &Resources{Slot: slot},
 	}
+}
+
+type releaseSubscriber struct {
+	insertRecorder
+
+	onRelease func(*Sandbox) error
+}
+
+func (s *releaseSubscriber) OnNetworkRelease(_ context.Context, sbx *Sandbox) error {
+	return s.onRelease(sbx)
+}
+
+// A failed release is reported after the source lookup is gone, and the other
+// subscribers still receive the release.
+func TestMapNetworkReleasedJoinsSubscriberErrors(t *testing.T) {
+	t.Parallel()
+
+	sandboxes := NewSandboxesMap()
+	sbx := testMapSandbox(t, "lifecycle-1")
+	ip := sbx.Slot.HostIPString()
+	boom := errors.New("boom")
+	var released []*Sandbox
+	sandboxes.Subscribe(&releaseSubscriber{onRelease: func(*Sandbox) error {
+		_, err := sandboxes.GetByHostPort(net.JoinHostPort(ip, "1234"))
+		assert.Error(t, err, "subscribers run after the source lookup is removed")
+
+		return boom
+	}})
+	sandboxes.Subscribe(&releaseSubscriber{onRelease: func(sbx *Sandbox) error {
+		released = append(released, sbx)
+
+		return nil
+	}})
+	sandboxes.AssignNetwork(t.Context(), sbx)
+
+	require.ErrorIs(t, sandboxes.NetworkReleased(t.Context(), ip), boom)
+	assert.Equal(t, []*Sandbox{sbx}, released)
+	require.NoError(t, sandboxes.NetworkReleased(t.Context(), ip), "a repeated release notifies nobody")
+	assert.Len(t, released, 1)
 }

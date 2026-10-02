@@ -266,6 +266,8 @@ func (p *SandboxProxy) OnStopping(_ context.Context, _ *sandbox.Sandbox) {}
 
 // OnNetworkRelease is called when a sandbox's network slot is released.
 // Keyed by LifecycleID so the removal is scoped to this sandbox lifecycle.
-func (p *SandboxProxy) OnNetworkRelease(_ context.Context, sbx *sandbox.Sandbox) {
+func (p *SandboxProxy) OnNetworkRelease(_ context.Context, sbx *sandbox.Sandbox) error {
 	p.limiter.Remove(sbx.LifecycleID)
+
+	return nil
 }
