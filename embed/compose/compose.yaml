@@ -22,8 +22,22 @@ x-tools: &tools
 x-node-e2b: &node-e2b
   image: ${E2B_NODE_E2B_IMAGE:?fetch the .env that ships beside compose.yaml (README, Install)}
 
+# Docker's json-file driver keeps a container's log forever by default. On a
+# full disk a service that fails on every write, ClickHouse above all, writes
+# error output faster than anything frees space, and the disk stays full until
+# someone steps in. Every service aliases this cap: five files of 50 MiB,
+# 250 MiB a service, and `docker compose logs` reads the rotated files as
+# before. The driver is named so the options are valid on a daemon whose
+# default driver is another one.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "50m"
+    max-file: "5"
+
 services:
   postgres:
+    logging: *logging
     image: postgres:18.6-alpine
     restart: unless-stopped
     environment:
@@ -42,6 +56,7 @@ services:
       retries: 20
 
   redis:
+    logging: *logging
     image: redis:7.4.6
     restart: unless-stopped
     ports:
@@ -55,6 +70,7 @@ services:
       retries: 20
 
   clickhouse:
+    logging: *logging
     image: clickhouse/clickhouse-server:25.8.30.16
     restart: unless-stopped
     environment:
@@ -80,6 +96,7 @@ services:
       retries: 30
 
   vector:
+    logging: *logging
     image: timberio/vector:0.51.1-alpine
     restart: unless-stopped
     depends_on:
@@ -112,6 +129,7 @@ services:
   # has no shell, so there is no healthcheck; `curl -s 127.0.0.1:13133` on the
   # host is the check. No service depends on it, `ready` included.
   otel-collector:
+    logging: *logging
     image: otel/opentelemetry-collector-contrib:0.146.0
     profiles: [otel]
     restart: unless-stopped
@@ -129,6 +147,7 @@ services:
         target: /etc/otelcol-contrib/config.yaml
 
   db-migrator:
+    logging: *logging
     image: ${E2B_DB_MIGRATOR_IMAGE:?fetch the .env that ships beside compose.yaml (README, Install)}
     restart: "no"
     depends_on:
@@ -138,6 +157,7 @@ services:
       POSTGRES_CONNECTION_STRING: postgres://postgres:postgres@postgres:5432/postgres?sslmode=disable
 
   clickhouse-migrator:
+    logging: *logging
     image: ${E2B_CLICKHOUSE_MIGRATOR_IMAGE:?fetch the .env that ships beside compose.yaml (README, Install)}
     restart: "no"
     depends_on:
@@ -147,6 +167,7 @@ services:
       GOOSE_DBSTRING: clickhouse://clickhouse:clickhouse@clickhouse:9000/default
 
   seed:
+    logging: *logging
     image: ${E2B_SEED_IMAGE:?fetch the .env that ships beside compose.yaml (README, Install)}
     restart: "no"
     depends_on:
@@ -172,6 +193,7 @@ services:
 
   preflight:
     <<: *tools
+    logging: *logging
     restart: "no"
     network_mode: host
     pid: host
@@ -182,6 +204,7 @@ services:
 
   host-setup:
     <<: *tools
+    logging: *logging
     restart: "no"
     network_mode: host
     pid: host
@@ -196,6 +219,7 @@ services:
 
   fetch-artifacts:
     <<: *tools
+    logging: *logging
     restart: "no"
     network_mode: host
     depends_on:
@@ -224,6 +248,7 @@ services:
   # written long before the api needs it — and the values are never printed.
   api-secrets:
     <<: *tools
+    logging: *logging
     restart: "no"
     depends_on:
       preflight:
@@ -250,6 +275,7 @@ services:
 
   orchestrator:
     <<: *tools
+    logging: *logging
     restart: unless-stopped
     network_mode: host
     pid: host
@@ -310,6 +336,7 @@ services:
       start_period: 30s
 
   api:
+    logging: *logging
     image: ${E2B_API_IMAGE:?fetch the .env that ships beside compose.yaml (README, Install)}
     restart: unless-stopped
     network_mode: host
@@ -408,6 +435,7 @@ services:
   # this install generated. It starts without an identity provider; the
   # /v1/management routes then answer 401, and nothing here calls them.
   dashboard-api:
+    logging: *logging
     image: ${E2B_DASHBOARD_API_IMAGE:?fetch the .env that ships beside compose.yaml (README, Install)}
     restart: unless-stopped
     network_mode: host
@@ -470,6 +498,7 @@ services:
   # /api/health is 503 until dashboard-api answers, which makes it the right
   # readiness for `up --wait`; the image has node but no wget or curl.
   dashboard:
+    logging: *logging
     image: ${E2B_DASHBOARD_IMAGE:?fetch the .env that ships beside compose.yaml (README, Install)}
     restart: unless-stopped
     network_mode: host
@@ -494,6 +523,7 @@ services:
       start_period: 30s
 
   client-proxy:
+    logging: *logging
     image: ${E2B_CLIENT_PROXY_IMAGE:?fetch the .env that ships beside compose.yaml (README, Install)}
     restart: unless-stopped
     network_mode: host
@@ -523,6 +553,7 @@ services:
   # and the one service whose presence means "the stack is usable".
   ready:
     <<: *tools
+    logging: *logging
     restart: unless-stopped
     network_mode: host
     depends_on:
@@ -579,6 +610,7 @@ services:
 
   base-template:
     <<: *node-e2b
+    logging: *logging
     restart: "no"
     network_mode: host
     environment:
@@ -607,6 +639,7 @@ services:
 
   smoke:
     <<: *node-e2b
+    logging: *logging
     profiles: [test]
     restart: "no"
     network_mode: host
@@ -633,6 +666,7 @@ services:
 
   host-teardown:
     <<: *tools
+    logging: *logging
     profiles: [purge]
     restart: "no"
     network_mode: host

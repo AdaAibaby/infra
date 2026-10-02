@@ -388,6 +388,12 @@ restarts; a single machine has nowhere to drain them to.
 - The team API key rotates only through the seed (set `TEAM_API_KEY`, or
   remove the key file, then `up`), not through an API call, and the old key
   keeps working for up to five minutes afterwards.
+- Container logs are capped: every service keeps at most five 50 MiB log
+  files (`x-logging` in `compose.yaml`), so `docker compose logs` shows about
+  the last 250 MiB per service and older lines are gone. Without the cap a
+  service that fails on a full disk writes error output faster than anything
+  frees space and holds the disk at 100%. Raise the cap in your copy for a
+  longer history.
 - Expected log noise, all harmless: an OIDC warning from api at startup,
   because no identity provider is configured, and, every ten seconds from both
   api and the orchestrator, `failed to upload metrics: exporter export
