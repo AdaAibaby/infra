@@ -22,6 +22,7 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+	"google.golang.org/protobuf/proto"
 
 	"github.com/e2b-dev/infra/packages/clickhouse/pkg/hoststats"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/cfg"
@@ -186,6 +187,24 @@ func (c *Config) GetNetworkIngress() *orchestrator.SandboxNetworkIngressConfig {
 	defer c.mu.RUnlock()
 
 	return c.Network.GetIngress()
+}
+
+// Clone returns a copy with its own lock and its own network config, snapshotted
+// under this config's lock. A throwaway resumed from the copy therefore starts
+// from a consistent egress and ingress even while a concurrent Update rewrites
+// the original's, and nothing done to the copy reaches the live sandbox.
+func (c *Config) Clone() *Config {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	clone := *c
+	clone.Network, _ = proto.Clone(c.Network).(*orchestrator.SandboxNetworkConfig)
+	if clone.Network == nil {
+		clone.Network = &orchestrator.SandboxNetworkConfig{}
+	}
+	clone.mu = &sync.RWMutex{}
+
+	return &clone
 }
 
 type VolumeMountConfig struct {

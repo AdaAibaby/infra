@@ -15,6 +15,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/block"
 	sbxtemplate "github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/template"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/template/metadata"
+	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/orchestrator"
 	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/storage"
 )
@@ -65,12 +66,18 @@ type fakeHarvestResumer struct {
 	called     bool
 	gotRuntime sandboxtypes.RuntimeMetadata
 	gotConfig  *sandbox.Config
+	// onResume runs while the throwaway is being brought up, standing in for
+	// anything that touches the live source concurrently.
+	onResume func()
 }
 
 func (f *fakeHarvestResumer) ResumeForHarvest(_ context.Context, _ sbxtemplate.Template, config *sandbox.Config, runtime sandboxtypes.RuntimeMetadata, _, _ time.Time) (harvestInstance, error) {
 	f.called = true
 	f.gotRuntime = runtime
 	f.gotConfig = config
+	if f.onResume != nil {
+		f.onResume()
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -239,6 +246,41 @@ func TestHarvestRun_ThrowawayIdentity(t *testing.T) {
 		"throwaway must resume with volume mounts suppressed so /init does not attempt the (DenyEgress-blocked) NFS mount")
 }
 
+// TestHarvestRun_ThrowawayNetworkIsASnapshot: the throwaway resumes from its
+// own copy of the network config, taken under the source's lock, so an egress
+// Update landing on the live source while the throwaway starts (the in-place
+// case: the source keeps running) neither reaches the throwaway nor races it.
+func TestHarvestRun_ThrowawayNetworkIsASnapshot(t *testing.T) {
+	t.Parallel()
+
+	p := newHarvestProbe()
+	source := testHarvestSandbox()
+	source.Config.SetNetworkEgress(&orchestrator.SandboxNetworkEgressConfig{AllowedDomains: []string{"before.example"}})
+	p.resumer.onResume = func() {
+		source.Config.SetNetworkEgress(&orchestrator.SandboxNetworkEgressConfig{AllowedDomains: []string{"after.example"}})
+	}
+
+	res, err := p.h.run(t.Context(), source, metadata.Template{}, p.upload, "build-1", storage.ObjectMetadata{}, false)
+	require.NoError(t, err)
+	require.Equal(t, harvestSuccess, res.outcome)
+
+	got := p.resumer.gotConfig
+	require.NotNil(t, got)
+	require.NotSame(t, source.Config.Network, got.Network, "throwaway must not share the live network config")
+	require.Equal(t, []string{"before.example"}, got.GetNetworkEgress().GetAllowedDomains(), "throwaway keeps the egress it was started with")
+	require.Equal(t, []string{"after.example"}, source.Config.GetNetworkEgress().GetAllowedDomains(), "the live source still takes the update")
+	require.Equal(t, []string{"vol-1"}, mountNames(source.Config.VolumeMounts), "suppressing the throwaway's mounts must not touch the source")
+}
+
+func mountNames(mounts []sandbox.VolumeMountConfig) []string {
+	names := make([]string, 0, len(mounts))
+	for _, m := range mounts {
+		names = append(names, m.Name)
+	}
+
+	return names
+}
+
 // TestHarvestRun_NoConsumePersistsNothing: with consume off, the harvest still
 // resumes/reaps and reports the trace size, but writes no metadata (write-side
 // gate — see design Decision 7).
@@ -329,10 +371,10 @@ func TestHarvestRun_CollectErrorStillReaps(t *testing.T) {
 		"a pin leaked on the error path keeps the template resident for the life of the process")
 }
 
-// TestHarvestRun_AcquireErrorSkips: if the start slot can't be acquired the
-// harvest is skipped — nothing is resumed and nothing is released (it never
-// acquired).
-func TestHarvestRun_AcquireErrorSkips(t *testing.T) {
+// TestHarvestRun_AcquireErrorIsSlotTimeout: if no start slot frees up the
+// harvest is dropped as slot_timeout (not skipped, which is the seal outcome) —
+// nothing is resumed and nothing is released (it never acquired).
+func TestHarvestRun_AcquireErrorIsSlotTimeout(t *testing.T) {
 	t.Parallel()
 
 	p := newHarvestProbe()
@@ -341,7 +383,7 @@ func TestHarvestRun_AcquireErrorSkips(t *testing.T) {
 	_, outcome, err := p.run(t.Context(), true)
 
 	require.Error(t, err)
-	require.Equal(t, harvestSkipped, outcome)
+	require.Equal(t, harvestSlotTimeout, outcome)
 	require.False(t, p.resumer.called)
 	require.False(t, p.released, "release must not run when acquire failed")
 }

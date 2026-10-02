@@ -627,10 +627,18 @@ var (
 	ResumeLastCyclePrefetchMaxMiBFlag = NewIntFlag("resume-last-cycle-prefetch-max-mib", -1)
 
 	// PauseResumePrefetchHarvestFlag makes the orchestrator, after a pause
-	// snapshot is durable, run a throwaway warm resume of the just-written
-	// artifact (driven by envd /init, workload frozen, egress denied) to record
-	// the resume page-fault trace and turn it into a prefetch mapping. Off by
-	// default; the harvest is best-effort and never affects the pause result.
+	// snapshot or an in-place checkpoint is durable, run a throwaway warm resume
+	// of the just-written artifact (driven by envd /init, workload frozen, egress
+	// denied) to record the resume page-fault trace and turn it into a prefetch
+	// mapping. The in-place checkpoint has no resume of its own to trace, so
+	// this is the only way a template it produces gets an init mapping. The
+	// code fallback is off, but the flag already serves true in every
+	// production environment, so wherever in-place-checkpoint is on the
+	// checkpoint harvest runs too: this flag gates both producers at once and
+	// turning it off also stops the pause harvest. To stop only the checkpoint
+	// harvest, turn in-place-checkpoint off (read per checkpoint; a resume-fresh
+	// checkpoint records its own mapping and runs no throwaway). The harvest is
+	// best-effort and never affects the pause or checkpoint result.
 	PauseResumePrefetchHarvestFlag = NewBoolFlag("pause-resume-prefetch-harvest", false)
 
 	// PauseResumePrefetchConsumeFlag controls whether a harvested mapping is

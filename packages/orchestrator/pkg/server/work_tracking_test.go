@@ -213,7 +213,7 @@ func TestHarvestResumePrefetchAsyncTracksWorkThroughSealWait(t *testing.T) {
 				defer cancel()
 
 				releaseParent := s.info.TrackWork()
-				s.harvestResumePrefetchAsync(ctx, testHarvestSandbox(), res, "build-1", nil)
+				s.harvestResumePrefetchAsync(ctx, testHarvestSandbox(), res, "build-1", nil, harvestSourcePause)
 				require.Equal(t, int64(2), s.info.OutstandingWork())
 				releaseParent()
 				cancel()
@@ -235,6 +235,6 @@ func TestHarvestResumePrefetchAsyncDisabledTracksNoWork(t *testing.T) {
 	t.Parallel()
 
 	s := &Server{info: &service.ServiceInfo{}, featureFlags: admissionFlagClient(t, nil)}
-	s.harvestResumePrefetchAsync(t.Context(), nil, nil, "build-1", nil)
+	s.harvestResumePrefetchAsync(t.Context(), nil, nil, "build-1", nil, harvestSourcePause)
 	require.Zero(t, s.info.OutstandingWork())
 }

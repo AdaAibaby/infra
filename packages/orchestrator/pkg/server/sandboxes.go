@@ -1044,7 +1044,7 @@ func (s *Server) Pause(ctx context.Context, in *orchestrator.SandboxPauseRequest
 	// memory resume of it would just fail (the resume is reserved for memory
 	// snapshots; fs-only is a reboot) — there is no memory working set to harvest.
 	if !in.GetFilesystemOnly() {
-		s.harvestResumePrefetchAsync(ctx, sbx, res, in.GetBuildId(), res.objectMetadata)
+		s.harvestResumePrefetchAsync(ctx, sbx, res, in.GetBuildId(), res.objectMetadata, harvestSourcePause)
 	}
 
 	teamID, buildId, eventsTTLDays, eventData := s.prepareSandboxEventData(ctx, sbx)
@@ -1489,17 +1489,24 @@ func (s *Server) checkpointInPlace(ctx context.Context, sbx *sandbox.Sandbox, in
 		return nil, false, status.Errorf(codes.FailedPrecondition, "error snapshotting sandbox '%s': %s", in.GetSandboxId(), err)
 	}
 
-	// Prefetch mapping is intentionally omitted for an in-place checkpoint: the
-	// live PrefetchTracker holds the whole workload's fault history (not a
-	// cold-start working set), and embedding it made launches from the produced
-	// template over-prefetch. res.meta.Prefetch stays nil. The sandbox was already
-	// resumed in place inside Pause, so there is no resume-fresh / lifecycle setup
-	// / envd-upgrade / markSandboxLive here — the original sandbox keeps running.
+	// res.meta.Prefetch stays nil here: the live PrefetchTracker holds the whole
+	// workload's fault history (not a cold-start working set), and embedding it
+	// made launches from the produced template over-prefetch. The resume-fresh
+	// checkpoint gets its mapping from the real resume it performs; in place
+	// there is none (the sandbox was already resumed inside Pause, so there is no
+	// resume-fresh / lifecycle setup / envd-upgrade / markSandboxLive here — the
+	// original sandbox keeps running), so the mapping is harvested below from a
+	// throwaway warm resume, exactly as the pause path does. Without it a
+	// template produced in place launches with no prefetch at all under the
+	// default resume-prefetch-source, and every sandbox from it demand-faults its
+	// working set.
 
 	deferred = res.memoryExportDeferred
 	if err := s.runCheckpointUpload(ctx, sbx, res, in, codes.FailedPrecondition, nil); err != nil {
 		return nil, deferred, err
 	}
+
+	s.harvestCheckpointPrefetchAsync(ctx, sbx, res, in)
 
 	s.publishSandboxEvent(ctx, sbx, events.SandboxCheckpointedEvent)
 
@@ -1508,6 +1515,23 @@ func (s *Server) checkpointInPlace(ctx context.Context, sbx *sandbox.Sandbox, in
 	return &orchestrator.SandboxCheckpointResponse{
 		SchedulingMetadata: res.schedulingMetadata,
 	}, deferred, nil
+}
+
+// harvestCheckpointPrefetchAsync schedules the resume-prefetch harvest for a
+// checkpoint taken in place, once its upload has been kicked off or completed:
+// the local snapshot is in the cache, the deferred seals (memfile through the
+// CoW window, rootfs when deferred rootfs export is on) are awaited by the
+// harvest itself, and the consume path waits for the upload before touching
+// metadata. Best-effort and off the checkpoint's critical path: the source
+// sandbox is already running again and the RPC result is not affected. Skipped
+// for a filesystem-only checkpoint, which has no memfile and whose template
+// cold-boots — there is no resume working set to harvest.
+func (s *Server) harvestCheckpointPrefetchAsync(ctx context.Context, sbx *sandbox.Sandbox, res *snapshotResult, in *orchestrator.SandboxCheckpointRequest) {
+	if in.GetFilesystemOnly() {
+		return
+	}
+
+	s.harvestResumePrefetchAsync(ctx, sbx, res, in.GetBuildId(), res.objectMetadata, harvestSourceCheckpoint)
 }
 
 // checkpointResumeFresh snapshots the sandbox and resumes a FRESH sandbox
