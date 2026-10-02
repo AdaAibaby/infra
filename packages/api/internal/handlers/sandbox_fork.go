@@ -138,6 +138,11 @@ func (a *APIStore) PostSandboxesSandboxIDFork(c *gin.Context, sandboxID api.Sand
 		a.sendAPIStoreError(c, http.StatusServiceUnavailable, fmt.Sprintf("Sandbox '%s' cannot be forked right now because its node is busy, please retry", sandboxID))
 
 		return
+	// The sandbox is untouched: another replica, or a retry here, can fork it.
+	case errors.Is(err, orchestrator.ErrDraining):
+		a.sendAPIStoreError(c, http.StatusServiceUnavailable, fmt.Sprintf("Sandbox '%s' cannot be forked right now, please retry", sandboxID))
+
+		return
 	default:
 		telemetry.ReportError(ctx, "error checkpointing sandbox for fork", err, telemetry.WithSandboxID(sandboxID))
 		a.sendAPIStoreError(c, http.StatusInternalServerError, "Error forking sandbox")

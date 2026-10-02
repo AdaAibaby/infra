@@ -27,6 +27,14 @@ func (o *Orchestrator) CheckpointSandbox(ctx context.Context, teamID uuid.UUID, 
 	ctx, span := tracer.Start(ctx, "checkpoint-sandbox")
 	defer span.End()
 
+	// Tracked from the start, like a pause: a checkpoint's work can outlive
+	// the request, and a drain that already stopped waiting must not admit one.
+	releaseWork, ok := o.TrackWork()
+	if !ok {
+		return ErrDraining
+	}
+	defer releaseWork()
+
 	transition, alreadyDone, finishSnapshotting, err := o.sandboxStore.StartRemoving(ctx, teamID, sandboxID, sandbox.RemoveOpts{Action: sandbox.StateActionSnapshot})
 	sbx := transition.Sandbox
 	if err != nil {

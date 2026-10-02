@@ -49,6 +49,14 @@ func (o *Orchestrator) CreateSnapshotTemplate(ctx context.Context, teamID uuid.U
 	ctx, span := tracer.Start(ctx, "create-snapshot-template")
 	defer span.End()
 
+	// Tracked from the start, like a pause: a checkpoint's work can outlive
+	// the request, and a drain that already stopped waiting must not admit one.
+	releaseWork, ok := o.TrackWork()
+	if !ok {
+		return SnapshotTemplateResult{}, ErrDraining
+	}
+	defer releaseWork()
+
 	transition, alreadyDone, finishSnapshotting, err := o.sandboxStore.StartRemoving(ctx, teamID, sandboxID, sandbox.RemoveOpts{Action: sandbox.StateActionSnapshot})
 	sbx := transition.Sandbox
 	if err != nil {

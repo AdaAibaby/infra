@@ -223,6 +223,13 @@ func (a *APIStore) PostSandboxesSandboxIDSnapshots(c *gin.Context, sandboxID api
 			return
 		}
 
+		// The sandbox is untouched: another replica, or a retry here, can snapshot it.
+		if errors.Is(err, orchestrator.ErrDraining) {
+			a.sendAPIStoreError(c, http.StatusServiceUnavailable, fmt.Sprintf("Sandbox '%s' cannot be snapshotted right now, please retry", sandboxID))
+
+			return
+		}
+
 		telemetry.ReportCriticalError(ctx, "Error creating snapshot template", err, telemetry.WithSandboxID(sandboxID))
 		a.sendAPIStoreError(c, http.StatusInternalServerError, "Error creating snapshot template")
 
