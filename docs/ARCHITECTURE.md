@@ -699,9 +699,9 @@ deletion owns a separate hold until artifact cleanup returns.
 
 The services are scheduler-agnostic binaries and containers; the supported way to run them is the
 Kubernetes-based distribution. The roles below hold regardless of how the nodes are provisioned.
-E2B Embed (`embed/`) runs the same containers on one machine, the web dashboard included, in three
-shapes (Compose, Terraform for GCP, Kubernetes); its ports, start order and images are in
-`embed/docs/REFERENCE.md`.
+E2B Embed (`embed/`) runs the same containers on one machine, the web dashboard included — with
+Compose, with Terraform on GCP, AWS or Azure, or on Kubernetes; its ports, start order and images
+are in `embed/docs/REFERENCE.md`.
 
 ```mermaid
 flowchart TB
