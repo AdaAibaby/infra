@@ -1096,6 +1096,7 @@ func (r *runner) collectAndUploadPrefetch(ctx context.Context, opts pauseOptions
 
 	updatedMeta := existingMeta.WithPrefetch(&metadata.Prefetch{
 		Memory: mapping,
+		Origin: metadata.PrefetchOriginBuild,
 	})
 
 	if err := metadata.UploadMetadata(ctx, r.storage, updatedMeta, nil); err != nil {

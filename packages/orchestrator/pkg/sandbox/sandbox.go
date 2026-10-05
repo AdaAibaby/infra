@@ -890,7 +890,7 @@ func (f *Factory) CreateSandbox(
 		opt(&createOpts)
 	}
 
-	execCtx, execSpan := startExecutionSpan(ctx)
+	execCtx, execSpan := startExecutionSpan(ctx, runtime)
 
 	exit := utils.NewErrorOnce()
 
@@ -1249,7 +1249,7 @@ func (f *Factory) ResumeSandbox(
 		opt(&ropts)
 	}
 
-	execCtx, execSpan := startExecutionSpan(ctx)
+	execCtx, execSpan := startExecutionSpan(ctx, runtime)
 
 	exit := utils.NewErrorOnce()
 
@@ -1348,6 +1348,7 @@ func (f *Factory) ResumeSandbox(
 		if useInit && meta.Prefetch != nil {
 			initMapping = meta.Prefetch.Memory
 		}
+		initOrigin := meta.Prefetch.InitOrigin()
 
 		var lastCycleMapping *metadata.MemoryPrefetchMapping
 		if useLastCycle {
@@ -1358,11 +1359,13 @@ func (f *Factory) ResumeSandbox(
 			lastCycleMapping = capResumePrefetch(lastCycleMapping, maxMiB)
 		}
 
-		// Record the chosen source and the sizes it resolved to, so a resume can
-		// be cohorted by prefetch source (guards against flag misconfiguration)
-		// and the last-cycle set size is visible per resume.
+		// Record the chosen source, the init mapping's origin and the sizes they
+		// resolved to, so a resume can be cohorted by prefetch source and by who
+		// produced its mapping (guards against flag misconfiguration) and the
+		// last-cycle set size is visible per resume.
 		execSpan.SetAttributes(
 			attribute.String("resume.prefetch.source", source),
+			attribute.String("resume.prefetch.init_origin", initOrigin),
 			attribute.Int("resume.prefetch.init_blocks", initMapping.Count()),
 			attribute.Int("resume.prefetch.last_cycle_blocks", lastCycleMapping.Count()),
 		)
@@ -1805,12 +1808,20 @@ func (f *Factory) ResumeSandbox(
 	return sbx, nil
 }
 
-func startExecutionSpan(ctx context.Context) (context.Context, trace.Span) {
+func startExecutionSpan(ctx context.Context, runtime sandboxtypes.RuntimeMetadata) (context.Context, trace.Span) {
 	parentSpan := trace.SpanFromContext(ctx)
 
 	ctx = context.WithoutCancel(ctx)
+	// The span is a new root, so it carries the sandbox's identity itself:
+	// its attributes (resume prefetch source and sizes) are otherwise
+	// unlinkable to the create or resume that produced them.
 	ctx, span := tracer.Start(ctx, "execute sandbox", //nolint:spancheck // this is still just a helper method
 		trace.WithNewRoot(),
+		trace.WithAttributes(
+			telemetry.WithSandboxID(runtime.SandboxID),
+			telemetry.WithTemplateID(runtime.TemplateID),
+			telemetry.WithBuildID(runtime.BuildID),
+		),
 	)
 
 	parentSpan.AddLink(trace.LinkFromContext(ctx))

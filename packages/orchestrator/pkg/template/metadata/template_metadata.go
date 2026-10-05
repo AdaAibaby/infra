@@ -143,8 +143,40 @@ func (p *MemoryPrefetchMapping) Count() int {
 	return len(p.Indices)
 }
 
+// PrefetchOrigin names the producer of a prefetch mapping, so a resume can
+// report where the mapping it replays came from.
+type PrefetchOrigin string
+
+const (
+	// PrefetchOriginBuild is the template builder's optimize phase, or the
+	// resume-build tool: recorded before the build is published.
+	PrefetchOriginBuild PrefetchOrigin = "build"
+	// PrefetchOriginCheckpoint is the resume-fresh checkpoint, which traces
+	// its own resume and embeds the mapping before the upload.
+	PrefetchOriginCheckpoint PrefetchOrigin = "checkpoint"
+	// PrefetchOriginHarvest is the throwaway resume after a pause or an
+	// in-place checkpoint, persisted after the build is published.
+	PrefetchOriginHarvest PrefetchOrigin = "harvest"
+)
+
 type Prefetch struct {
 	Memory *MemoryPrefetchMapping `json:"memory"`
+	// Origin is the producer of Memory. Empty on a mapping written before the
+	// field existed, which every reader treats like any other mapping.
+	Origin PrefetchOrigin `json:"origin,omitempty"`
+}
+
+// InitOrigin reports the origin of the init mapping p carries, "none" when
+// there is no mapping and "unknown" when the mapping predates origins.
+func (p *Prefetch) InitOrigin() string {
+	if p == nil || p.Memory.Count() == 0 {
+		return "none"
+	}
+	if p.Origin == "" {
+		return "unknown"
+	}
+
+	return string(p.Origin)
 }
 
 // Balloon is the balloon device configuration a template was built with.

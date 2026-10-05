@@ -1689,6 +1689,7 @@ func (s *Server) checkpointResumeFresh(ctx context.Context, sbx *sandbox.Sandbox
 		if prefetchMapping != nil {
 			res.meta = res.meta.WithPrefetch(&metadata.Prefetch{
 				Memory: prefetchMapping,
+				Origin: metadata.PrefetchOriginCheckpoint,
 			})
 
 			if err := s.templateCache.UpdateMetadata(ctx, in.GetBuildId(), res.meta); err != nil {
