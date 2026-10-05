@@ -22,7 +22,17 @@ type Client struct {
 }
 
 func NewClient(ctx context.Context, databaseURL string, options ...pool.Option) (*Client, error) {
-	dbClient, connPool, err := pool.New(ctx, databaseURL, poolName, options...)
+	return newClient(ctx, databaseURL, poolName, options...)
+}
+
+// NewReadClient is NewClient for a read replica. Its pool metrics carry
+// pool.name "read" so they stay apart from the primary's.
+func NewReadClient(ctx context.Context, databaseURL string, options ...pool.Option) (*Client, error) {
+	return newClient(ctx, databaseURL, "read", options...)
+}
+
+func newClient(ctx context.Context, databaseURL string, name string, options ...pool.Option) (*Client, error) {
+	dbClient, connPool, err := pool.New(ctx, databaseURL, name, options...)
 	if err != nil {
 		return nil, err
 	}

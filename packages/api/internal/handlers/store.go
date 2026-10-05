@@ -213,6 +213,7 @@ type APIStore struct {
 	teamSandboxCounter        teamRunningSandboxCounter
 	templateManager           *template_manager.TemplateManager
 	sqlcDB                    *sqlcdb.Client
+	sqlcReadDB                *sqlcdb.Client
 	authDB                    *authdb.Client
 	redisClient               redis.UniversalClient
 	templateCache             *templatecache.TemplateCache
@@ -254,6 +255,16 @@ func NewAPIStore(ctx context.Context, tel *telemetry.Client, redisClient redis.U
 	sqlcDB, err := sqlcdb.NewClient(ctx, config.PostgresConnectionString, pool.WithMaxConnections(config.DBMaxOpenConnections), pool.WithMinIdle(config.DBMinIdleConnections))
 	if err != nil {
 		logger.L().Fatal(ctx, "Initializing SQLC client", zap.Error(err))
+	}
+
+	// Read-only queries that tolerate replica lag go to sqlcReadDB: the read
+	// replica when one is configured, otherwise the primary.
+	sqlcReadDB := sqlcDB
+	if config.PostgresReadReplicaConnectionString != "" {
+		sqlcReadDB, err = sqlcdb.NewReadClient(ctx, config.PostgresReadReplicaConnectionString, pool.WithMaxConnections(config.DBMaxOpenConnections), pool.WithMinIdle(config.DBMinIdleConnections))
+		if err != nil {
+			logger.L().Fatal(ctx, "Initializing read SQLC client", zap.Error(err))
+		}
 	}
 
 	authDB, err := authdb.NewClient(
@@ -414,6 +425,7 @@ func NewAPIStore(ctx context.Context, tel *telemetry.Client, redisClient redis.U
 		teamSandboxCounter:    sandboxcountscache.NewCountsCache(orch, redisClient),
 		templateManager:       templateManager,
 		sqlcDB:                sqlcDB,
+		sqlcReadDB:            sqlcReadDB,
 		authDB:                authDB,
 		Telemetry:             tel,
 		posthog:               posthogClient,
@@ -494,6 +506,12 @@ func (a *APIStore) Close(ctx context.Context) error {
 
 	if err := a.authDB.Close(); err != nil {
 		errs = append(errs, fmt.Errorf("closing auth database client: %w", err))
+	}
+
+	if a.sqlcReadDB != a.sqlcDB {
+		if err := a.sqlcReadDB.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("closing read sqlc database client: %w", err))
+		}
 	}
 
 	if err := a.sqlcDB.Close(); err != nil {
