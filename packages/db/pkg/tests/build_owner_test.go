@@ -13,14 +13,12 @@ import (
 )
 
 // Template builds and snapshot builds set env_builds.env_id and team_id when
-// they are inserted, so the build is complete without the backfill triggers
-// on env_build_assignments. The triggers are disabled here to prove it.
-func TestBuildInsertsSetEnvAndTeamWithoutTriggers(t *testing.T) {
+// they are inserted; nothing fills them in later.
+func TestBuildInsertsSetEnvAndTeam(t *testing.T) {
 	t.Parallel()
 
 	db := testutils.SetupDatabase(t)
 	ctx := t.Context()
-	require.NoError(t, db.SqlcClient.TestsRawSQL(ctx, `ALTER TABLE public.env_build_assignments DISABLE TRIGGER USER`))
 
 	teamID := testutils.CreateTestTeam(t, db)
 	templateID := testutils.CreateTestTemplate(t, db, teamID)
