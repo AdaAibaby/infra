@@ -970,6 +970,26 @@ func (s *Server) Pause(ctx context.Context, in *orchestrator.SandboxPauseRequest
 		}
 	}
 
+	// Refuse retryably, still before anything destructive, a capture the build
+	// filesystem cannot hold (pause_disk_admission.go). A sandbox that can never
+	// be persisted again is not refused but killed below, which a refusal would
+	// only defer. The estimate stays reserved until the capture is on disk and
+	// its upload has ended, or until this call fails before that.
+	var diskReservation *pauseDiskReservation
+	if latchedErr == nil && sbx.EnsurePausable() == nil {
+		reservation, refuseErr := s.admitPauseDisk(ctx, sbx, in.GetFilesystemOnly())
+		if refuseErr != nil {
+			return nil, refuseErr
+		}
+		diskReservation = reservation
+	}
+	diskHandedOff := false
+	defer func() {
+		if !diskHandedOff {
+			diskReservation.Release()
+		}
+	}()
+
 	marked := s.sandboxFactory.Sandboxes.MarkStopping(ctx, sbx.Runtime.SandboxID, sbx.LifecycleID)
 	if !marked {
 		telemetry.ReportCriticalError(ctx, "failed to mark sandbox as stopping", nil, telemetry.WithSandboxID(in.GetSandboxId()))
@@ -1029,6 +1049,16 @@ func (s *Server) Pause(ctx context.Context, in *orchestrator.SandboxPauseRequest
 
 		return nil, status.Errorf(codes.Internal, "error snapshotting sandbox '%s': %s", in.GetSandboxId(), err)
 	}
+
+	// The disk reservation follows the capture from here: most of it goes
+	// once the diffs are on disk, the upload's copy once the upload ends.
+	s.releasePauseDiskWhenWritten(context.WithoutCancel(ctx), res, diskReservation)
+	completeUpload := res.completeUpload
+	res.completeUpload = func(ctx context.Context, err error) {
+		completeUpload(ctx, err)
+		diskReservation.Release()
+	}
+	diskHandedOff = true
 
 	s.uploadSnapshotAsync(ctx, sbx, res)
 
@@ -1761,6 +1791,10 @@ type snapshotResult struct {
 	// so the prefetch harvest waits on its CachePath before its throwaway resume
 	// (a warm resume reads the rootfs). Nil-safe callers only: always set here.
 	rootfsDiff build.Diff
+	// memoryDiff is the snapshot's memory diff. With the memfd background copy
+	// its CachePath resolves only once the copy has finished streaming into the
+	// build directory, which is when the capture's bytes are all on disk.
+	memoryDiff build.Diff
 	// objectMetadata is the storage object metadata the snapshot was uploaded
 	// with. The prefetch harvest reuses it verbatim when re-uploading the
 	// metadata object, so the two can never drift.
@@ -1897,6 +1931,7 @@ func (s *Server) snapshotAndCacheSandbox(
 		objectMetadata:       objectMetadata,
 		filesystemOnly:       filesystemOnly,
 		rootfsDiff:           snapshot.RootfsDiff,
+		memoryDiff:           snapshot.MemorySnapshot.Diff,
 		memoryExportDeferred: snapshot.MemoryExportDeferred,
 		waitMemorySealed:     snapshot.WaitMemorySealed,
 	}, nil

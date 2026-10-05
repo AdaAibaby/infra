@@ -137,6 +137,21 @@ func envBoolOr(key string, fallback bool) bool {
 	return parsed
 }
 
+// envIntOr reads key as an integer, falling back when it is unset or
+// unparseable, for the same reason as envBoolOr.
+func envIntOr(key string, fallback int) int {
+	raw := env.GetEnv(key, "")
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := strconv.Atoi(raw)
+	if err != nil {
+		return fallback
+	}
+
+	return parsed
+}
+
 func NewBoolFlag(name string, fallback bool) BoolFlag {
 	flag := BoolFlag{name: name, fallback: fallback}
 	builder := launchDarklyOfflineStore.Flag(flag.name).VariationForAll(fallback)
@@ -542,6 +557,16 @@ var (
 	// 0 probes the parent header's readiness without waiting; a positive value
 	// waits up to that long before refusing retryably.
 	PauseAdmissionGraceMs = NewIntFlag("pause-admission-grace-milliseconds", -1)
+	// PauseAdmissionDiskHeadroomMiB makes a node refuse a pause, retryably and
+	// before anything destructive, when the filesystem holding its build
+	// directory cannot take the snapshot's capture (guest memory plus the
+	// rootfs cache plus a snapfile allowance, twice that when template storage
+	// is a directory on the same filesystem, counting captures already admitted
+	// and not yet on disk) and still keep this many MiB free. Negative, the
+	// default, turns the check off; the fallback reads
+	// PAUSE_ADMISSION_DISK_HEADROOM_MIB so a deployment without LaunchDarkly can
+	// turn it on, as E2B Embed does.
+	PauseAdmissionDiskHeadroomMiB = NewIntFlag("pause-admission-disk-headroom-mib", envIntOr("PAUSE_ADMISSION_DISK_HEADROOM_MIB", -1))
 	// OrchestratorGOGCPercentFlag sets the orchestrator's Go GC percent. 10 to
 	// 100 is written with debug.SetGCPercent. -1 (default) and any other
 	// value, 0 included, keep the percent read when the controller was built:

@@ -922,6 +922,7 @@ func run(config cfg.Config, opts Options) (success bool) {
 		Info:             serviceInfo,
 		Proxy:            sandboxProxy,
 		Persistence:      persistence,
+		TemplateStorage:  templateSpec,
 		FeatureFlags:     featureFlags,
 		SbxEventsService: eventsService,
 		PeerRegistry:     peerRegistry,

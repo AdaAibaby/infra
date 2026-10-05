@@ -3759,7 +3759,28 @@ const (
 	// SnapshotAdmissionLatchedError: a latched seal failure means no valid
 	// snapshot can ever be produced; not retryable.
 	SnapshotAdmissionLatchedError SnapshotAdmissionOutcome = "latched_error"
+	// SnapshotAdmissionRefusedDisk: the build filesystem cannot hold the
+	// capture; refused retryably before anything destructive.
+	SnapshotAdmissionRefusedDisk SnapshotAdmissionOutcome = "refused_disk"
 )
+
+// rootfsCacheSizer is the optional capability of a rootfs provider to report
+// what its writable cache occupies on disk; the NBD provider has it.
+type rootfsCacheSizer interface {
+	CacheSize(ctx context.Context) (int64, error)
+}
+
+// RootfsCacheSize reports the bytes the sandbox's writable rootfs cache
+// occupies on disk, which a rootfs export copies; 0 when the provider cannot
+// say.
+func (s *Sandbox) RootfsCacheSize(ctx context.Context) (int64, error) {
+	sizer, ok := s.rootfs.(rootfsCacheSizer)
+	if !ok {
+		return 0, nil
+	}
+
+	return sizer.CacheSize(ctx)
+}
 
 // ErrSnapshotAdmissionPending marks a retryable admission refusal: the parent
 // memfile header was still deduplicating when the grace elapsed.

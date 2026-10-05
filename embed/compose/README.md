@@ -51,7 +51,10 @@ the hub is [`../README.md`](../README.md).
   show what you have; an
   older Compose rejects the compose file with an error on `required:` before
   anything starts.
-- 12 GiB RAM recommended and 20 GiB free disk. `HUGEPAGES=2048` reserves
+- 12 GiB RAM recommended and 20 GiB free disk. With an orchestrator release that
+  reads `PAUSE_ADMISSION_DISK_HEADROOM_MIB` (the pin here predates it), a pause
+  the disk cannot hold is refused before it starts, keeping 1 GiB free, instead
+  of failing midway. `HUGEPAGES=2048` reserves
   4 GiB of that RAM for sandboxes, and `preflight` does not check RAM, so on
   a smaller host the first signal is `host-setup` failing with `FIX: give the
   host more memory (12 GiB recommended) or lower HUGEPAGES`. Lower

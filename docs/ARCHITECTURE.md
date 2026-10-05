@@ -545,7 +545,14 @@ sequenceDiagram
   storage (with a retry budget). The orchestrator deletes the sandbox's routing record on
   `MarkStopping`. Once the API acquires the pause transition, the snapshot DB upsert and the node
   RPC share a detached 80-second budget; the Redis transition key has a 95-second TTL.
-  The node inherits that deadline for admission and snapshotting. Caller cancellation cannot
+  The node inherits that deadline for admission and snapshotting. Before anything destructive
+  the node also refuses, retryably, a pause whose capture the filesystem holding its build
+  directory cannot take: guest memory plus the rootfs cache's size plus a snapfile allowance,
+  doubled when template storage is a directory on that filesystem, counting captures already
+  admitted and not yet on disk, with the headroom the `pause-admission-disk-headroom-mib`
+  flag names left free. The check is off by default; the flag's fallback reads the
+  `PAUSE_ADMISSION_DISK_HEADROOM_MIB` environment variable, which is how E2B Embed turns it
+  on. Caller cancellation cannot
   abandon the snapshot or its RPC result; terminal build-status writes have a separate detached
   ten-second budget. Snapshot uploads and sandbox teardown retain their separate background
   lifetimes. Shutdown drains pauses still in flight — after the HTTP and gRPC drains, before the
