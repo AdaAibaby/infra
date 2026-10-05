@@ -204,6 +204,9 @@ func (a *API) PostInit(w http.ResponseWriter, r *http.Request) {
 	operationID := logs.AssignOperationID()
 	logger := a.logger.With().Str(string(logs.OperationIDKey), operationID).Logger()
 
+	// Why this request's cpuCount was refused, reported on its own response only.
+	var cpuErr error
+
 	if r.Body != nil {
 		// Read raw body so we can wipe it after parsing
 		body, err := io.ReadAll(r.Body)
@@ -285,6 +288,14 @@ func (a *API) PostInit(w http.ResponseWriter, r *http.Request) {
 
 				return
 			}
+
+			// A refused count must not fail the resume.
+			// The refusal is reported as "rejected" on the X-Envd-Cpus header.
+			if initRequest.CpuCount != nil {
+				if cpuErr = a.cpuManager.SetTarget(*initRequest.CpuCount); cpuErr != nil {
+					logger.Warn().Err(cpuErr).Int("cpu_count", *initRequest.CpuCount).Msg("ignoring cpu count")
+				}
+			}
 		}
 
 		// Auth passed and token restored: mark the envd initialized so the
@@ -303,6 +314,7 @@ func (a *API) PostInit(w http.ResponseWriter, r *http.Request) {
 	// After SetData, so this reports what is actually in effect rather than what was
 	// requested. Set before WriteHeader.
 	a.reportEffectiveDefaults(w, logger)
+	a.reportCPUs(w, cpuErr)
 
 	w.Header().Set("Cache-Control", "no-store")
 

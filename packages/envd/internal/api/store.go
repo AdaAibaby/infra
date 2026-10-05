@@ -13,6 +13,7 @@ import (
 	"github.com/e2b-dev/infra/packages/envd/internal/execcontext"
 	"github.com/e2b-dev/infra/packages/envd/internal/host"
 	"github.com/e2b-dev/infra/packages/envd/internal/services/cgroups"
+	"github.com/e2b-dev/infra/packages/envd/internal/services/cpus"
 	"github.com/e2b-dev/infra/packages/envd/internal/services/fsfreeze"
 	"github.com/e2b-dev/infra/packages/envd/internal/utils"
 )
@@ -69,6 +70,9 @@ type API struct {
 	// fsFreezeLock serializes /fsfreeze and /fsthaw.
 	fsFreezer    fsfreeze.Freezer
 	fsFreezeLock *semaphore.Weighted
+
+	// cpuManager applies the target online CPU count.
+	cpuManager cpus.Manager
 
 	// handover, when non-nil, is the outcome of the live-upgrade handover this
 	// envd booted from; PostInit advertises it to the orchestrator via the
@@ -135,7 +139,7 @@ func (a *API) SetHandoverResult(failed bool, procs, procsFailed, retained, retai
 	}
 }
 
-func New(l *zerolog.Logger, defaults *execcontext.Defaults, mmdsChan chan *host.MMDSOpts, isNotFC bool, workloadFreezer *cgroups.WorkloadFreezer, oomKills *host.OOMWatcher, logFlushers ...LogFlusher) *API {
+func New(l *zerolog.Logger, defaults *execcontext.Defaults, mmdsChan chan *host.MMDSOpts, isNotFC bool, workloadFreezer *cgroups.WorkloadFreezer, oomKills *host.OOMWatcher, cpuManager cpus.Manager, logFlushers ...LogFlusher) *API {
 	logFlusher := NewNoopLogFlusher()
 	if len(logFlushers) > 0 && logFlushers[0] != nil {
 		logFlusher = logFlushers[0]
@@ -157,6 +161,7 @@ func New(l *zerolog.Logger, defaults *execcontext.Defaults, mmdsChan chan *host.
 		initLock:        semaphore.NewWeighted(1),
 		fsFreezer:       fsfreeze.New(),
 		fsFreezeLock:    semaphore.NewWeighted(1),
+		cpuManager:      cpuManager,
 	}
 }
 
@@ -186,6 +191,11 @@ func (a *API) GetMetrics(w http.ResponseWriter, r *http.Request) {
 
 		return
 	}
+	cpu := a.cpuManager.Status()
+	metrics.CPUPossible = uint32(cpu.Possible)
+	metrics.CPUTarget = uint32(cpu.Target)
+	metrics.CPUTargetAttempts = uint32(cpu.Attempts)
+	metrics.CPUWritePendingMs = uint64(cpu.WritePending.Milliseconds())
 
 	if a.oomKills != nil {
 		if kills, ok := a.oomKills.Kills(); ok {

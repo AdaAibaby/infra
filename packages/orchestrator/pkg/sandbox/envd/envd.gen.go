@@ -170,11 +170,23 @@ type FreezeResultMode string
 
 // Metrics Resource usage metrics
 type Metrics struct {
-	// CpuCount Number of CPU cores
+	// CpuCount Number of CPU cores online
 	CpuCount int `json:"cpu_count,omitempty"`
+
+	// CpuPossible Number of CPUs the guest can bring online
+	CpuPossible int `json:"cpu_possible,omitempty"`
+
+	// CpuTarget Online count last requested, 0 when none was
+	CpuTarget int `json:"cpu_target,omitempty"`
+
+	// CpuTargetAttempts Attempts at reaching cpu_target since it was set
+	CpuTargetAttempts int `json:"cpu_target_attempts,omitempty"`
 
 	// CpuUsedPct CPU usage percentage
 	CpuUsedPct float32 `json:"cpu_used_pct,omitempty"`
+
+	// CpuWritePendingMs How long a CPU online or offline write has been running in the guest kernel, 0 when none is. A value that keeps growing means CPU hotplug is stuck.
+	CpuWritePendingMs int64 `json:"cpu_write_pending_ms,omitempty"`
 
 	// DiskTotal Total disk space in bytes
 	DiskTotal int `json:"disk_total,omitempty"`
@@ -325,6 +337,9 @@ type PostInitJSONBody struct {
 
 	// CaBundle PEM-encoded CA certificates to install into the system trust store (may contain multiple concatenated PEM blocks)
 	CaBundle string `json:"caBundle,omitempty"`
+
+	// CpuCount Number of guest CPUs that should be online. envd attempts to bring the set of requested CPUs online asynchronously; the outcome is reported on the X-Envd-Cpus header and on /metrics.
+	CpuCount int `json:"cpuCount,omitempty"`
 
 	// DefaultUser The default user to use for operations
 	DefaultUser string `json:"defaultUser,omitempty"`

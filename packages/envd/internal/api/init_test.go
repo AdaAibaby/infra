@@ -22,6 +22,7 @@ import (
 
 	"github.com/e2b-dev/infra/packages/envd/internal/execcontext"
 	"github.com/e2b-dev/infra/packages/envd/internal/services/cgroups"
+	"github.com/e2b-dev/infra/packages/envd/internal/services/cpus"
 	"github.com/e2b-dev/infra/packages/envd/internal/utils"
 	"github.com/e2b-dev/infra/packages/shared/pkg/keys"
 )
@@ -150,7 +151,7 @@ func newTestAPI(accessToken *SecureToken, mmdsClient MMDSClient) *API {
 	defaults := &execcontext.Defaults{
 		EnvVars: utils.NewEnvVars(),
 	}
-	api := New(&logger, defaults, nil, false, cgroups.NewWorkloadFreezer(cgroups.NewNoopManager()), nil, nil)
+	api := New(&logger, defaults, nil, false, cgroups.NewWorkloadFreezer(cgroups.NewNoopManager()), nil, cpus.NewNoopManager(), nil)
 	if accessToken != nil {
 		api.accessToken.TakeFrom(accessToken)
 	}
@@ -745,7 +746,7 @@ func newAPIWithCgroupManager(mgr cgroups.Manager) *API {
 func newAPIWithCgroupManagerAndLogFlusher(mgr cgroups.Manager, logFlusher LogFlusher) *API {
 	logger := zerolog.Nop()
 
-	return New(&logger, &execcontext.Defaults{EnvVars: utils.NewEnvVars()}, nil, false, cgroups.NewWorkloadFreezer(mgr), nil, logFlusher)
+	return New(&logger, &execcontext.Defaults{EnvVars: utils.NewEnvVars()}, nil, false, cgroups.NewWorkloadFreezer(mgr), nil, cpus.NewNoopManager(), logFlusher)
 }
 
 // newAPIWithCgroupManagerLogging is newAPIWithCgroupManager with the log output captured,
@@ -753,7 +754,7 @@ func newAPIWithCgroupManagerAndLogFlusher(mgr cgroups.Manager, logFlusher LogFlu
 func newAPIWithCgroupManagerLogging(mgr cgroups.Manager, out io.Writer) *API {
 	logger := zerolog.New(out)
 
-	return New(&logger, &execcontext.Defaults{EnvVars: utils.NewEnvVars()}, nil, false, cgroups.NewWorkloadFreezer(mgr), nil, nil)
+	return New(&logger, &execcontext.Defaults{EnvVars: utils.NewEnvVars()}, nil, false, cgroups.NewWorkloadFreezer(mgr), nil, cpus.NewNoopManager(), nil)
 }
 
 func TestPostFreeze(t *testing.T) {

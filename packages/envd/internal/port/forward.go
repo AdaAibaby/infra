@@ -16,6 +16,7 @@ import (
 
 	"github.com/rs/zerolog"
 
+	"github.com/e2b-dev/infra/packages/envd/internal/reaper"
 	"github.com/e2b-dev/infra/packages/envd/internal/services/cgroups"
 	"github.com/e2b-dev/infra/packages/envd/internal/services/spec/upgrade"
 )
@@ -232,7 +233,7 @@ func (f *Forwarder) stopPortForwarding(p *PortToForward) {
 	logger.Debug().Msg("Stopping port forwarding")
 
 	// Kill the socat's process group. A re-adopted socat has no *exec.Cmd Wait
-	// goroutine to reap it, so ImportForwards started a wait4 reaper for it; a
+	// goroutine to reap it, so ImportForwards started reaper.Reap for it; a
 	// self-spawned socat is reaped by its startPortForwarding Wait goroutine.
 	if err := syscall.Kill(-pid, syscall.SIGKILL); err != nil {
 		logger.Error().Err(err).Msg("Failed to kill process group")
@@ -318,7 +319,7 @@ func (f *Forwarder) ImportForwards(forwards []*upgrade.ForwardedPort) (readopted
 			socatPid: pid,
 			state:    PortStateForward,
 		}
-		go reapAdoptedSocat(pid)
+		go reaper.Reap(pid)
 		readopted++
 	}
 

@@ -129,7 +129,7 @@ func dupKeep(oldfd, target int) (int, error) {
 // responsibility — see main's /upgrade handler). It serializes the process
 // table, carries the I/O fds across execve, and re-execs newBin with the same
 // PID. It does not return on success.
-func (s *Service) Upgrade(newBin, fromVer string, watchers []*upgrade.HandoverWatcher, mounts []*upgrade.MountEntry, forwards []*upgrade.ForwardedPort) error {
+func (s *Service) Upgrade(newBin, fromVer string, watchers []*upgrade.HandoverWatcher, mounts []*upgrade.MountEntry, forwards []*upgrade.ForwardedPort, helpers []int32) error {
 	// Only re-exec self (empty) or the fixed delivered-binary path — never an
 	// arbitrary caller-supplied path. Checked first, before any side effects.
 	if newBin != "" && newBin != DefaultUpgradeBinPath {
@@ -137,10 +137,11 @@ func (s *Service) Upgrade(newBin, fromVer string, watchers []*upgrade.HandoverWa
 	}
 
 	st := &upgrade.HandoverState{
-		FromVer:  fromVer,
-		Watchers: watchers,
-		Mounts:   mounts,
-		Forwards: forwards,
+		FromVer:    fromVer,
+		Watchers:   watchers,
+		Mounts:     mounts,
+		Forwards:   forwards,
+		HelperPids: helpers,
 		// Which cgroups the GUEST had frozen before the pre-pause sweep. Read from the
 		// freezer here rather than plumbed in by the caller: it is the freezer's own
 		// state, and the new image needs it before its /init thaws anything.
@@ -318,6 +319,7 @@ type HandoverResult struct {
 	// returned rather than applied via a callback.
 	Mounts   []*upgrade.MountEntry
 	Forwards []*upgrade.ForwardedPort
+	Helpers  []int32
 }
 
 func (s *Service) ResumeFromHandover(reArmWatchers func([]*upgrade.HandoverWatcher) (rearmed, failed int)) (HandoverResult, error) {
@@ -519,6 +521,7 @@ func (s *Service) ResumeFromHandover(reArmWatchers func([]*upgrade.HandoverWatch
 		// are constructed after this returns.
 		Mounts:   st.GetMounts(),
 		Forwards: st.GetForwards(),
+		Helpers:  st.GetHelperPids(),
 	}, nil
 }
 
