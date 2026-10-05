@@ -82,6 +82,7 @@ type Cluster struct {
 	SandboxProxyDomain pgtype.Text
 	AuthOrgID          pgtype.Text
 	Name               string
+	DeletionProtection bool
 }
 
 type Env struct {
