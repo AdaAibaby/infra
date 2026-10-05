@@ -66,6 +66,8 @@ snapshot as (
 
 new_build as (
     INSERT INTO "public"."env_builds" (
+        env_id,
+        team_id,
         vcpu,
         ram_mb,
         free_disk_size_mb,
@@ -83,6 +85,8 @@ new_build as (
         cpu_flags
     )
     VALUES (
+        (SELECT template_id FROM snapshot),
+        $2,
         $13,
         $14,
         $15,
