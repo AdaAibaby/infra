@@ -23,7 +23,7 @@ import (
 
 const testPostgresImage = "postgres:18-alpine"
 
-func TestSerializableRetryDelay(t *testing.T) {
+func TestTransactionRetryDelay(t *testing.T) {
 	t.Parallel()
 
 	for _, tc := range []struct {
@@ -43,7 +43,7 @@ func TestSerializableRetryDelay(t *testing.T) {
 
 			delays := make(map[time.Duration]struct{})
 			for range 32 {
-				delay := serializableRetryDelay(tc.attempt)
+				delay := transactionRetryDelay(tc.attempt)
 				require.GreaterOrEqual(t, delay, tc.minimum)
 				require.Less(t, delay, tc.maximum)
 				delays[delay] = struct{}{}
@@ -123,6 +123,62 @@ func TestAdvisoryLockSerializesOneKeyAndReleases(t *testing.T) {
 	regained, err := client.AcquireAdvisoryLock(t.Context(), "held")
 	require.NoError(t, err)
 	require.NoError(t, regained.Release(t.Context()))
+}
+
+func TestPoolTransactionRetriesOnlyAbortedTransactions(t *testing.T) {
+	t.Parallel()
+	client := testClient(t)
+	_, err := client.Pool().Exec(t.Context(), "CREATE TABLE counters (code text PRIMARY KEY, value integer NOT NULL)")
+	require.NoError(t, err)
+
+	for _, tc := range []struct {
+		code     string
+		attempts int
+	}{
+		{pgerrcode.SerializationFailure, 2},
+		{pgerrcode.DeadlockDetected, 2},
+		{pgerrcode.TransactionResolutionUnknown, 1},
+		{pgerrcode.CheckViolation, 1},
+	} {
+		t.Run(tc.code, func(t *testing.T) {
+			t.Parallel()
+			_, err := client.Pool().Exec(t.Context(), "INSERT INTO counters VALUES ($1, 0)", tc.code)
+			require.NoError(t, err)
+			attempts := 0
+			result, err := InTxReturn1(t.Context(), client.Pool(), func(ctx context.Context, tx pgx.Tx) (int, error) {
+				attempts++
+				var isolation string
+				if err := tx.QueryRow(ctx, "SHOW transaction_isolation").Scan(&isolation); err != nil {
+					return 0, err
+				}
+				require.Equal(t, "read committed", isolation)
+				if _, err := tx.Exec(ctx, "UPDATE counters SET value=value+1 WHERE code=$1", tc.code); err != nil {
+					return 0, err
+				}
+				if attempts == 1 {
+					_, err := tx.Exec(ctx, fmt.Sprintf("DO $$ BEGIN RAISE EXCEPTION USING ERRCODE = '%s'; END $$", tc.code))
+
+					return attempts, err
+				}
+
+				return attempts, nil
+			})
+			require.Equal(t, tc.attempts, attempts)
+			var stored int
+			require.NoError(t, client.Pool().QueryRow(t.Context(), "SELECT value FROM counters WHERE code=$1", tc.code).Scan(&stored))
+			if tc.attempts == 2 {
+				require.NoError(t, err)
+				require.Equal(t, 2, result)
+				require.Equal(t, 1, stored, "the failed attempt must roll back")
+			} else {
+				var pgErr *pgconn.PgError
+				require.ErrorAs(t, err, &pgErr)
+				require.Equal(t, tc.code, pgErr.Code)
+				require.Zero(t, result, "a failed transaction must not return its value")
+				require.Zero(t, stored)
+			}
+		})
+	}
 }
 
 func TestAdvisoryLockRetriesSerializableTransactionOnItsSession(t *testing.T) {
@@ -265,7 +321,7 @@ func TestSerializableTransactionCleansUpAndBoundsReplays(t *testing.T) {
 		return &pgconn.PgError{Code: pgerrcode.SerializationFailure}
 	})
 	require.Error(t, err)
-	assert.Equal(t, serializableAttempts, attempts)
+	assert.Equal(t, transactionAttempts, attempts)
 
 	cancelled, cancel := context.WithCancel(t.Context())
 	attempts = 0
