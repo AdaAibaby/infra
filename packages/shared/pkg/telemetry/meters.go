@@ -411,6 +411,9 @@ const (
 	BuildPhaseDurationHistogramName HistogramType = "template.build.phase.duration"
 	BuildStepDurationHistogramName  HistogramType = "template.build.step.duration"
 
+	NetworkSlotReturnDurationName       HistogramType = "orchestrator.network.slot.return.duration"
+	NetworkEgressRetirementDurationName HistogramType = "orchestrator.network.egress.retirement.duration"
+
 	// Sandbox timing histograms
 	OrchestratorSandboxCreateDurationName HistogramType = "orchestrator.sandbox.create.duration"
 	WaitForEnvdDurationHistogramName      HistogramType = "orchestrator.sandbox.envd.init.duration"
@@ -1015,6 +1018,8 @@ var histogramDesc = map[HistogramType]string{
 	FPHRunDurationName:                                "Duration of a completed free-page-hinting drain or run, labeled by phase",
 	FPHStopDurationName:                               "Duration of the stop of an abandoned hinting cycle, acknowledgement wait included",
 	FPHRunFaultsName:                                  "Demand faults the serve loop resolved for one sandbox across a periodic hinting attempt (window=run) and over the interval that followed a tick (window=interval), labeled by kind (served pages, deferred installs, wp faults, deferred wp resolves) and outcome: the attempt's run outcome, or for a tick that attempted nothing the skip reason or observe-only, which is the baseline an attempt is read against",
+	NetworkSlotReturnDurationName:                     "Network slot return attempt duration, by network_version, phase (total including reuse delay or cleanup after it), and result (success, shutdown, retained, error)",
+	NetworkEgressRetirementDurationName:               "Time waiting for execution-owned egress flows to close before other network release subscribers, by result (success, timeout, error)",
 	BuildDurationHistogramName:                        "Time taken to build a template",
 	BuildPhaseDurationHistogramName:                   "Time taken to build each phase of a template",
 	BuildStepDurationHistogramName:                    "Time taken to build each step of a template",
@@ -1095,6 +1100,8 @@ var histogramUnits = map[HistogramType]string{
 	FPHRunDurationName:                                "ms",
 	FPHStopDurationName:                               "ms",
 	FPHRunFaultsName:                                  "{fault}",
+	NetworkSlotReturnDurationName:                     "ms",
+	NetworkEgressRetirementDurationName:               "ms",
 	BuildDurationHistogramName:                        "ms",
 	BuildPhaseDurationHistogramName:                   "ms",
 	BuildStepDurationHistogramName:                    "ms",

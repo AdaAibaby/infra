@@ -14,6 +14,7 @@ import (
 	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
 
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network"
@@ -25,7 +26,8 @@ import (
 )
 
 var (
-	meter = otel.Meter("github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network/v2")
+	tracer = otel.Tracer("github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network/v2")
+	meter  = otel.Meter("github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network/v2")
 
 	newSlotsAvailableCounter = utils.Must(meter.Int64UpDownCounter("orchestrator.network.v2.slots_pool.new",
 		metric.WithDescription("Number of new v2 network slots ready to be used."),
@@ -340,27 +342,37 @@ func (p *V2Pool) ReturnAsync(ctx context.Context, slot *network.Slot, releasedFn
 // returnSlot recycles a slot that was used by a sandbox. It waits returnDelay
 // before making the slot reusable to let inflight requests on the previous
 // sandbox drain.
-func (p *V2Pool) returnSlot(ctx context.Context, slot *network.Slot, releasedFn network.ReleaseNotify, returnDelay time.Duration) error {
-	// If the pool is closed or the context is cancelled during the delay we
-	// still fall through and clean up the slot to avoid leaking it.
-	var cause error
-	select {
-	case <-ctx.Done():
-		cause = ctx.Err()
-	case <-p.done:
-		cause = network.ErrClosed
-	case <-time.After(returnDelay):
-	}
+func (p *V2Pool) returnSlot(ctx context.Context, slot *network.Slot, releasedFn network.ReleaseNotify, returnDelay time.Duration) (retErr error) {
+	started := time.Now()
+	cleanupStarted := started
+	defer func() { network.RecordSlotReturnDuration(ctx, started, cleanupStarted, 2, retErr) }()
 
-	// Every path notifies before the slot can be torn down or reused.
-	if err := releasedFn(ctx, slot.HostIPString()); err != nil {
-		return errors.Join(cause, fmt.Errorf("%w: v2 slot '%d': %w", network.ErrSlotRetained, slot.Idx, err))
-	}
-	if cause != nil {
-		return p.cleanupWith(ctx, slot, cause)
-	}
+	return telemetry.Observe0(ctx, tracer, "clean network-slot", func(ctx context.Context) error {
+		// If the pool is closed or the context is cancelled during the delay we
+		// still fall through and clean up the slot to avoid leaking it.
+		var cause error
+		select {
+		case <-ctx.Done():
+			cause = ctx.Err()
+		case <-p.done:
+			cause = network.ErrClosed
+		case <-time.After(returnDelay):
+		}
 
-	return p.recycle(ctx, slot)
+		cleanupStarted = time.Now()
+
+		// Every path notifies before the slot can be torn down or reused.
+		if err := releasedFn(ctx, slot.HostIPString()); err != nil {
+			telemetry.SetAttributes(ctx, attribute.Bool("network.slot.retained", true))
+
+			return errors.Join(cause, fmt.Errorf("%w: v2 slot '%d': %w", network.ErrSlotRetained, slot.Idx, err))
+		}
+		if cause != nil {
+			return p.cleanupWith(ctx, slot, cause)
+		}
+
+		return p.recycle(ctx, slot)
+	}, trace.WithAttributes(attribute.Int("network_version", 2)))
 }
 
 func (p *V2Pool) recycle(ctx context.Context, slot *network.Slot) error {

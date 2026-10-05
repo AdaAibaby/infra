@@ -4209,9 +4209,6 @@ func getNetworkSlot(
 		}
 
 		cleanup.Add(ctx, func(ctx context.Context) error {
-			ctx, span := tracer.Start(ctx, "clean network-slot")
-			defer span.End()
-
 			// Async so sandbox cleanup doesn't block on the return delay or
 			// network teardown; the pool's Close waits for in-flight returns.
 			return networkPool.ReturnAsync(ctx, slot, networkReleased, network.ReturnDelay)
