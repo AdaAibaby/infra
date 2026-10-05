@@ -367,6 +367,11 @@ const (
 	// score drifted from the stored EndTime and were re-scored by the evictor
 	// scan. Sustained non-zero rate means score updates are being lost.
 	ApiRedisStorageExpirationIndexRescored CounterType = "api.redis_storage.expiration_index.rescored"
+	// ApiRedisStorageExpirationIndexDeferred counts expired members the
+	// evictor scan moved out of its window because their sandbox is still in
+	// a transition. A sustained high rate means transitions pile up at the
+	// front of the index, e.g. evictions near their concurrency limit.
+	ApiRedisStorageExpirationIndexDeferred CounterType = "api.redis_storage.expiration_index.deferred"
 )
 
 const (
@@ -755,6 +760,7 @@ var counterDesc = map[CounterType]string{
 	ApiRedisStorageExpirationIndexHealed:   "Sandboxes re-added to the global expiration index by the healer; sustained non-zero rate means index writes are being lost",
 	ApiRedisStorageExpirationIndexSwept:    "Members removed from the global expiration index by the evictor scan (reason=orphan|dead_execution|invalid)",
 	ApiRedisStorageExpirationIndexRescored: "Live expiration index members re-scored after drifting from the stored EndTime",
+	ApiRedisStorageExpirationIndexDeferred: "Expired expiration index members moved out of the evictor scan window while their sandbox is in a transition",
 }
 
 var counterUnits = map[CounterType]string{
@@ -830,6 +836,7 @@ var counterUnits = map[CounterType]string{
 	ApiRedisStorageExpirationIndexHealed:   "{sandbox}",
 	ApiRedisStorageExpirationIndexSwept:    "{member}",
 	ApiRedisStorageExpirationIndexRescored: "{member}",
+	ApiRedisStorageExpirationIndexDeferred: "{member}",
 }
 
 var observableCounterDesc = map[ObservableCounterType]string{
