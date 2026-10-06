@@ -1740,7 +1740,11 @@ func (s *Server) prepareSandboxEventData(ctx context.Context, sbx *sandbox.Sandb
 }
 
 func (s *Server) getSandboxExecutionData(sbx *sandbox.Sandbox) map[string]any {
+	// ExecutionStartedAt survives Checkpoint's handler rebuild, which resets StartedAt, so the earlier of the two is the execution start.
 	startedAt := sbx.GetStartedAt()
+	if executionStartedAt := sbx.GetExecutionStartedAt(); !executionStartedAt.IsZero() && executionStartedAt.Before(startedAt) {
+		startedAt = executionStartedAt
+	}
 
 	return map[string]any{
 		"started_at":     startedAt.UTC().Format(time.RFC3339),
