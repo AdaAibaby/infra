@@ -24,11 +24,11 @@ func TestCustomServiceEndpoints(t *testing.T) {
 
 	for _, constructor := range []struct {
 		name string
-		new  func(string, string) (*Client, error)
+		new  func(string, string, string) (*Client, error)
 	}{
 		{name: "default", new: NewClient},
-		{name: "log level", new: func(environment, service string) (*Client, error) {
-			return NewClientWithLogLevel(environment, service, ldlog.Error)
+		{name: "log level", new: func(environment, service, version string) (*Client, error) {
+			return NewClientWithLogLevel(environment, service, version, ldlog.Error)
 		}},
 	} {
 		t.Run(constructor.name, func(t *testing.T) {
@@ -72,7 +72,7 @@ data: {"path":"/flags/local-bool","data":{"key":"local-bool","on":true,"version"
 			}))
 			t.Cleanup(server.Close)
 			t.Setenv("LAUNCH_DARKLY_BASE_URL", server.URL)
-			client, err := constructor.new("local", "test")
+			client, err := constructor.new("local", "test", "1.0.0")
 			require.NoError(t, err)
 			t.Cleanup(func() { require.NoError(t, client.Close(context.WithoutCancel(t.Context()))) })
 			require.True(t, client.Live())
@@ -109,7 +109,7 @@ func TestCustomEndpointWithoutKeyStaysOffline(t *testing.T) {
 	t.Cleanup(server.Close)
 	t.Setenv("LAUNCH_DARKLY_BASE_URL", server.URL)
 
-	client, err := NewClient("local", "test")
+	client, err := NewClient("local", "test", "1.0.0")
 	require.NoError(t, err)
 	require.False(t, client.Live())
 	require.True(t, client.BoolFlag(t.Context(), BoolFlag{name: "absent-local-flag", fallback: true}))

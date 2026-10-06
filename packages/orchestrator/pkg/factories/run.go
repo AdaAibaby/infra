@@ -561,7 +561,7 @@ func run(config cfg.Config, opts Options) (success bool) {
 	sandboxes := sandbox.NewSandboxesMap()
 
 	// feature flags
-	featureFlags, err := featureflags.NewClient(config.DeploymentEnvironment, "")
+	featureFlags, err := featureflags.NewClient(config.DeploymentEnvironment, serviceName, version)
 	if err != nil {
 		logger.L().Fatal(ctx, "failed to create feature flags client", zap.Error(err))
 	}

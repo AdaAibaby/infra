@@ -67,7 +67,7 @@ func TestPeriodicHintGates_HostAdmission(t *testing.T) {
 // returns without starting a loop or touching the process.
 func TestRunPeriodicHinting_StaticDisabledReturns(t *testing.T) {
 	t.Parallel()
-	ff, err := featureflags.NewClient("", "")
+	ff, err := featureflags.NewClient("", "", "")
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = ff.Close(context.WithoutCancel(t.Context())) })
 	require.False(t, ff.Live(), "the test environment has no LaunchDarkly key")

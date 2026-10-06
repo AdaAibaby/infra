@@ -6,6 +6,7 @@ import (
 
 	"github.com/launchdarkly/go-sdk-common/v3/ldcontext"
 	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
+	"github.com/launchdarkly/go-server-sdk/v7/interfaces"
 	"github.com/launchdarkly/go-server-sdk/v7/testhelpers/ldtestdata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,7 +22,7 @@ const (
 //nolint:paralleltest
 func TestOfflineDatastore(t *testing.T) {
 	clientCtx := ldcontext.NewBuilder(flagName).Build()
-	client, err := NewClient("", "")
+	client, err := NewClient("", "", "")
 	require.NoError(t, err)
 
 	t.Cleanup(func() {
@@ -65,6 +66,24 @@ func TestAllContextsIncludesServiceAndDeployment(t *testing.T) {
 	require.Equal(t, "orchestration-api", seen[ServiceKind])
 }
 
+// A combined orchestrator host evaluates some flags once per service it runs,
+// so the service a caller names must win over the process-wide one.
+func TestAllContextsCallerServiceOverridesProcessService(t *testing.T) {
+	t.Parallel()
+
+	client := newClient(nil, true, "staging", "orchestrator_template-manager")
+
+	merged := mergeContexts(t.Context(), client.allContexts(t.Context(), []ldcontext.Context{ServiceContext("orchestrator")}))
+
+	seen := map[ldcontext.Kind]string{}
+	for _, item := range merged.GetAllIndividualContexts(nil) {
+		seen[item.Kind()] = item.Key()
+	}
+
+	require.Equal(t, "orchestrator", seen[ServiceKind])
+	require.Equal(t, "staging", seen[DeploymentEnvironmentKind])
+}
+
 // newClient is exercised directly: a real client on launchDarklyOfflineStore
 // would race with the updates in TestOfflineDatastore.
 func TestNewClientPlaceKey(t *testing.T) {
@@ -91,6 +110,37 @@ func TestNewClientPlaceKey(t *testing.T) {
 
 			require.Equal(t, tc.want, seen[DeploymentEnvironmentKind])
 			require.NotContains(t, seen, ServiceKind)
+		})
+	}
+}
+
+func TestApplicationInfo(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name        string
+		environment string
+		service     string
+		version     string
+		want        interfaces.ApplicationInfo
+	}{
+		{
+			name: "service and environment", environment: "e2b-staging", service: "orchestration-api", version: "0.14.1",
+			want: interfaces.ApplicationInfo{ApplicationID: "orchestration-api-e2b-staging", ApplicationVersion: "0.14.1"},
+		},
+		{
+			name: "empty environment is undefined", environment: "", service: "orchestration-api", version: "0.14.1",
+			want: interfaces.ApplicationInfo{ApplicationID: "orchestration-api-" + undefinedDeploymentEnvironment, ApplicationVersion: "0.14.1"},
+		},
+		{
+			name: "empty service sends nothing", environment: "e2b-staging", service: "", version: "0.14.1",
+			want: interfaces.ApplicationInfo{},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			require.Equal(t, tc.want, applicationInfo(tc.environment, tc.service, tc.version))
 		})
 	}
 }

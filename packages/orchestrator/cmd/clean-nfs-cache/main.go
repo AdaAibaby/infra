@@ -129,7 +129,7 @@ func configure(ctx context.Context) (cleaner.Options, logger.Logger, *telemetry.
 		return opts, nil, nil, nil, nil, fmt.Errorf("could not parse feature flags config: %w", err)
 	}
 
-	ffc, err := featureflags.NewClient(ffConfig.DeploymentEnvironment, serviceName)
+	ffc, err := featureflags.NewClient(ffConfig.DeploymentEnvironment, serviceName, serviceVersion)
 	if err != nil {
 		return opts, nil, nil, nil, nil, err
 	}

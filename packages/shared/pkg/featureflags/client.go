@@ -54,6 +54,25 @@ func newClient(ld *ldclient.LDClient, static bool, deploymentEnvironment, servic
 	return &Client{ld: ld, static: static, deploymentEnvironment: deploymentEnvironment, serviceName: serviceName}
 }
 
+// applicationInfo names the process to LaunchDarkly. Every deployment
+// environment reports into one LaunchDarkly environment, and the Monitoring
+// tab splits evaluations by application only, so the application ID carries
+// the environment next to the service name. An empty service name sends no
+// metadata: the SDK drops it without an ID anyway.
+func applicationInfo(deploymentEnvironment, serviceName, serviceVersion string) interfaces.ApplicationInfo {
+	if serviceName == "" {
+		return interfaces.ApplicationInfo{}
+	}
+	if deploymentEnvironment == "" {
+		deploymentEnvironment = undefinedDeploymentEnvironment
+	}
+
+	return interfaces.ApplicationInfo{
+		ApplicationID:      serviceName + "-" + deploymentEnvironment,
+		ApplicationVersion: serviceVersion,
+	}
+}
+
 // ContextProvider supplies an additional LD context on every flag evaluation.
 // Services register providers to inject specific contexts without leaking that
 // specificity into the shared client.
@@ -80,7 +99,9 @@ func NewClientWithDatasource(source *ldtestdata.TestDataSource) (*Client, error)
 
 // NewClient creates a client that adds a DeploymentEnvironmentKind context and,
 // when serviceName is not empty, a ServiceKind context to every evaluation.
-func NewClient(deploymentEnvironment, serviceName string) (*Client, error) {
+// The same names, with serviceVersion, identify the process as a LaunchDarkly
+// application; see applicationInfo.
+func NewClient(deploymentEnvironment, serviceName, serviceVersion string) (*Client, error) {
 	if launchDarklyApiKey == "" {
 		c, err := NewClientWithDatasource(launchDarklyOfflineStore)
 		if err != nil {
@@ -90,9 +111,11 @@ func NewClient(deploymentEnvironment, serviceName string) (*Client, error) {
 		return newClient(c.ld, true, deploymentEnvironment, serviceName), nil
 	}
 
-	ldClient, err := ldclient.MakeCustomClient(launchDarklyApiKey, ldclient.Config{
+	cfg := ldclient.Config{
+		ApplicationInfo:  applicationInfo(deploymentEnvironment, serviceName, serviceVersion),
 		ServiceEndpoints: serviceEndpoints(),
-	}, waitForInit)
+	}
+	ldClient, err := ldclient.MakeCustomClient(launchDarklyApiKey, cfg, waitForInit)
 	if err != nil {
 		return nil, err
 	}
@@ -102,8 +125,9 @@ func NewClient(deploymentEnvironment, serviceName string) (*Client, error) {
 
 // NewClientWithLogLevel creates a client with a specific log level.
 // Use ldlog.Error to suppress INFO/WARN logs in CLI tools.
-func NewClientWithLogLevel(deploymentEnvironment, serviceName string, logLevel ldlog.LogLevel) (*Client, error) {
+func NewClientWithLogLevel(deploymentEnvironment, serviceName, serviceVersion string, logLevel ldlog.LogLevel) (*Client, error) {
 	cfg := ldclient.Config{
+		ApplicationInfo:  applicationInfo(deploymentEnvironment, serviceName, serviceVersion),
 		Logging:          ldcomponents.Logging().MinLevel(logLevel),
 		ServiceEndpoints: serviceEndpoints(),
 	}
@@ -259,16 +283,20 @@ func (c *Client) Close(ctx context.Context) error {
 	return nil
 }
 
+// allContexts puts the process identity before the contexts of one
+// evaluation: mergeContexts lets a later context of the same kind win, so a
+// caller that names a service explicitly overrides the process default.
 func (c *Client) allContexts(ctx context.Context, contexts []ldcontext.Context) []ldcontext.Context {
+	var all []ldcontext.Context
 	if c.deploymentEnvironment != "" {
-		contexts = append(contexts, DeploymentEnvironmentContext(c.deploymentEnvironment))
+		all = append(all, DeploymentEnvironmentContext(c.deploymentEnvironment))
 	}
 	if c.serviceName != "" {
-		contexts = append(contexts, ServiceContext(c.serviceName))
+		all = append(all, ServiceContext(c.serviceName))
 	}
 	for _, provider := range c.contextProviders {
-		contexts = append(contexts, provider(ctx))
+		all = append(all, provider(ctx))
 	}
 
-	return contexts
+	return append(all, contexts...)
 }

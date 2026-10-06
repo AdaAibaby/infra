@@ -414,7 +414,7 @@ func run() int {
 		return redisClient.Close()
 	})
 
-	featureFlags, err := featureflags.NewClient(config.DeploymentEnvironment, serviceName)
+	featureFlags, err := featureflags.NewClient(config.DeploymentEnvironment, serviceName, serviceVersion)
 	if err != nil {
 		logger.L().Fatal(ctx, "failed to create feature flags client", zap.Error(err))
 	}
