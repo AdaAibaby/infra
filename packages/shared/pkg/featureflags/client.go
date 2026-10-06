@@ -90,7 +90,9 @@ func NewClient(deploymentEnvironment, serviceName string) (*Client, error) {
 		return newClient(c.ld, true, deploymentEnvironment, serviceName), nil
 	}
 
-	ldClient, err := ldclient.MakeClient(launchDarklyApiKey, waitForInit)
+	ldClient, err := ldclient.MakeCustomClient(launchDarklyApiKey, ldclient.Config{
+		ServiceEndpoints: serviceEndpoints(),
+	}, waitForInit)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +104,8 @@ func NewClient(deploymentEnvironment, serviceName string) (*Client, error) {
 // Use ldlog.Error to suppress INFO/WARN logs in CLI tools.
 func NewClientWithLogLevel(deploymentEnvironment, serviceName string, logLevel ldlog.LogLevel) (*Client, error) {
 	cfg := ldclient.Config{
-		Logging: ldcomponents.Logging().MinLevel(logLevel),
+		Logging:          ldcomponents.Logging().MinLevel(logLevel),
+		ServiceEndpoints: serviceEndpoints(),
 	}
 
 	if launchDarklyApiKey == "" {
@@ -124,6 +127,15 @@ func NewClientWithLogLevel(deploymentEnvironment, serviceName string, logLevel l
 	}
 
 	return newClient(ldClient, false, deploymentEnvironment, serviceName), nil
+}
+
+// LAUNCH_DARKLY_BASE_URL redirects streaming, polling and events together.
+func serviceEndpoints() interfaces.ServiceEndpoints {
+	if baseURL := os.Getenv("LAUNCH_DARKLY_BASE_URL"); baseURL != "" {
+		return ldcomponents.RelayProxyEndpoints(baseURL)
+	}
+
+	return interfaces.ServiceEndpoints{}
 }
 
 // Live reports whether flag values can change at runtime. A client built
