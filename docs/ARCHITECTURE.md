@@ -503,6 +503,11 @@ resume path.
 The TTL of the record is `sandbox_max_length_in_hours` from the write time. The record is
 deleted earlier in every normal stop path.
 
+A routed sandbox adds `lifecycle_id` (its Firecracker process) and `network_placement` with the
+mode, Router and Portable IP. The record carries no configuration: the
+orchestrator hands the Router its policy and workload identity over gRPC before the create call
+returns. An absent placement means the legacy per-worker network. Nothing writes a placement yet.
+
 ### Volume content
 
 Persistent volumes (`packages/orchestrator/pkg/volumes/`) are managed through the control-plane
