@@ -329,7 +329,12 @@ takes the replacement under Upgrading; the reference's
   scale set then replaces it from a fresh disk. So `docker compose down` on
   the instance is not a pause: suspend repairs first with
   `az vmss update --resource-group <name> --name <name> --enable-automatic-repairs false`,
-  and turn them back on once `/health` answers again.
+  and turn them back on once `/health` answers again with
+  `az vmss update --resource-group <name> --name <name> --enable-automatic-repairs true --automatic-repairs-grace-period 15`.
+  Re-enabling demands the grace period restated, and the flag takes bare
+  minutes, not an ISO 8601 span -- the CLI wraps the value itself, so `PT15M`
+  is refused as `PTPT15MM`. A later `terraform apply` also restores the
+  policy, since the suspension lives outside the Terraform state.
 - Nested virtualization cannot be checked before the apply. Azure decides it
   by the size alone, with no per-instance flag and no API to ask at plan time,
   so `instance_size` is held to the generations that have it rather than to
