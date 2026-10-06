@@ -244,34 +244,9 @@ func (p *V2Pool) Populate(ctx context.Context) {
 }
 
 func (p *V2Pool) Get(ctx context.Context, netConfig *orchestrator.SandboxNetworkConfig, class sandboxtypes.EgressClass) (*network.Slot, error) {
-	var slot *network.Slot
-
-	select {
-	case <-p.done:
-		return nil, network.ErrClosed
-	case s := <-p.reusedSlots:
-		reusableSlotsAvailableCounter.Add(ctx, -1)
-		acquiredSlots.Add(ctx, 1, metric.WithAttributes(attribute.String("pool", "reused")))
-		telemetry.ReportEvent(ctx, "reused v2 network slot")
-		slot = s
-	default:
-		select {
-		case <-p.done:
-			return nil, network.ErrClosed
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		case s, ok := <-p.newSlots:
-			// Populate closes the channel on its way out, and a closed channel
-			// wins this select as readily as done does.
-			if !ok {
-				return nil, network.ErrClosed
-			}
-
-			newSlotsAvailableCounter.Add(ctx, -1)
-			acquiredSlots.Add(ctx, 1, metric.WithAttributes(attribute.String("pool", "new")))
-			telemetry.ReportEvent(ctx, "new v2 network slot")
-			slot = s
-		}
+	slot, err := p.take(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	if err := p.configureSlot(ctx, slot, netConfig, class); err != nil {
@@ -284,6 +259,48 @@ func (p *V2Pool) Get(ctx context.Context, netConfig *orchestrator.SandboxNetwork
 	}
 
 	return slot, nil
+}
+
+// take prefers a reused slot and otherwise waits for whichever queue delivers
+// first.
+func (p *V2Pool) take(ctx context.Context) (*network.Slot, error) {
+	select {
+	case <-p.done:
+		return nil, network.ErrClosed
+	case s := <-p.reusedSlots:
+		return p.takeReused(ctx, s), nil
+	default:
+	}
+
+	select {
+	case <-p.done:
+		return nil, network.ErrClosed
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	case s := <-p.reusedSlots:
+		// ReturnAsync may publish a reusable slot after the fast-path miss.
+		return p.takeReused(ctx, s), nil
+	case s, ok := <-p.newSlots:
+		// Populate closes the channel on its way out, and a closed channel
+		// wins this select as readily as done does.
+		if !ok {
+			return nil, network.ErrClosed
+		}
+
+		newSlotsAvailableCounter.Add(ctx, -1)
+		acquiredSlots.Add(ctx, 1, metric.WithAttributes(attribute.String("pool", "new")))
+		telemetry.ReportEvent(ctx, "new v2 network slot")
+
+		return s, nil
+	}
+}
+
+func (p *V2Pool) takeReused(ctx context.Context, s *network.Slot) *network.Slot {
+	reusableSlotsAvailableCounter.Add(ctx, -1)
+	acquiredSlots.Add(ctx, 1, metric.WithAttributes(attribute.String("pool", "reused")))
+	telemetry.ReportEvent(ctx, "reused v2 network slot")
+
+	return s
 }
 
 func (p *V2Pool) configureSlot(ctx context.Context, slot *network.Slot, netConfig *orchestrator.SandboxNetworkConfig, class sandboxtypes.EgressClass) error {
