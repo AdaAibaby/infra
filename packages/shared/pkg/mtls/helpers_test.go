@@ -222,6 +222,11 @@ func logMessages(logs *observer.ObservedLogs) []string {
 	return messages
 }
 
+// mtlstestLeafSpecNoSAN is a leaf with no URI SAN at all.
+func mtlstestLeafSpecNoSAN() mtlstest.LeafSpec {
+	return mtlstest.LeafSpec{URIs: []string{}}
+}
+
 // testMetrics builds the package instruments on a provider the test reads
 // directly, so metric assertions never touch the global provider.
 func testMetrics(t *testing.T) (*Metrics, *sdkmetric.ManualReader) {

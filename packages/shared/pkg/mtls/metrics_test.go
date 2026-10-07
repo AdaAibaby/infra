@@ -23,6 +23,13 @@ func listenerAttr() attribute.KeyValue {
 	return attribute.String(AttrListener, "test-listener")
 }
 
+// wouldRejectCount reads the fixture listener's would-reject counter for one reason and kind.
+func wouldRejectCount(t *testing.T, fx *fixture, reason Reason, kind string) int64 {
+	t.Helper()
+
+	return mustPoint(t, fx.reader, MetricWouldReject, listenerAttr(), attribute.String(AttrReason, string(reason)), attribute.String(AttrKind, kind))
+}
+
 func TestMetricsCountHandshakesByOutcomeAndCaller(t *testing.T) {
 	t.Parallel()
 
@@ -81,6 +88,51 @@ func TestMetricsCountRefusalsOnARequiredListener(t *testing.T) {
 
 	require.Error(t, getErr(t, httpClient(rawClientTLS(nil, protoHTTP11)), "https://"+addr+"/"), "no certificate under RequireAnyClientCert fails inside Go's handshake")
 	awaitPoint(t, fx.reader, 1, MetricHandshakes, listenerAttr(), attribute.String(AttrOutcome, OutcomeFailed))
+}
+
+func TestMetricsCountPlaintextRequestsAndRPCs(t *testing.T) {
+	t.Parallel()
+
+	fx := newFixture(t, serverDNS)
+	permissive := newServerConfig(t, fx, StaticMode(ModePermissive), clientID)
+
+	code, _, _ := guarded(t, permissive, []string{"/health"}, plainRequest(t, http.MethodGet, "/health"))
+	require.Equal(t, http.StatusNoContent, code)
+	_, counted := pointValue(t, fx.reader, MetricPlaintextRequests, listenerAttr(), attribute.String(AttrKind, KindHTTP))
+	assert.False(t, counted, "a health probe is not a plaintext request")
+
+	code, _, _ = guarded(t, permissive, []string{"/health"}, plainRequest(t, http.MethodPost, "/admin"))
+	require.Equal(t, http.StatusNoContent, code)
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricPlaintextRequests, listenerAttr(), attribute.String(AttrKind, KindHTTP)))
+
+	_, _, err := callUnary(t, permissive, peerContext(t, plaintextAuthInfo()), businessMethod)
+	require.NoError(t, err)
+	_, _, err = callUnary(t, permissive, peerContext(t, plaintextAuthInfo()), healthMethod)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricPlaintextRequests, listenerAttr(), attribute.String(AttrKind, KindGRPC)))
+
+	_, _, err = callUnary(t, permissive, tlsPeer(t, fx.peerLeaf(t, strangerID).Cert), businessMethod)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricWouldReject, listenerAttr(), attribute.String(AttrReason, string(ReasonNotAllowed)), attribute.String(AttrKind, KindGRPC)))
+
+	required := newServerConfig(t, fx, StaticMode(ModeRequired), clientID)
+	code, _, _ = guarded(t, required, []string{"/health"}, plainRequest(t, http.MethodPost, "/admin"))
+	require.Equal(t, http.StatusForbidden, code)
+	assert.Equal(t, int64(2), mustPoint(t, fx.reader, MetricPlaintextRequests, listenerAttr(), attribute.String(AttrKind, KindHTTP)), "refused plaintext is still a plaintext request")
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricRefused, listenerAttr(), attribute.String(AttrReason, string(ReasonPlaintext)), attribute.String(AttrKind, KindHTTP)))
+
+	_, _, err = callUnary(t, required, tlsPeer(t, fx.peerLeaf(t, strangerID).Cert), businessMethod)
+	require.Error(t, err)
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricRefused, listenerAttr(), attribute.String(AttrReason, string(ReasonNotAllowed)), attribute.String(AttrKind, KindGRPC)))
+
+	// Required with an empty allow-list is served as permissive: the plaintext
+	// request is admitted and counted, and the gauge reports the mode in force.
+	emptyRequired := newServerConfig(t, fx, StaticMode(ModeRequired))
+	emptyRequired.Name = "required-empty-metrics"
+	code, _, _ = guarded(t, emptyRequired, []string{"/health"}, plainRequest(t, http.MethodPost, "/admin"))
+	require.Equal(t, http.StatusNoContent, code)
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricPlaintextRequests, attribute.String(AttrListener, "required-empty-metrics"), attribute.String(AttrKind, KindHTTP)))
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricMode, attribute.String(AttrListener, "required-empty-metrics"), attribute.String(AttrMode, "permissive"), attribute.String(AttrSource, SourceFallback)))
 }
 
 func TestMetricsReportTheModeInForceAndItsSource(t *testing.T) {
