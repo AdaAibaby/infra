@@ -3,6 +3,7 @@ package mtls
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
@@ -13,6 +14,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/spiffe/go-spiffe/v2/bundle/x509bundle"
+	"github.com/spiffe/go-spiffe/v2/spiffeid"
+	"github.com/spiffe/go-spiffe/v2/svid/x509svid"
 	"go.uber.org/zap"
 
 	"github.com/e2b-dev/infra/packages/shared/pkg/env"
@@ -55,10 +59,16 @@ type Bundle struct {
 	// Certificate has Leaf populated; Certificate.Certificate[1:] are the
 	// intermediates the certificate file carried.
 	Certificate *tls.Certificate
-	// Roots verifies peers; RootCerts are the same certificates for reporting.
-	Roots     *x509.CertPool
-	RootCerts []*x509.Certificate
-	LoadedAt  time.Time
+	// SVID is the same material in go-spiffe's shape, for its TLS callbacks.
+	// Its ID is zero when the leaf carries no SPIFFE ID.
+	SVID *x509svid.SVID
+	// Roots verifies peers; RootCerts are the same certificates for reporting,
+	// and Authorities the same again in go-spiffe's shape, served for every
+	// trust domain since one certificate authority signs for all of them.
+	Roots       *x509.CertPool
+	RootCerts   []*x509.Certificate
+	Authorities *x509bundle.Bundle
+	LoadedAt    time.Time
 }
 
 // Files reads the certificate, key and trust bundle from disk, re-reads them
@@ -226,19 +236,75 @@ func parseBundle(certPEM, keyPEM, caPEM []byte) (*Bundle, error) {
 	if blocks := countPEMBlocks(certPEM); blocks != len(cert.Certificate) {
 		return nil, fmt.Errorf("%w: certificate file has %d PEM blocks but %d certificates parsed", ErrInvalidBundle, blocks, len(cert.Certificate))
 	}
-	// X509KeyPair parses only the leaf and keeps the rest of the chain as bytes.
-	for i, der := range cert.Certificate[1:] {
-		if _, err := x509.ParseCertificate(der); err != nil {
-			return nil, fmt.Errorf("%w: certificate %d: %w", ErrInvalidBundle, i+2, err)
-		}
-	}
 
 	roots, rootCerts, err := parseTrustBundle(caPEM)
 	if err != nil {
 		return nil, err
 	}
 
-	return &Bundle{Certificate: &cert, Roots: roots, RootCerts: rootCerts, LoadedAt: time.Now()}, nil
+	svid, err := svidFromCertificate(&cert)
+	if err != nil {
+		return nil, err
+	}
+
+	return &Bundle{
+		Certificate: &cert,
+		SVID:        svid,
+		Roots:       roots,
+		RootCerts:   rootCerts,
+		Authorities: x509bundle.FromX509Authorities(svid.ID.TrustDomain(), rootCerts),
+		LoadedAt:    time.Now(),
+	}, nil
+}
+
+// svidFromCertificate puts a parsed key pair in go-spiffe's shape. The ID is
+// zero when the leaf carries no SPIFFE ID: the files load regardless, and it
+// is the peer's checks that refuse such a leaf.
+func svidFromCertificate(cert *tls.Certificate) (*x509svid.SVID, error) {
+	signer, ok := cert.PrivateKey.(crypto.Signer)
+	if !ok {
+		return nil, fmt.Errorf("%w: a private key of type %T cannot sign", ErrInvalidBundle, cert.PrivateKey)
+	}
+
+	certs := make([]*x509.Certificate, 0, len(cert.Certificate))
+	for _, der := range cert.Certificate {
+		parsed, err := x509.ParseCertificate(der)
+		if err != nil {
+			return nil, fmt.Errorf("%w: %w", ErrInvalidBundle, err)
+		}
+		certs = append(certs, parsed)
+	}
+
+	svid := &x509svid.SVID{Certificates: certs, PrivateKey: signer}
+	if id, err := x509svid.IDFromCert(certs[0]); err == nil {
+		svid.ID = id
+	}
+
+	return svid, nil
+}
+
+// GetX509SVID implements x509svid.Source over the loaded files, so go-spiffe's
+// TLS callbacks present the certificate loaded now.
+func (f *Files) GetX509SVID() (*x509svid.SVID, error) {
+	b := f.Bundle()
+	if b == nil {
+		return nil, ErrNoCertificateLoaded
+	}
+
+	return b.SVID, nil
+}
+
+// GetX509BundleForTrustDomain implements x509bundle.Source over the loaded
+// files. One certificate authority signs for every trust domain, so the same
+// roots answer whatever trust domain a peer's ID names; the allow-list is
+// what tells the trust domains apart.
+func (f *Files) GetX509BundleForTrustDomain(spiffeid.TrustDomain) (*x509bundle.Bundle, error) {
+	b := f.Bundle()
+	if b == nil {
+		return nil, ErrNoRootsLoaded
+	}
+
+	return b.Authorities, nil
 }
 
 // parseTrustBundle walks every PEM block: each must be a certificate that

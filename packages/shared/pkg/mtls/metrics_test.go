@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"net"
+	"net/http"
 	"sync"
 	"testing"
 	"time"
@@ -16,6 +18,100 @@ import (
 
 	"github.com/e2b-dev/infra/packages/shared/pkg/mtls/mtlstest"
 )
+
+func listenerAttr() attribute.KeyValue {
+	return attribute.String(AttrListener, "test-listener")
+}
+
+func TestMetricsCountHandshakesByOutcomeAndCaller(t *testing.T) {
+	t.Parallel()
+
+	fx := newFixture(t, serverDNS)
+	cfg := newServerConfig(t, fx, StaticMode(ModePermissive), clientID)
+	cfg.HandshakeTimeout = 300 * time.Millisecond
+	_, addr := serveOn(t, cfg, &http.Server{Handler: describe(), ReadHeaderTimeout: time.Second})
+
+	plain := httpClient(nil)
+	resp := get(t, plain, "http://"+addr+"/")
+	require.Equal(t, http.StatusOK, resp.status)
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricHandshakes, listenerAttr(), attribute.String(AttrOutcome, OutcomePlaintext)))
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricPlaintextOpen, listenerAttr()), "the plaintext connection is open and idle")
+
+	plain.CloseIdleConnections()
+	require.Eventually(t, func() bool {
+		open, _ := pointValue(t, fx.reader, MetricPlaintextOpen, listenerAttr())
+
+		return open == 0
+	}, 5*time.Second, 10*time.Millisecond, "closing the connection takes the gauge back to zero")
+
+	resp = get(t, httpClient(rawClientTLS(fx.peerLeaf(t, clientID), protoHTTP11)), "https://"+addr+"/")
+	require.Equal(t, http.StatusOK, resp.status)
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricHandshakes, listenerAttr(), attribute.String(AttrOutcome, OutcomeTLS)))
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricConnections, listenerAttr(), attribute.String(AttrCaller, clientID)))
+
+	resp = get(t, httpClient(rawClientTLS(fx.peerLeaf(t, strangerID), protoHTTP11)), "https://"+addr+"/")
+	require.Equal(t, http.StatusOK, resp.status, "permissive admits")
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricWouldReject, listenerAttr(), attribute.String(AttrReason, string(ReasonNotAllowed)), attribute.String(AttrKind, KindHandshake)))
+	_, counted := pointValue(t, fx.reader, MetricConnections, listenerAttr(), attribute.String(AttrCaller, strangerID))
+	assert.False(t, counted, "a name that would be refused is not a connection by caller")
+
+	var dialer net.Dialer
+	silent, err := dialer.DialContext(t.Context(), "tcp", addr)
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = silent.Close() })
+	require.Eventually(t, func() bool {
+		timeouts, _ := pointValue(t, fx.reader, MetricHandshakes, listenerAttr(), attribute.String(AttrOutcome, OutcomeTimeout))
+
+		return timeouts == 1
+	}, 5*time.Second, 20*time.Millisecond)
+}
+
+func TestMetricsCountRefusalsOnARequiredListener(t *testing.T) {
+	t.Parallel()
+
+	fx := newFixture(t, serverDNS)
+	cfg := newServerConfig(t, fx, StaticMode(ModeRequired), clientID)
+	_, addr := serveOn(t, cfg, &http.Server{Handler: describe(), ReadHeaderTimeout: time.Second})
+
+	// The client learns of a refusal from the alert before the listener's
+	// goroutine has recorded it, so these counters are awaited, not read once.
+	require.Error(t, getErr(t, httpClient(rawClientTLS(fx.peerLeaf(t, strangerID), protoHTTP11)), "https://"+addr+"/"))
+	awaitPoint(t, fx.reader, 1, MetricHandshakes, listenerAttr(), attribute.String(AttrOutcome, OutcomeRefused))
+	awaitPoint(t, fx.reader, 1, MetricRefused, listenerAttr(), attribute.String(AttrReason, string(ReasonNotAllowed)), attribute.String(AttrKind, KindHandshake))
+
+	require.Error(t, getErr(t, httpClient(rawClientTLS(nil, protoHTTP11)), "https://"+addr+"/"), "no certificate under RequireAnyClientCert fails inside Go's handshake")
+	awaitPoint(t, fx.reader, 1, MetricHandshakes, listenerAttr(), attribute.String(AttrOutcome, OutcomeFailed))
+}
+
+func TestMetricsReportTheModeInForceAndItsSource(t *testing.T) {
+	t.Parallel()
+
+	fx := newFixture(t, serverDNS)
+	flags := newFakeFlags()
+	allow := mustAllow(t, clientID)
+	src := NewFlagModeSource(flags, "listener-mode", ModePermissive, allow, WithModeLogger(fx.log))
+	cfg := newServerConfig(t, fx, src, clientID)
+
+	cfg.policy(t.Context())
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricMode, listenerAttr(), attribute.String(AttrMode, "permissive"), attribute.String(AttrSource, SourceFallback)))
+
+	flags.set("listener-mode", "required")
+	cfg.policy(t.Context())
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricMode, listenerAttr(), attribute.String(AttrMode, "required"), attribute.String(AttrSource, SourceFlag)))
+	assert.Equal(t, int64(0), mustPoint(t, fx.reader, MetricMode, listenerAttr(), attribute.String(AttrMode, "permissive"), attribute.String(AttrSource, SourceFallback)), "the series left behind reads zero")
+
+	hop := ClientConfig{Name: "test-hop", Files: fx.peerFiles(t, clientID), Mode: StaticClientMode(ClientOff), ExpectedServerIDs: allow, Logger: fx.log, Metrics: fx.metrics}
+	creds := NewClientCredentials(hop)
+	serverSide, clientSide := net.Pipe()
+	t.Cleanup(func() {
+		_ = serverSide.Close()
+		_ = clientSide.Close()
+	})
+	_, _, err := creds.ClientHandshake(t.Context(), "ignored", clientSide)
+	require.NoError(t, err)
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricClientMode, attribute.String(AttrClientHop, "test-hop"), attribute.String(AttrMode, "off"), attribute.String(AttrSource, SourceFallback)))
+	assert.Equal(t, int64(1), mustPoint(t, fx.reader, MetricHandshakes, attribute.String(AttrClientHop, "test-hop"), attribute.String(AttrOutcome, OutcomePlaintext)))
+}
 
 func fingerprint(der []byte) string {
 	sum := sha256.Sum256(der)
