@@ -3,7 +3,9 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -49,6 +51,23 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
 )
+
+// cpuTemplateOverride wraps a -cpu-template document as the reboot-cpu-template-override
+// value. Empty and null documents mean no template, so they wrap as {} rather than as null,
+// which the flag reads as no override.
+func cpuTemplateOverride(raw []byte) (ldvalue.Value, error) {
+	tmpl := ldvalue.ObjectBuild().Build()
+	if raw = bytes.TrimSpace(raw); len(raw) > 0 {
+		if !json.Valid(raw) {
+			return ldvalue.Null(), errors.New("not valid JSON")
+		}
+		if parsed := ldvalue.Parse(raw); !parsed.IsNull() {
+			tmpl = parsed
+		}
+	}
+
+	return ldvalue.ObjectBuild().Set("template", tmpl).Build(), nil
+}
 
 func main() {
 	fromBuild := flag.String("from-build", "", "build ID (UUID) to resume from (required)")
@@ -171,7 +190,11 @@ func main() {
 				log.Fatalf("read -cpu-template: %v", err)
 			}
 		}
-		featureflags.OverrideJSONFlag(featureflags.RebootCPUTemplateOverride, ldvalue.Parse(raw))
+		override, err := cpuTemplateOverride(raw)
+		if err != nil {
+			log.Fatalf("-cpu-template: %v", err)
+		}
+		featureflags.OverrideJSONFlag(featureflags.RebootCPUTemplateOverride, override)
 	}
 
 	if *fromBuild == "" {

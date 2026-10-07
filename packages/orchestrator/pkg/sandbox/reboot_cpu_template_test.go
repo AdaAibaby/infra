@@ -52,18 +52,27 @@ func TestRebootCPUTemplate(t *testing.T) {
 	assert.False(t, overridden)
 	assert.Equal(t, a, got, "with no override the build's template returns")
 
-	got, overridden, err = rebootCPUTemplate(meta, ldvalue.Parse([]byte(`{"kvm_capabilities":["!122"]}`)))
+	for _, none := range []string{`{}`, `{"template":null}`} {
+		got, overridden, err = rebootCPUTemplate(meta, ldvalue.Parse([]byte(none)))
+		require.NoError(t, err)
+		assert.False(t, overridden)
+		assert.Equal(t, a, got, "%s is no override", none)
+	}
+
+	got, overridden, err = rebootCPUTemplate(meta, ldvalue.Parse([]byte(`{"template":{"kvm_capabilities":["!122"]}}`)))
 	require.NoError(t, err)
 	assert.True(t, overridden)
 	assert.Equal(t, b, got)
 
-	got, overridden, err = rebootCPUTemplate(meta, ldvalue.Parse([]byte(`{}`)))
+	got, overridden, err = rebootCPUTemplate(meta, ldvalue.Parse([]byte(`{"template":{}}`)))
 	require.NoError(t, err)
 	assert.True(t, overridden)
-	assert.Nil(t, got, "{} boots with no template")
+	assert.Nil(t, got, `{"template":{}} boots with no template`)
 
-	got, overridden, err = rebootCPUTemplate(meta, ldvalue.Parse([]byte(`{"bogus":1}`)))
-	require.Error(t, err)
-	assert.False(t, overridden)
-	assert.Equal(t, a, got, "an invalid override falls back to the build's template")
+	for _, invalid := range []string{`{"template":{"bogus":1}}`, `{"kvm_capabilities":["!122"]}`, `{"template":{},"x":1}`, `[]`} {
+		got, overridden, err = rebootCPUTemplate(meta, ldvalue.Parse([]byte(invalid)))
+		require.Error(t, err, invalid)
+		assert.False(t, overridden)
+		assert.Equal(t, a, got, "an invalid override falls back to the build's template")
+	}
 }

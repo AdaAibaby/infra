@@ -1046,9 +1046,10 @@ var (
 	BuildCPUTemplate = NewJSONFlag("build-cpu-template", ldvalue.Null())
 
 	// RebootCPUTemplateOverride replaces the build's CPU template on a filesystem-only cold
-	// boot, as the PUT /cpu-config body; {} boots with none. Null (the default) boots the
-	// build's template. The applied template is recorded as the running one, so the next
-	// pause stores it, while the build's template is kept and returns once the flag clears.
+	// boot: {"template": <PUT /cpu-config body>}; {"template": {}} boots with none. {} or null
+	// (the default) boots the build's template. The applied template is recorded as the
+	// running one, so the next pause stores it, while the build's template is kept and
+	// returns once the flag clears.
 	// A value that does not parse is logged and ignored; one the resolved Firecracker version
 	// or host cannot apply fails the boot, like a stored template would.
 	RebootCPUTemplateOverride = NewJSONFlag("reboot-cpu-template-override", ldvalue.Null())

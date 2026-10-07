@@ -4,8 +4,10 @@ package sandbox
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
@@ -85,11 +87,19 @@ func checkRebootCPUTemplate(tmpl *cputemplate.Template, fcVersion string) error 
 // boot ran, unless override (the reboot-cpu-template-override flag) replaces it. An invalid
 // override is returned as an error alongside the build's template.
 func rebootCPUTemplate(meta metadata.Template, override ldvalue.Value) (*cputemplate.Template, bool, error) {
-	if override.IsNull() {
+	var o struct {
+		Template *json.RawMessage `json:"template"`
+	}
+	dec := json.NewDecoder(strings.NewReader(override.JSONString()))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&o); err != nil {
+		return meta.BuildCPUTemplate, false, fmt.Errorf("invalid CPU template override: %w", err)
+	}
+	if o.Template == nil {
 		return meta.BuildCPUTemplate, false, nil
 	}
 
-	tmpl, err := cputemplate.Parse([]byte(override.JSONString()))
+	tmpl, err := cputemplate.Parse(*o.Template)
 	if err != nil {
 		return meta.BuildCPUTemplate, false, err
 	}
