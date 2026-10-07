@@ -867,6 +867,23 @@ func withNetworkAssignReason(reason NetworkAssignReason) CreateOption {
 	return func(o *createOptions) { o.networkAssignReason = reason }
 }
 
+type rootfsLifecycle interface {
+	Start(ctx context.Context) error
+	Close(ctx context.Context) error
+}
+
+func startRootfsProvider(ctx, execCtx context.Context, cleanup *Cleanup, provider rootfsLifecycle, lg logger.Logger) {
+	// Add runs late callbacks inline. Start needs its own goroutine first because
+	// the NBD close path waits for Start to publish readiness.
+	go func() {
+		if err := provider.Start(execCtx); err != nil {
+			lg.Error(ctx, "rootfs overlay error", zap.Error(err))
+		}
+	}()
+
+	cleanup.Add(ctx, provider.Close)
+}
+
 // CreateSandbox creates the sandbox.
 // IMPORTANT: You must Close() the sandbox after you are done with it.
 func (f *Factory) CreateSandbox(
@@ -941,13 +958,7 @@ func (f *Factory) CreateSandbox(
 	if err != nil {
 		return nil, fmt.Errorf("failed to create rootfs overlay: %w", err)
 	}
-	cleanup.Add(ctx, rootfsProvider.Close)
-	go func() {
-		runErr := rootfsProvider.Start(execCtx)
-		if runErr != nil {
-			sbxLogger.Error(ctx, "rootfs overlay error", zap.Error(runErr))
-		}
-	}()
+	startRootfsProvider(ctx, execCtx, cleanup, rootfsProvider, sbxLogger)
 
 	memfile, err := template.Memfile(ctx)
 	if err != nil {
@@ -1292,9 +1303,9 @@ func (f *Factory) ResumeSandbox(
 	// non-cancelable (context.WithoutCancel) and the fetch-only last-cycle path
 	// has no copy worker to observe uffd close, so without an explicit cancel a
 	// torn-down sandbox would keep draining a (potentially multi-GiB) diff from
-	// object storage. Registering here rather than inside the goroutine also
-	// avoids racing cleanup.Run: a goroutine-side Add could lose the hasRun
-	// check to a concurrent teardown and never register.
+	// object storage. Registering here rather than inside the goroutine makes
+	// cancellation ownership and priority ordering explicit before any prefetch
+	// work starts.
 	//
 	// Register as PRIORITY so teardown aborts the fetch first: priority handlers
 	// run before the normal cleanup list, and (LIFO) this one runs before the
@@ -1427,16 +1438,9 @@ func (f *Factory) ResumeSandbox(
 			return nil, fmt.Errorf("failed to create rootfs overlay: %w", err)
 		}
 
-		cleanup.Add(ctx, overlay.Close)
-
 		telemetry.ReportEvent(ctx, "created rootfs overlay")
 
-		go func() {
-			runErr := overlay.Start(execCtx)
-			if runErr != nil {
-				sbxLogger.Error(ctx, "rootfs overlay error", zap.Error(runErr))
-			}
-		}()
+		startRootfsProvider(ctx, execCtx, cleanup, overlay, sbxLogger)
 
 		return overlay, nil
 	})
