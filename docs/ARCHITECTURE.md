@@ -106,6 +106,9 @@ The control-plane entry point (Gin, OpenAPI-generated from `spec/openapi.yml`, p
 - **Resources**: sandboxes (create/list/kill/pause/resume/connect/timeout/metrics/logs),
   templates and builds, teams, volumes, API keys, secrets, sandbox events and webhooks,
   admin operations.
+- **Spec document**: `GET /openapi.json` serves, without authentication, the spec the request
+  validator runs. An `ETag` over the document answers a matching `If-None-Match` with 304. It is
+  registered before the validator, which rejects undeclared paths.
 - **Auth** (via `packages/auth`): team API keys (`X-API-Key`, `e2b_` prefix), auth-provider JWTs
   (OIDC), and either an admin token or a service JWT verified from the configured admin JWKS.
   Backed by an auth DB (Postgres) with a Redis team cache.

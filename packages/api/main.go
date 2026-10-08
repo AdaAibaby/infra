@@ -32,6 +32,7 @@ import (
 	customMiddleware "github.com/e2b-dev/infra/packages/api/internal/middleware"
 	"github.com/e2b-dev/infra/packages/api/internal/middleware/ratelimit"
 	"github.com/e2b-dev/infra/packages/api/internal/oauth"
+	"github.com/e2b-dev/infra/packages/api/internal/openapispec"
 	"github.com/e2b-dev/infra/packages/api/internal/utils"
 	"github.com/e2b-dev/infra/packages/auth/pkg/auth"
 	sqlcdb "github.com/e2b-dev/infra/packages/db/client"
@@ -99,6 +100,13 @@ var (
 )
 
 func NewGinServer(ctx context.Context, config cfg.Config, tel *telemetry.Client, l logger.Logger, apiStore *handlers.APIStore, adminJWTVerifier *auth.JWKSVerifier, redisClient redis.UniversalClient, ff *featureflags.Client, swagger *openapi3.T, port int) *http.Server {
+	// Rendered before the servers are cleared below, so the served document
+	// keeps them.
+	openAPISpec, err := openapispec.Handler(swagger)
+	if err != nil {
+		l.Fatal(ctx, "failed to render the OpenAPI document", zap.Error(err))
+	}
+
 	// Clear out the servers array in the swagger spec, that skips validating
 	// that server names match. We don't know how this thing will be run.
 	swagger.Servers = nil
@@ -180,6 +188,11 @@ func NewGinServer(ctx context.Context, config cfg.Config, tel *telemetry.Client,
 	r.POST("/templates/:templateID", templateBuildV1Gone)
 	r.POST("/templates/:templateID/builds/:buildID", templateBuildV1Gone)
 	r.POST("/v2/templates", templateBuildV1Gone)
+
+	// The spec does not declare its own document, so it is registered before
+	// the validator, like the removed routes.
+	r.GET(openapispec.Path, openAPISpec)
+	r.HEAD(openapispec.Path, openAPISpec)
 
 	// Create a team API Key auth validator
 	AuthenticationFunc := auth.CreateAuthenticationFunc(
