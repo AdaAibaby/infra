@@ -63,6 +63,7 @@ const (
 	maxIamTokens = 5
 )
 
+// PostSandboxes creates a sandbox with secured envd access; the body's secure field is ignored.
 func (a *APIStore) PostSandboxes(c *gin.Context) {
 	ctx := c.Request.Context()
 
@@ -75,6 +76,7 @@ func (a *APIStore) PostSandboxes(c *gin.Context) {
 		return
 	}
 
+	body.Secure = new(true)
 	a.createSandbox(c, body, sandbox.SandboxTimeoutDefault)
 }
 
@@ -313,14 +315,6 @@ func (a *APIStore) createSandbox(c *gin.Context, body api.NewSandbox, defaultTim
 			}
 
 			apiorch.ApplyValidatedEgressProxy(network.Egress, canonical)
-		}
-
-		// Make sure envd seucre access is enforced when public access is disabled,
-		// This requirement forces users using newer features to secure sandboxes properly.
-		if !sharedUtils.DerefOrDefault(network.Ingress.AllowPublicAccess, types.AllowPublicAccessDefault) && envdAccessToken == nil {
-			a.sendAPIStoreError(c, http.StatusBadRequest, "You cannot create a sandbox without public access unless you enable secure envd access via 'secure' flag.")
-
-			return
 		}
 	}
 

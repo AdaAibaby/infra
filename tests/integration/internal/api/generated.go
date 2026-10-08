@@ -685,7 +685,8 @@ type NewSandbox struct {
 	Metadata *SandboxMetadata      `json:"metadata,omitempty"`
 	Network  *SandboxNetworkConfig `json:"network,omitempty"`
 
-	// Secure Secure all system communication with sandbox
+	// Secure Ignored. All system communication with the sandbox is always secured; the template's envd version must support secured access.
+	// Deprecated: this property has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 	Secure *bool `json:"secure,omitempty"`
 
 	// TemplateID Identifier of the required template
@@ -2777,7 +2778,7 @@ type ClientInterface interface {
 
 	// PostSandboxesWithBody Create sandbox
 	//
-	// Create a sandbox from the template. Use POST /v2/sandboxes instead.
+	// Create a sandbox from the template. All system communication with the sandbox is secured. Use POST /v2/sandboxes instead.
 	//
 	// Takes any type of body and a specified content type.
 	//
@@ -2788,7 +2789,7 @@ type ClientInterface interface {
 
 	// PostSandboxes Create sandbox
 	//
-	// Create a sandbox from the template. Use POST /v2/sandboxes instead.
+	// Create a sandbox from the template. All system communication with the sandbox is secured. Use POST /v2/sandboxes instead.
 	//
 	// Takes a body of the `application/json` content type.
 	//
@@ -3952,7 +3953,7 @@ func (c *Client) GetSandboxes(ctx context.Context, params *GetSandboxesParams, r
 
 // PostSandboxesWithBody Create sandbox
 //
-// Create a sandbox from the template. Use POST /v2/sandboxes instead.
+// Create a sandbox from the template. All system communication with the sandbox is secured. Use POST /v2/sandboxes instead.
 //
 // Takes any type of body and a specified content type.
 //
@@ -3972,7 +3973,7 @@ func (c *Client) PostSandboxesWithBody(ctx context.Context, contentType string, 
 
 // PostSandboxes Create sandbox
 //
-// Create a sandbox from the template. Use POST /v2/sandboxes instead.
+// Create a sandbox from the template. All system communication with the sandbox is secured. Use POST /v2/sandboxes instead.
 //
 // Takes a body of the `application/json` content type.
 //
@@ -9410,7 +9411,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostSandboxesWithBodyWithResponse Create sandbox
 	//
-	// Create a sandbox from the template. Use POST /v2/sandboxes instead.
+	// Create a sandbox from the template. All system communication with the sandbox is secured. Use POST /v2/sandboxes instead.
 	//
 	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -9421,7 +9422,7 @@ type ClientWithResponsesInterface interface {
 
 	// PostSandboxesWithResponse Create sandbox
 	//
-	// Create a sandbox from the template. Use POST /v2/sandboxes instead.
+	// Create a sandbox from the template. All system communication with the sandbox is secured. Use POST /v2/sandboxes instead.
 	//
 	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 	//
@@ -16495,7 +16496,7 @@ func (c *ClientWithResponses) GetSandboxesWithResponse(ctx context.Context, para
 
 // PostSandboxesWithBodyWithResponse Create sandbox
 //
-// Create a sandbox from the template. Use POST /v2/sandboxes instead.
+// Create a sandbox from the template. All system communication with the sandbox is secured. Use POST /v2/sandboxes instead.
 //
 // Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
 //
@@ -16512,7 +16513,7 @@ func (c *ClientWithResponses) PostSandboxesWithBodyWithResponse(ctx context.Cont
 
 // PostSandboxesWithResponse Create sandbox
 //
-// Create a sandbox from the template. Use POST /v2/sandboxes instead.
+// Create a sandbox from the template. All system communication with the sandbox is secured. Use POST /v2/sandboxes instead.
 //
 // Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
 //

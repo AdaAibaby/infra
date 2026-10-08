@@ -981,7 +981,8 @@ components:
           $ref: "#/components/schemas/SandboxAutoResumeConfig"
         secure:
           type: boolean
-          description: Secure all system communication with sandbox
+          deprecated: true
+          description: "Ignored. All system communication with the sandbox is always secured; the template's envd version must support secured access."
         allow_internet_access:
           type: boolean
           description:
@@ -2943,7 +2944,7 @@ paths:
           $ref: "#/components/responses/500"
     post:
       summary: Create sandbox
-      description: Create a sandbox from the template. Use POST /v2/sandboxes instead.
+      description: Create a sandbox from the template. All system communication with the sandbox is secured. Use POST /v2/sandboxes instead.
       deprecated: true
       tags: [sandboxes]
       security:

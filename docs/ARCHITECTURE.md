@@ -436,6 +436,7 @@ sequenceDiagram
 
     C->>API: POST /sandboxes {templateID}
     API->>API: auth team, resolve template alias → ready build (Postgres/cache)
+    API->>API: mint envd access token (build's envd must support secured access)
     API->>API: best-of-K placement → pick node
     API->>O: gRPC SandboxService.Create(SandboxConfig)
     O->>O: fetch template (local cache / NFS / object storage)
@@ -445,7 +446,7 @@ sequenceDiagram
     E-->>O: 204
     O-->>API: Create OK
     API->>R: store running sandbox
-    API-->>C: 201 sandbox {sandboxID, domain}
+    API-->>C: 201 sandbox {sandboxID, domain, envdAccessToken}
 ```
 
 The API blocks on the gRPC `Create`, which itself blocks on envd's `/init` — when the client
