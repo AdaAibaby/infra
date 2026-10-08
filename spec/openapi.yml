@@ -1286,6 +1286,35 @@ components:
           type: integer
           description: Number of sandboxes that failed to kill
 
+    AdminSandbox:
+      type: object
+      required:
+        - sandboxID
+        - teamID
+        - state
+      properties:
+        sandboxID:
+          type: string
+          description: Identifier of the sandbox
+        teamID:
+          type: string
+          format: uuid
+          description: Identifier of the team that owns the sandbox
+        state:
+          $ref: "#/components/schemas/AdminSandboxState"
+
+    AdminSandboxState:
+      type: string
+      description: State after the sandbox's latest create, resume, pause or kill event
+      enum:
+        - running
+        - paused
+        - killed
+      x-enum-varnames:
+        - AdminSandboxStateRunning
+        - AdminSandboxStatePaused
+        - AdminSandboxStateKilled
+
     AdminTeamRunningSandboxCounts:
       type: object
       description: |
@@ -4473,6 +4502,37 @@ paths:
                 $ref: "#/components/schemas/AdminTeamRunningSandboxCounts"
         "401":
           $ref: "#/components/responses/401"
+        "429":
+          $ref: "#/components/responses/429"
+        "500":
+          $ref: "#/components/responses/500"
+
+  /admin/sandboxes/{sandboxID}:
+    get:
+      summary: Get a sandbox's team and state
+      description: |
+        Reads the team and state of a sandbox from its latest lifecycle event.
+        The state lags the sandbox while that event is in flight. A sandbox
+        whose events have expired is not found.
+      tags: [admin]
+      security:
+        - AdminApiKeyAuth: []
+        - AdminJWTAuth: []
+      parameters:
+        - $ref: "#/components/parameters/sandboxID"
+      responses:
+        "200":
+          description: The sandbox, its team and its state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdminSandbox"
+        "400":
+          $ref: "#/components/responses/400"
+        "401":
+          $ref: "#/components/responses/401"
+        "404":
+          $ref: "#/components/responses/404"
         "429":
           $ref: "#/components/responses/429"
         "500":

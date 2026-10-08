@@ -34,6 +34,27 @@ func (e AWSRegistryType) Valid() bool {
 	}
 }
 
+// Defines values for AdminSandboxState.
+const (
+	AdminSandboxStateKilled  AdminSandboxState = "killed"
+	AdminSandboxStatePaused  AdminSandboxState = "paused"
+	AdminSandboxStateRunning AdminSandboxState = "running"
+)
+
+// Valid indicates whether the value is a known member of the AdminSandboxState enum.
+func (e AdminSandboxState) Valid() bool {
+	switch e {
+	case AdminSandboxStateKilled:
+		return true
+	case AdminSandboxStatePaused:
+		return true
+	case AdminSandboxStateRunning:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GCPRegistryType.
 const (
 	Gcp GCPRegistryType = "gcp"
@@ -346,6 +367,18 @@ type AdminBuildCancelResult struct {
 	FailedCount int `json:"failedCount"`
 }
 
+// AdminSandbox defines model for AdminSandbox.
+type AdminSandbox struct {
+	// SandboxID Identifier of the sandbox
+	SandboxID string `json:"sandboxID"`
+
+	// State State after the sandbox's latest create, resume, pause or kill event
+	State AdminSandboxState `json:"state"`
+
+	// TeamID Identifier of the team that owns the sandbox
+	TeamID openapi_types.UUID `json:"teamID"`
+}
+
 // AdminSandboxKillResult defines model for AdminSandboxKillResult.
 type AdminSandboxKillResult struct {
 	// FailedCount Number of sandboxes that failed to kill
@@ -354,6 +387,9 @@ type AdminSandboxKillResult struct {
 	// KilledCount Number of sandboxes successfully killed
 	KilledCount int `json:"killedCount"`
 }
+
+// AdminSandboxState State after the sandbox's latest create, resume, pause or kill event
+type AdminSandboxState string
 
 // AdminTeamRunningSandboxCounts Cached live sandbox index count keyed by team ID. Counts may briefly
 // include sandboxes transitioning out of running; teams without indexed
@@ -2490,6 +2526,15 @@ type ClientInterface interface {
 	// Corresponds with GET /admin/sandboxes/running-counts (the `GetAdminSandboxesRunningCounts` operationId).
 	GetAdminSandboxesRunningCounts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetAdminSandboxesSandboxID Get a sandbox's team and state
+	//
+	// Reads the team and state of a sandbox from its latest lifecycle event.
+	// The state lags the sandbox while that event is in flight. A sandbox
+	// whose events have expired is not found.
+	//
+	// Corresponds with GET /admin/sandboxes/{sandboxID} (the `GetAdminSandboxesSandboxID` operationId).
+	GetAdminSandboxesSandboxID(ctx context.Context, sandboxID SandboxID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostAdminTeamsTeamIDApiKeysWithBody Create team API key as admin
 	//
 	// Creates a team API key for internal service workflows.
@@ -3297,6 +3342,25 @@ type ClientInterface interface {
 // Corresponds with GET /admin/sandboxes/running-counts (the `GetAdminSandboxesRunningCounts` operationId).
 func (c *Client) GetAdminSandboxesRunningCounts(ctx context.Context, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetAdminSandboxesRunningCountsRequest(c.Server)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetAdminSandboxesSandboxID Get a sandbox's team and state
+//
+// Reads the team and state of a sandbox from its latest lifecycle event.
+// The state lags the sandbox while that event is in flight. A sandbox
+// whose events have expired is not found.
+//
+// Corresponds with GET /admin/sandboxes/{sandboxID} (the `GetAdminSandboxesSandboxID` operationId).
+func (c *Client) GetAdminSandboxesSandboxID(ctx context.Context, sandboxID SandboxID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetAdminSandboxesSandboxIDRequest(c.Server, sandboxID)
 	if err != nil {
 		return nil, err
 	}
@@ -5104,6 +5168,40 @@ func NewGetAdminSandboxesRunningCountsRequest(server string) (*http.Request, err
 	}
 
 	operationPath := fmt.Sprintf("/admin/sandboxes/running-counts")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetAdminSandboxesSandboxIDRequest constructs an http.Request for the GetAdminSandboxesSandboxID method
+func NewGetAdminSandboxesSandboxIDRequest(server string, sandboxID SandboxID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "sandboxID", sandboxID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/admin/sandboxes/%s", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -9015,6 +9113,17 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /admin/sandboxes/running-counts (the `GetAdminSandboxesRunningCounts` operationId).
 	GetAdminSandboxesRunningCountsWithResponse(ctx context.Context, reqEditors ...RequestEditorFn) (*GetAdminSandboxesRunningCountsResponse, error)
 
+	// GetAdminSandboxesSandboxIDWithResponse Get a sandbox's team and state
+	//
+	// Reads the team and state of a sandbox from its latest lifecycle event.
+	// The state lags the sandbox while that event is in flight. A sandbox
+	// whose events have expired is not found.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /admin/sandboxes/{sandboxID} (the `GetAdminSandboxesSandboxID` operationId).
+	GetAdminSandboxesSandboxIDWithResponse(ctx context.Context, sandboxID SandboxID, reqEditors ...RequestEditorFn) (*GetAdminSandboxesSandboxIDResponse, error)
+
 	// PostAdminTeamsTeamIDApiKeysWithBodyWithResponse Create team API key as admin
 	//
 	// Creates a team API key for internal service workflows.
@@ -9973,6 +10082,89 @@ func (r GetAdminSandboxesRunningCountsResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetAdminSandboxesRunningCountsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetAdminSandboxesSandboxIDResponse429Headers the declared response headers of an HTTP 429 response for GetAdminSandboxesSandboxID
+type GetAdminSandboxesSandboxIDResponse429Headers struct {
+	RetryAfter *int
+}
+
+type GetAdminSandboxesSandboxIDResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdminSandbox
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetAdminSandboxesSandboxIDResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetAdminSandboxesSandboxIDResponse) GetJSON200() *AdminSandbox {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetAdminSandboxesSandboxIDResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetAdminSandboxesSandboxIDResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetAdminSandboxesSandboxIDResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetAdminSandboxesSandboxIDResponse) GetJSON429() *N429 {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetAdminSandboxesSandboxIDResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetAdminSandboxesSandboxIDResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetAdminSandboxesSandboxIDResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetAdminSandboxesSandboxIDResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetAdminSandboxesSandboxIDResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -15796,6 +15988,23 @@ func (c *ClientWithResponses) GetAdminSandboxesRunningCountsWithResponse(ctx con
 	return ParseGetAdminSandboxesRunningCountsResponse(rsp)
 }
 
+// GetAdminSandboxesSandboxIDWithResponse Get a sandbox's team and state
+//
+// Reads the team and state of a sandbox from its latest lifecycle event.
+// The state lags the sandbox while that event is in flight. A sandbox
+// whose events have expired is not found.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /admin/sandboxes/{sandboxID} (the `GetAdminSandboxesSandboxID` operationId).
+func (c *ClientWithResponses) GetAdminSandboxesSandboxIDWithResponse(ctx context.Context, sandboxID SandboxID, reqEditors ...RequestEditorFn) (*GetAdminSandboxesSandboxIDResponse, error) {
+	rsp, err := c.GetAdminSandboxesSandboxID(ctx, sandboxID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetAdminSandboxesSandboxIDResponse(rsp)
+}
+
 // PostAdminTeamsTeamIDApiKeysWithBodyWithResponse Create team API key as admin
 //
 // Creates a team API key for internal service workflows.
@@ -17333,6 +17542,80 @@ func ParseGetAdminSandboxesRunningCountsResponse(rsp *http.Response) (*GetAdminS
 	switch {
 	case rsp.StatusCode == 429:
 		var headers GetAdminSandboxesRunningCountsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetAdminSandboxesSandboxIDResponse parses an HTTP response from a GetAdminSandboxesSandboxIDWithResponse call
+func ParseGetAdminSandboxesSandboxIDResponse(rsp *http.Response) (*GetAdminSandboxesSandboxIDResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetAdminSandboxesSandboxIDResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdminSandbox
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetAdminSandboxesSandboxIDResponse429Headers
 		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
 			var value int
 			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {

@@ -191,6 +191,10 @@ type teamRunningSandboxCounter interface {
 	TeamRunningSandboxCounts(ctx context.Context) (map[uuid.UUID]int64, error)
 }
 
+type sandboxLifecycleReader interface {
+	QuerySandboxLifecycle(ctx context.Context, sandboxID string) (clickhouse.SandboxLifecycle, error)
+}
+
 type APIStore struct {
 	startupState atomic.Uint32
 	config       cfg.Config
@@ -211,6 +215,7 @@ type APIStore struct {
 	// RPC: a running sandbox is routed before its snapshot kind is consulted.
 	autoResumeBackendOverride autoResumeOrchestrator
 	teamSandboxCounter        teamRunningSandboxCounter
+	sandboxLifecycles         sandboxLifecycleReader
 	templateManager           *template_manager.TemplateManager
 	sqlcDB                    *sqlcdb.Client
 	sqlcReadDB                *sqlcdb.Client
@@ -423,6 +428,7 @@ func NewAPIStore(ctx context.Context, tel *telemetry.Client, redisClient redis.U
 		config:                config,
 		orchestrator:          orch,
 		teamSandboxCounter:    sandboxcountscache.NewCountsCache(orch, redisClient),
+		sandboxLifecycles:     clickhouseStore,
 		templateManager:       templateManager,
 		sqlcDB:                sqlcDB,
 		sqlcReadDB:            sqlcReadDB,
