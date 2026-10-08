@@ -38,7 +38,7 @@ LEFT JOIN LATERAL (
 ) template_alias ON TRUE
 WHERE sl.team_id = $1::uuid
   AND sl.sandbox_id = $2::text
-ORDER BY sl.created_at DESC
+ORDER BY sl.started_at DESC
 LIMIT 1
 `
 
