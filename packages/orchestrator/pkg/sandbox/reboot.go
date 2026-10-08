@@ -170,7 +170,9 @@ func (f *Factory) RebootSandbox(
 		featureflags.TeamContext(runtime.TeamID))
 	cpuTemplate, overridden, err := rebootCPUTemplate(meta, override)
 	if err != nil {
-		logger.L().Error(ctx, "ignoring invalid reboot CPU template override", zap.Error(err))
+		logger.L().Error(ctx, "ignoring invalid reboot CPU template override",
+			zap.String("flag", featureflags.RebootCPUTemplateOverride.Key()), zap.Error(err),
+			logger.WithSandboxID(runtime.SandboxID))
 	}
 	if overridden {
 		logger.L().Info(ctx, "reboot CPU template overridden",
@@ -181,6 +183,7 @@ func (f *Factory) RebootSandbox(
 	span.SetAttributes(
 		attribute.String("sandbox.build_cpu_template", cputemplate.AppliedDigest(meta.BuildCPUTemplate)),
 		attribute.Bool("sandbox.cpu_template_overridden", overridden),
+		attribute.Bool("sandbox.cpu_template_override_invalid", err != nil),
 	)
 
 	if err := checkRebootCPUTemplate(meta.CPUTemplate, config.FirecrackerConfig.FirecrackerVersion); err != nil {

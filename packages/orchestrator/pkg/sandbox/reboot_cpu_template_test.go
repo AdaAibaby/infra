@@ -3,15 +3,27 @@
 package sandbox
 
 import (
+	"context"
 	"runtime"
 	"testing"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/launchdarkly/go-sdk-common/v3/ldvalue"
+	"github.com/launchdarkly/go-server-sdk/v7/testhelpers/ldtestdata"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.uber.org/zap"
 
+	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/fc"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/fc/cputemplate"
+	templatemocks "github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/template/mocks"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/template/metadata"
+	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
+	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
+	"github.com/e2b-dev/infra/packages/shared/pkg/storage"
 )
 
 func TestCheckRebootCPUTemplate(t *testing.T) {
@@ -74,5 +86,69 @@ func TestRebootCPUTemplate(t *testing.T) {
 		require.Error(t, err, invalid)
 		assert.False(t, overridden)
 		assert.Equal(t, a, got, "an invalid override falls back to the build's template")
+	}
+}
+
+// A rejected override boots the build's template, exactly as no override does, so the span and
+// the log are the only places that tell the two apart.
+func TestRebootSandboxMarksRejectedCPUTemplateOverride(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		override string
+		invalid  bool
+	}{
+		{override: `{}`, invalid: false},
+		{override: `{"kvm_capabilities":["!122"]}`, invalid: true},
+	} {
+		t.Run(tc.override, func(t *testing.T) {
+			t.Parallel()
+
+			td := ldtestdata.DataSource()
+			td.Update(td.Flag(featureflags.RebootCPUTemplateOverride.Key()).ValueForAll(ldvalue.Parse([]byte(tc.override))))
+			ff, err := featureflags.NewClientWithDatasource(td)
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = ff.Close(context.WithoutCancel(t.Context())) })
+
+			tpl := templatemocks.NewMockTemplate(t)
+			tpl.EXPECT().Files().Return(storage.CachePaths{Paths: storage.Paths{BuildID: uuid.NewString()}})
+			tpl.EXPECT().Metadata().Return(metadata.Template{
+				FilesystemOnly:   true,
+				BuildCPUTemplate: &cputemplate.Template{KvmCapabilities: []string{"!121"}},
+			}, nil)
+
+			ctx, parent := otel.Tracer("github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox").Start(t.Context(), "test")
+			// The build's template needs a Firecracker version to check against, so an
+			// unparseable one stops the boot right after the template is picked.
+			config := &Config{FirecrackerConfig: fc.Config{FirecrackerVersion: "not-a-version"}}
+			sandboxID := "sbx-" + uuid.NewString()
+			f := &Factory{featureFlags: ff}
+			_, err = f.RebootSandbox(ctx, tpl, config, sandboxtypes.RuntimeMetadata{SandboxID: sandboxID},
+				time.Now().Add(time.Minute), nil, false, false, nil)
+			parent.End()
+			require.ErrorContains(t, err, "not-a-version")
+
+			got := map[attribute.Key]bool{}
+			for _, sp := range testSpanRecorder.Ended() {
+				if sp.Name() != "reboot sandbox" || sp.Parent().SpanID() != parent.SpanContext().SpanID() {
+					continue
+				}
+				for _, kv := range sp.Attributes() {
+					if kv.Value.Type() == attribute.BOOL {
+						got[kv.Key] = kv.Value.AsBool()
+					}
+				}
+			}
+			require.Contains(t, got, attribute.Key("sandbox.cpu_template_override_invalid"))
+			assert.Equal(t, tc.invalid, got["sandbox.cpu_template_override_invalid"])
+			assert.False(t, got["sandbox.cpu_template_overridden"])
+
+			if tc.invalid {
+				entries := testLogObserver.FilterMessage("ignoring invalid reboot CPU template override").
+					FilterField(zap.String("sandbox.id", sandboxID)).All()
+				require.Len(t, entries, 1)
+				assert.Equal(t, featureflags.RebootCPUTemplateOverride.Key(), entries[0].ContextMap()["flag"])
+			}
+		})
 	}
 }
