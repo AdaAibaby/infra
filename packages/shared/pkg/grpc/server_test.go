@@ -12,10 +12,12 @@ import (
 	"math/big"
 	"net"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	metricnoop "go.opentelemetry.io/otel/metric/noop"
 	tracenoop "go.opentelemetry.io/otel/trace/noop"
@@ -160,6 +162,79 @@ func TestNewGRPCServerWithMaxConnectionAge(t *testing.T) {
 	require.Less(t, time.Since(start), 5*time.Second)
 	require.Equal(t, codes.Unavailable, status.Code(receive(ctx, t, held)))
 	require.EqualValues(t, 2, service.calls.Load())
+}
+
+// cleanupService keeps running after its call is cancelled, until the test
+// releases it, as a handler still releasing a database session would.
+type cleanupService struct {
+	proxygrpc.UnimplementedSandboxServiceServer
+
+	entered   chan struct{}
+	cancelled chan struct{}
+	release   chan struct{}
+	returned  atomic.Bool
+}
+
+func (s *cleanupService) ResumeSandbox(ctx context.Context, _ *proxygrpc.SandboxResumeRequest) (*proxygrpc.SandboxResumeResponse, error) {
+	s.entered <- struct{}{}
+	<-ctx.Done()
+	s.cancelled <- struct{}{}
+	<-s.release
+	s.returned.Store(true)
+
+	return nil, status.FromContextError(ctx.Err()).Err()
+}
+
+func TestNewGRPCServerWithWaitForHandlers(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name string
+		stop func(*testing.T, *grpc.Server)
+	}{
+		{"Stop", func(_ *testing.T, server *grpc.Server) { server.Stop() }},
+		{"GracefulStopWithTimeout fallback", func(t *testing.T, server *grpc.Server) {
+			t.Helper()
+			assert.False(t, GracefulStopWithTimeout(server, 50*time.Millisecond), "the held call prevents a graceful stop")
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			service := &cleanupService{entered: make(chan struct{}, 1), cancelled: make(chan struct{}, 1), release: make(chan struct{})}
+			server, conn := startSandboxServer(t, service, WithWaitForHandlers())
+			// Runs before the server's cleanup, so a failed run cannot hang it.
+			release := sync.OnceFunc(func() { close(service.release) })
+			t.Cleanup(release)
+			ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+			defer cancel()
+			go func() {
+				_, _ = proxygrpc.NewSandboxServiceClient(conn).ResumeSandbox(ctx, &proxygrpc.SandboxResumeRequest{})
+			}()
+			receive(ctx, t, service.entered)
+
+			stopped := make(chan struct{})
+			go func() {
+				tc.stop(t, server)
+				close(stopped)
+			}()
+			// The stop cancels the admitted handler, which then holds on
+			// until released. The window only gives an early return a
+			// chance to show. A passing run cannot depend on it.
+			receive(ctx, t, service.cancelled)
+			require.Never(t, func() bool {
+				select {
+				case <-stopped:
+					return true
+				default:
+					return false
+				}
+			}, 100*time.Millisecond, 5*time.Millisecond, "the stop returned while the cancelled handler was still running")
+			release()
+			receive(ctx, t, stopped)
+			require.True(t, service.returned.Load())
+		})
+	}
 }
 
 func receive[T any](ctx context.Context, t *testing.T, values <-chan T) T {

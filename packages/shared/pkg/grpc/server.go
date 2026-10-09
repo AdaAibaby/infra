@@ -46,6 +46,7 @@ type serverOptions struct {
 	maxConnectionAge         time.Duration
 	maxConnectionAgeGrace    time.Duration
 	maxConnectionAgeSet      bool
+	waitForHandlers          bool
 }
 
 // connectionAge returns the age and grace to apply: the explicit values when
@@ -95,6 +96,15 @@ func WithStreamInterceptors(interceptors ...grpc.StreamServerInterceptor) Server
 // it the server speaks plaintext, as before.
 func WithTransportCredentials(creds credentials.TransportCredentials) ServerOption {
 	return func(o *serverOptions) { o.creds = creds }
+}
+
+// WithWaitForHandlers makes Stop, including the forced fallback of
+// GracefulStopWithTimeout, return only after every method handler has
+// returned. Stop still closes connections and cancels handler contexts first.
+// Without it, Stop can return while handlers run, so a caller that closes
+// their dependencies afterwards races them.
+func WithWaitForHandlers() ServerOption {
+	return func(o *serverOptions) { o.waitForHandlers = true }
 }
 
 // WithUnaryDeadline bounds unary requests while preserving an earlier caller deadline.
@@ -204,6 +214,9 @@ func NewGRPCServer(tel *telemetry.Client, opts ...ServerOption) *grpc.Server {
 	}
 	if cfg.creds != nil {
 		serverOpts = append(serverOpts, grpc.Creds(cfg.creds))
+	}
+	if cfg.waitForHandlers {
+		serverOpts = append(serverOpts, grpc.WaitForHandlers(true))
 	}
 
 	return grpc.NewServer(serverOpts...)

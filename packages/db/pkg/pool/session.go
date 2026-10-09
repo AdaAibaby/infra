@@ -29,6 +29,15 @@ var (
 // ErrAdvisoryLockBusy reports that a non-blocking lock attempt found a holder.
 var ErrAdvisoryLockBusy = errors.New("database advisory lock is held")
 
+// ErrCommitOutcomeUnknown marks a COMMIT that was sent but not answered with a
+// rollback or an ordinary ERROR outside SQLSTATE class 08. A lost reply, a
+// closed connection, a FATAL error and a connection exception all carry it,
+// because the server may have applied the transaction first. It wraps the
+// original error and is never replayed, whatever SQLSTATE that error carries.
+// A COMMIT pgx reports as never sent does not carry it, unless pgx cannot
+// tell, as with "conn closed".
+var ErrCommitOutcomeUnknown = errors.New("transaction commit outcome is unknown")
+
 // AdvisoryLock is a PostgreSQL session lock held on one pool connection. One
 // lock belongs to one goroutine and must be released when its work finishes.
 type AdvisoryLock struct {
@@ -88,7 +97,8 @@ func (c *Client) TryAcquireAdvisoryLock(ctx context.Context, key string) (*Advis
 // InTxReturn1 runs fn in a READ COMMITTED transaction without advisory locks.
 // Serialization failures and deadlocks replay the whole callback, so fn must
 // only perform work inside the transaction. Only a committed value is returned.
-// Connection errors and uncertain commit outcomes are not retried.
+// Connection errors and uncertain commit outcomes are not retried. An uncertain
+// commit outcome wraps ErrCommitOutcomeUnknown.
 // Attempts and backoff share a five-second budget, bounded by the caller's deadline.
 func InTxReturn1[T any](ctx context.Context, pool *pgxpool.Pool, fn func(context.Context, pgx.Tx) (T, error)) (T, error) {
 	return replayTransaction(ctx, func(ctx context.Context) (T, error) {
@@ -209,6 +219,8 @@ func replayTransaction[T any](ctx context.Context, run func(context.Context) (T,
 		switch {
 		case err == nil:
 			return value, nil
+		case errors.Is(err, ErrCommitOutcomeUnknown):
+			return zero, err
 		case retryable(err):
 			conflict = err
 		default:
@@ -251,10 +263,37 @@ func runInTxReturn1[T any](
 		return zero, err
 	}
 	if err := tx.Commit(ctx); err != nil {
-		return zero, fmt.Errorf("commit a transaction: %w", err)
+		if isKnownCommitAbort(err) {
+			return zero, fmt.Errorf("commit a transaction: %w", err)
+		}
+
+		return zero, fmt.Errorf("commit a transaction: %w: %w", ErrCommitOutcomeUnknown, err)
 	}
 
 	return value, nil
+}
+
+// isKnownCommitAbort reports whether a failed COMMIT certainly did not apply:
+// it was never sent, the server rolled it back, or the server answered with an
+// ordinary ERROR. pgx also marks "conn closed" safe to retry when the
+// connection died while it read the reply, so that error counts as unknown. A
+// FATAL error or a connection exception, which a pooler can report after its
+// server connection died during the COMMIT, counts as unknown too, as does a
+// localized severity sent without the unlocalized field.
+func isKnownCommitAbort(err error) bool {
+	if (pgconn.SafeToRetry(err) && !errors.Is(err, pgconn.ErrConnClosed)) || errors.Is(err, pgx.ErrTxCommitRollback) {
+		return true
+	}
+	var pgErr *pgconn.PgError
+	if !errors.As(err, &pgErr) {
+		return false
+	}
+	severity := pgErr.SeverityUnlocalized
+	if severity == "" {
+		severity = pgErr.Severity
+	}
+
+	return severity == "ERROR" && !pgerrcode.IsConnectionException(pgErr.Code)
 }
 
 func isSerializationConflict(err error) bool {
