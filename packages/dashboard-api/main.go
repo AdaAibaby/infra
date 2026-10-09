@@ -145,7 +145,7 @@ func run() int {
 	}
 	defer authDB.Close()
 
-	featureFlags, err := featureflags.NewClient(config.DeploymentEnvironment, serviceName, serviceVersion)
+	featureFlags, err := featureflags.NewClient(config.DeploymentEnvironment, serviceName, serviceVersion, featureflags.WithStartOnInitTimeout())
 	if err != nil {
 		l.Error(ctx, "Initializing feature flags client", zap.Error(err))
 

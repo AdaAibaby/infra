@@ -55,6 +55,8 @@ const (
 )
 
 // All flags must be defined here: https://app.launchdarkly.com/projects/default/flags/
+// A flag read through StringReader is the exception: its caller owns the key
+// and the fallback.
 
 type JSONFlag struct {
 	name     string

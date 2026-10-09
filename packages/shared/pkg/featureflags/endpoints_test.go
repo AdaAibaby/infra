@@ -24,11 +24,11 @@ func TestCustomServiceEndpoints(t *testing.T) {
 
 	for _, constructor := range []struct {
 		name string
-		new  func(string, string, string) (*Client, error)
+		new  func(string, string, string, ...Option) (*Client, error)
 	}{
 		{name: "default", new: NewClient},
-		{name: "log level", new: func(environment, service, version string) (*Client, error) {
-			return NewClientWithLogLevel(environment, service, version, ldlog.Error)
+		{name: "log level", new: func(environment, service, version string, opts ...Option) (*Client, error) {
+			return NewClientWithLogLevel(environment, service, version, ldlog.Error, opts...)
 		}},
 	} {
 		t.Run(constructor.name, func(t *testing.T) {

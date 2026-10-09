@@ -2,6 +2,7 @@ package featureflags
 
 import (
 	"context"
+	"errors"
 	"os"
 	"time"
 
@@ -24,6 +25,20 @@ var launchDarklyOfflineStore = ldtestdata.DataSource()
 var launchDarklyApiKey = os.Getenv("LAUNCH_DARKLY_API_KEY")
 
 const waitForInit = 5 * time.Second
+
+// Option configures NewClient and NewClientWithLogLevel.
+type Option func(*options)
+
+type options struct{ startOnInitTimeout bool }
+
+// WithStartOnInitTimeout keeps the client when LaunchDarkly has not answered
+// within waitForInit: it is Live and serves fallbacks until the stream
+// connects, then follows the flags. A permanent failure, such as a rejected
+// SDK key, still fails. Opt in only where running on fallbacks is safer than
+// not starting.
+func WithStartOnInitTimeout() Option {
+	return func(o *options) { o.startOnInitTimeout = true }
+}
 
 // undefinedDeploymentEnvironment is the place key of a process whose
 // configuration names no deployment environment. It keeps the context
@@ -101,7 +116,7 @@ func NewClientWithDatasource(source *ldtestdata.TestDataSource) (*Client, error)
 // when serviceName is not empty, a ServiceKind context to every evaluation.
 // The same names, with serviceVersion, identify the process as a LaunchDarkly
 // application; see applicationInfo.
-func NewClient(deploymentEnvironment, serviceName, serviceVersion string) (*Client, error) {
+func NewClient(deploymentEnvironment, serviceName, serviceVersion string, opts ...Option) (*Client, error) {
 	if launchDarklyApiKey == "" {
 		c, err := NewClientWithDatasource(launchDarklyOfflineStore)
 		if err != nil {
@@ -115,9 +130,36 @@ func NewClient(deploymentEnvironment, serviceName, serviceVersion string) (*Clie
 		ApplicationInfo:  applicationInfo(deploymentEnvironment, serviceName, serviceVersion),
 		ServiceEndpoints: serviceEndpoints(),
 	}
-	ldClient, err := ldclient.MakeCustomClient(launchDarklyApiKey, cfg, waitForInit)
+
+	return connect(launchDarklyApiKey, cfg, waitForInit, deploymentEnvironment, serviceName, opts...)
+}
+
+// connect makes the SDK client and waits up to wait for its first payload.
+// On ErrInitializationTimeout the SDK keeps connecting in the background, and
+// the client is kept if the caller opted in. Otherwise an error closes the
+// client, stopping its event processor and data source. Close does not stop a
+// stream still retrying its first connection: it keeps running until it
+// connects.
+//
+//nolint:contextcheck // the constructors take no context; the warning is a one-off at startup
+func connect(sdkKey string, cfg ldclient.Config, wait time.Duration, deploymentEnvironment, serviceName string, opts ...Option) (*Client, error) {
+	var o options
+	for _, opt := range opts {
+		opt(&o)
+	}
+
+	ldClient, err := ldclient.MakeCustomClient(sdkKey, cfg, wait)
 	if err != nil {
-		return nil, err
+		if !o.startOnInitTimeout || !errors.Is(err, ldclient.ErrInitializationTimeout) {
+			if ldClient != nil {
+				_ = ldClient.Close()
+			}
+
+			return nil, err
+		}
+
+		logger.L().Warn(context.Background(), "LaunchDarkly client did not initialize in time; starting on flag fallbacks",
+			zap.String("service", serviceName), zap.Duration("waited", wait), zap.Error(err))
 	}
 
 	return newClient(ldClient, false, deploymentEnvironment, serviceName), nil
@@ -125,7 +167,7 @@ func NewClient(deploymentEnvironment, serviceName, serviceVersion string) (*Clie
 
 // NewClientWithLogLevel creates a client with a specific log level.
 // Use ldlog.Error to suppress INFO/WARN logs in CLI tools.
-func NewClientWithLogLevel(deploymentEnvironment, serviceName, serviceVersion string, logLevel ldlog.LogLevel) (*Client, error) {
+func NewClientWithLogLevel(deploymentEnvironment, serviceName, serviceVersion string, logLevel ldlog.LogLevel, opts ...Option) (*Client, error) {
 	cfg := ldclient.Config{
 		ApplicationInfo:  applicationInfo(deploymentEnvironment, serviceName, serviceVersion),
 		Logging:          ldcomponents.Logging().MinLevel(logLevel),
@@ -145,12 +187,7 @@ func NewClientWithLogLevel(deploymentEnvironment, serviceName, serviceVersion st
 		return newClient(ldClient, true, deploymentEnvironment, serviceName), nil
 	}
 
-	ldClient, err := ldclient.MakeCustomClient(launchDarklyApiKey, cfg, waitForInit)
-	if err != nil {
-		return nil, err
-	}
-
-	return newClient(ldClient, false, deploymentEnvironment, serviceName), nil
+	return connect(launchDarklyApiKey, cfg, waitForInit, deploymentEnvironment, serviceName, opts...)
 }
 
 // LAUNCH_DARKLY_BASE_URL redirects streaming, polling and events together.
@@ -257,6 +294,13 @@ func getFlag[T any](
 	if ld == nil {
 		logger.L().Info(ctx, "LaunchDarkly client is not initialized, returning fallback")
 
+		return flag.Fallback()
+	}
+
+	// A client kept on an initialization timeout fails every evaluation with
+	// ErrClientNotInitialized until its stream connects. That is expected, so
+	// it serves the fallback without a warning on each read.
+	if !ld.Initialized() {
 		return flag.Fallback()
 	}
 
