@@ -484,7 +484,7 @@ func (s *Sandbox) initEnvd(ctx context.Context, startType StartType, recordMetri
 	if err != nil {
 		logger.L().Error(ctx, "failed to init envd after retries",
 			logger.WithSandboxID(s.Runtime.SandboxID),
-                        logger.WithTeamID(s.Runtime.TeamID),
+			logger.WithTeamID(s.Runtime.TeamID),
 			logger.WithEnvdVersion(s.Config.Envd.Version),
 			zap.Int64("timeout_ms", s.internalConfig.EnvdInitRequestTimeout.Milliseconds()),
 			zap.Int64("attempts", count),
