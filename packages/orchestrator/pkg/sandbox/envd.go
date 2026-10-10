@@ -542,6 +542,7 @@ func (s *Sandbox) initEnvd(ctx context.Context, startType StartType, recordMetri
 	if response.StatusCode != http.StatusNoContent {
 		logger.L().Error(ctx, "envd init request failed",
 			logger.WithSandboxID(s.Runtime.SandboxID),
+			logger.WithTeamID(s.Runtime.TeamID),
 			logger.WithEnvdVersion(s.Config.Envd.Version),
 			zap.Int("status_code", response.StatusCode),
 			zap.String("response_body", utils.Truncate(string(body), 100)),
