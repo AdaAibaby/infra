@@ -4,6 +4,10 @@ ARG ALPINE_VERSION=3.24
 FROM golang:${GOLANG_VERSION}-alpine${ALPINE_VERSION} AS builder
 ARG TARGETARCH
 
+ENV GOPROXY=https://goproxy.cn,direct
+ENV GOSUMDB=sum.golang.google.cn
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
+
 RUN apk add --no-cache make
 
 # Cached golang dependencies

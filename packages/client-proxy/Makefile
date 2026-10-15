@@ -13,13 +13,11 @@ BUILD_ARCH ?= amd64
 #   BUILD_PLATFORM=linux/amd64,linux/arm64 make build-and-upload
 BUILD_PLATFORM ?= linux/$(BUILD_ARCH)
 
-ifeq ($(PROVIDER),aws)
-	IMAGE_REGISTRY := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PREFIX)core/client-proxy
-else ifeq ($(PROVIDER),azure)
-	IMAGE_REGISTRY := $(AZURE_REGISTRY_NAME).azurecr.io/$(PREFIX)core/client-proxy
-else
-	IMAGE_REGISTRY := $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/$(PREFIX)core/client-proxy
-endif
+# Volcengine configuration (dev)
+VOLC_REGISTRY ?= mp-bp-cn-shanghai.cr.volces.com
+VOLC_NAMESPACE ?= e2b
+IMAGE_TAG ?= latest
+IMAGE_REGISTRY := $(VOLC_REGISTRY)/$(VOLC_NAMESPACE)/client-proxy
 
 # E2B-hosted registry that holds released, prebuilt client-proxy images.
 # Published to by the release-please workflow on tagging a release.
@@ -60,7 +58,8 @@ build-and-upload:
 ifeq ($(strip $(CLIENT_PROXY_VERSION)),)
 	# Existing flow: build from source and push to the client's own core repo.
 	$(eval COMMIT_SHA := $(shell git rev-parse --short HEAD))
-	@docker buildx build --platform $(BUILD_PLATFORM) --tag $(IMAGE_REGISTRY) --tag $(IMAGE_REGISTRY):$(COMMIT_SHA) --push --build-arg COMMIT_SHA="$(COMMIT_SHA)" -f ./Dockerfile ..
+	@echo "Building and pushing to Volcengine: $(IMAGE_REGISTRY):$(IMAGE_TAG)"
+	@docker buildx build --platform $(BUILD_PLATFORM) --tag $(IMAGE_REGISTRY) --tag $(IMAGE_REGISTRY):$(IMAGE_TAG) --tag $(IMAGE_REGISTRY):$(COMMIT_SHA) --push --build-arg COMMIT_SHA="$(COMMIT_SHA)" -f ./Dockerfile ..
 else
 	# Released-image flow: pull the prebuilt, versioned image from the E2B
 	# artifacts registry and retag/push it into the client's own core repo.

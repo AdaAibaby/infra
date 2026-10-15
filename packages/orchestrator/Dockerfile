@@ -9,6 +9,10 @@ ARG GOLANG_VERSION=1.26.6
 ARG DEBIAN_VERSION=bookworm
 
 FROM golang:${GOLANG_VERSION}-${DEBIAN_VERSION} AS builder
+
+ENV GOPROXY=https://goproxy.cn,direct
+ENV GOSUMDB=sum.golang.google.cn
+RUN sed -i 's/dl-cdn.alpinelinux.org/mirrors.aliyun.com/g' /etc/apk/repositories
 ARG TARGETARCH
 
 # Cached golang dependencies

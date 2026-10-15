@@ -4,13 +4,11 @@ PREFIX := $(strip $(subst ",,$(PREFIX)))
 
 CLICKHOUSE_HOST ?= clickhouse
 
-ifeq ($(PROVIDER),aws)
-	CLICKHOUSE_MIGRATOR_IMAGE ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PREFIX)core/clickhouse-migrator
-else ifeq ($(PROVIDER),azure)
-	CLICKHOUSE_MIGRATOR_IMAGE ?= $(AZURE_REGISTRY_NAME).azurecr.io/$(PREFIX)core/clickhouse-migrator
-else
-	CLICKHOUSE_MIGRATOR_IMAGE ?= $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/$(PREFIX)core/clickhouse-migrator
-endif
+# Volcengine configuration (dev)
+VOLC_REGISTRY ?= mp-bp-cn-shanghai.cr.volces.com
+VOLC_NAMESPACE ?= e2b
+IMAGE_TAG ?= latest
+CLICKHOUSE_MIGRATOR_IMAGE := $(VOLC_REGISTRY)/$(VOLC_NAMESPACE)/clickhouse-migrator
 
 # E2B-hosted registry that holds released, prebuilt clickhouse-migrator images.
 # Published to by the release-please workflow on tagging a release.
@@ -72,7 +70,9 @@ ifeq ($(strip $(CLICKHOUSE_MIGRATOR_VERSION)),)
 # Existing flow: build from source and push to the client's own core repo.
 build-and-upload:build
 	$(eval COMMIT_SHA := $(shell git rev-parse --short HEAD))
+	@docker tag "$(CLICKHOUSE_MIGRATOR_IMAGE)" "$(CLICKHOUSE_MIGRATOR_IMAGE):$(IMAGE_TAG)"
 	@docker push "$(CLICKHOUSE_MIGRATOR_IMAGE)"
+	@docker push "$(CLICKHOUSE_MIGRATOR_IMAGE):$(IMAGE_TAG)"
 	@docker push "$(CLICKHOUSE_MIGRATOR_IMAGE):$(COMMIT_SHA)"
 else
 # Released-image flow: pull the prebuilt, versioned image from the E2B

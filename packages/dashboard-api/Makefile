@@ -7,11 +7,11 @@ PREFIX := $(strip $(subst ",,$(PREFIX)))
 # the published repository, where this package sits at packages/dashboard-api.
 expectedMigration := $(shell ls ../db/migrations | sed 's/_.*//' | sort | tail -n 1)
 
-ifeq ($(PROVIDER),aws)
-	IMAGE_REGISTRY := $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com/$(PREFIX)core/dashboard-api
-else
-	IMAGE_REGISTRY := $(GCP_REGION)-docker.pkg.dev/$(GCP_PROJECT_ID)/$(PREFIX)core/dashboard-api
-endif
+# Volcengine configuration (dev)
+VOLC_REGISTRY ?= mp-bp-cn-shanghai.cr.volces.com
+VOLC_NAMESPACE ?= e2b
+IMAGE_TAG ?= latest
+IMAGE_REGISTRY := $(VOLC_REGISTRY)/$(VOLC_NAMESPACE)/dashboard-api
 
 # E2B-hosted registry that holds released, prebuilt dashboard-api images.
 # Published to by the release-please workflow on tagging a release.
@@ -58,7 +58,7 @@ ifeq ($(strip $(DASHBOARD_API_VERSION)),)
 	# Existing flow: build from source and push to the client's own core repo.
 	$(eval COMMIT_SHA := $(shell git rev-parse --short HEAD))
 	$(eval EXPECTED_MIGRATION_TIMESTAMP := $(expectedMigration))
-	@docker build --platform linux/amd64 --tag $(IMAGE_REGISTRY) --tag $(IMAGE_REGISTRY):$(COMMIT_SHA) --push --build-arg COMMIT_SHA="$(COMMIT_SHA)" --build-arg EXPECTED_MIGRATION_TIMESTAMP="$(EXPECTED_MIGRATION_TIMESTAMP)" -f ./Dockerfile ..
+	@docker build --platform linux/amd64 --tag $(IMAGE_REGISTRY) --tag $(IMAGE_REGISTRY):$(IMAGE_TAG) --tag $(IMAGE_REGISTRY):$(COMMIT_SHA) --push --build-arg COMMIT_SHA="$(COMMIT_SHA)" --build-arg EXPECTED_MIGRATION_TIMESTAMP="$(EXPECTED_MIGRATION_TIMESTAMP)" -f ./Dockerfile ..
 else
 	# Released-image flow: pull the prebuilt, versioned image from the E2B
 	# artifacts registry and retag/push it into the client's own core repo.
