@@ -20,7 +20,7 @@ require (
 	github.com/oapi-codegen/runtime v1.6.0
 	github.com/prometheus/procfs v0.20.1
 	github.com/rs/cors v1.11.1
-	github.com/rs/zerolog v1.34.0
+	github.com/rs/zerolog v1.35.1
 	github.com/shirou/gopsutil/v4 v4.26.6
 	github.com/stretchr/testify v1.12.1
 	github.com/txn2/txeh v1.8.1
