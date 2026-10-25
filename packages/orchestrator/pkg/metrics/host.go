@@ -240,8 +240,8 @@ func hugePagesPool(ctx context.Context) hugePagePool {
 		return pool
 	}
 
-	now := time.Now().Unix()
-	if last := lastPoolWarning.Load(); now-last >= 60 && lastPoolWarning.CompareAndSwap(last, now) {
+	nowSec := time.Now().Unix()
+	if last := lastPoolWarning.Load(); nowSec-last >= 60 && lastPoolWarning.CompareAndSwap(last, nowSec) {
 		logger.L().Warn(ctx, "Cannot read the hugepage pool size, reporting it as unknown", zap.Error(err))
 	}
 

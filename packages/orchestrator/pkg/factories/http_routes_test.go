@@ -73,8 +73,8 @@ func TestHTTPHandlerPreservesUploadRoute(t *testing.T) {
 	t.Cleanup(server.Close)
 	client := server.Client()
 	client.Timeout = 3 * time.Second
-	expires := time.Now().Add(time.Minute).Unix()
-	url := fmt.Sprintf("%s/upload?path=artifact&expires=%d&token=%s", server.URL, expires, storage.ComputeUploadHMAC(key, "artifact", expires))
+	expiresSec := time.Now().Add(time.Minute).Unix()
+	url := fmt.Sprintf("%s/upload?path=artifact&expires=%d&token=%s", server.URL, expiresSec, storage.ComputeUploadHMAC(key, "artifact", expiresSec))
 	request, err := http.NewRequestWithContext(t.Context(), http.MethodPut, url, bytes.NewBufferString("uploaded artifact"))
 	require.NoError(t, err)
 	response, err := client.Do(request)
