@@ -51,9 +51,9 @@ require (
 	github.com/pressly/goose/v3 v3.27.2
 	github.com/redis/go-redis/extra/redisotel/v9 v9.17.3
 	github.com/redis/go-redis/v9 v9.22.0
-	github.com/riverqueue/river v0.47.0
-	github.com/riverqueue/river/riverdriver v0.47.0
-	github.com/riverqueue/river/rivertype v0.47.0
+	github.com/riverqueue/river v0.49.0
+	github.com/riverqueue/river/riverdriver v0.49.0
+	github.com/riverqueue/river/rivertype v0.49.0
 	github.com/riverqueue/rivercontrib/otelriver v0.12.0
 	github.com/rs/cors v1.11.1
 	github.com/samber/lo v1.53.0
@@ -347,7 +347,7 @@ require (
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.61.0 // indirect
 	github.com/redis/go-redis/extra/rediscmd/v9 v9.17.3 // indirect
-	github.com/riverqueue/river/rivershared v0.47.0 // indirect
+	github.com/riverqueue/river/rivershared v0.49.0 // indirect
 	github.com/rogpeppe/go-internal v1.15.0 // indirect
 	github.com/rs/zerolog v1.34.0 // indirect
 	github.com/sagikazarmark/locafero v0.10.0 // indirect
