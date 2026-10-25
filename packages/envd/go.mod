@@ -17,7 +17,7 @@ require (
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/go-chi/chi/v5 v5.2.4
 	github.com/google/uuid v1.6.0
-	github.com/oapi-codegen/runtime v1.6.0
+	github.com/oapi-codegen/runtime v1.7.0
 	github.com/prometheus/procfs v0.20.1
 	github.com/rs/cors v1.11.1
 	github.com/rs/zerolog v1.35.1
@@ -36,7 +36,8 @@ require (
 	github.com/dprotaso/go-yit v0.0.0-20220510233725-9ba8df137936 // indirect
 	github.com/ebitengine/purego v0.10.1 // indirect
 	github.com/go-ole/go-ole v1.3.0 // indirect
-	github.com/go-openapi/jsonpointer v1.0.0 // indirect
+	github.com/go-openapi/jsonpointer v1.0.1 // indirect
+	github.com/go-openapi/testify/v2 v2.8.0 // indirect
 	github.com/gofrs/uuid/v5 v5.5.1 // indirect
 	github.com/jackc/pgx/v5 v5.11.0 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260330125221-c963978e514e // indirect

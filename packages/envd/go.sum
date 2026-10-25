@@ -47,10 +47,10 @@ github.com/go-logr/stdr v1.2.2/go.mod h1:mMo/vtBO5dYbehREoey6XUKy/eSumjCCveDpRre
 github.com/go-ole/go-ole v1.2.6/go.mod h1:pprOEPIfldk/42T2oK7lQ4v4JSDwmV0As9GaiUsvbm0=
 github.com/go-ole/go-ole v1.3.0 h1:Dt6ye7+vXGIKZ7Xtk4s6/xVdGDQynvom7xCFEdWr6uE=
 github.com/go-ole/go-ole v1.3.0/go.mod h1:5LS6F96DhAwUc7C+1HLexzMXY1xGRSryjyPPKW6zv78=
-github.com/go-openapi/jsonpointer v1.0.0 h1:kR9tHqY0CtZaOPVFm622dPVNhrvYpwr4uCxgL3h1H8s=
-github.com/go-openapi/jsonpointer v1.0.0/go.mod h1:Z3rw7dWu1p9IgitXCFamSlA5lmDiklEB6vkaxcNZW5Y=
-github.com/go-openapi/testify/v2 v2.6.0 h1:5PKH2HE7YJ/LuRPQGvSxBRlFXNQhSetBLlGAgUEu3ug=
-github.com/go-openapi/testify/v2 v2.6.0/go.mod h1:SgsVHtfooshd0tublTtJ50FPKhujf47YRqauXXOUxfw=
+github.com/go-openapi/jsonpointer v1.0.1 h1:2KxywRmNwJkT/FMBa3iRNHEaAxSJvjqoufQZy3au1Mg=
+github.com/go-openapi/jsonpointer v1.0.1/go.mod h1:wI7ZYsFmbIi9nBXOZqgDaS/bqOchRGZjqxFli7FBYxY=
+github.com/go-openapi/testify/v2 v2.8.0 h1:19QDx5b57p8KjO2E4sgs/woL4Akp+FGLRlVm2xn0Rho=
+github.com/go-openapi/testify/v2 v2.8.0/go.mod h1:4gUN8jC+RqOE2qjW/vDmfyTvl5BCht4qL7oca0odrak=
 github.com/go-task/slim-sprig v0.0.0-20210107165309-348f09dbbbc0/go.mod h1:fyg7847qk6SyHyPtNmDHnmrv/HOrqktSC+C9fM+CJOE=
 github.com/gofrs/uuid/v5 v5.5.1 h1:z1Ce19/JwNidXpy3tOQc3241lnJLKdKyq/xlNvlD4Ng=
 github.com/gofrs/uuid/v5 v5.5.1/go.mod h1:bbAA98EoIlxyRHIVg6ektCSsZ5n8mSbwgEhvhMYlZgg=
@@ -105,8 +105,8 @@ github.com/oapi-codegen/nullable v1.1.0 h1:eAh8JVc5430VtYVnq00Hrbpag9PFRGWLjxR1/
 github.com/oapi-codegen/nullable v1.1.0/go.mod h1:KUZ3vUzkmEKY90ksAmit2+5juDIhIZhfDl+0PwOQlFY=
 github.com/oapi-codegen/oapi-codegen/v2 v2.8.0 h1:s4hxMxuqtR8jPzXkBTtFwY/SBuj3gEAYikmbBSdtLMM=
 github.com/oapi-codegen/oapi-codegen/v2 v2.8.0/go.mod h1:yae2TI9IYB5vxQ35gFrpXh9L5H1eJv4MAUK1jumGMTo=
-github.com/oapi-codegen/runtime v1.6.0 h1:7Xx+GlueD6nRuyKoCPzL434Jfi3BetbiJOrzCHp/VPU=
-github.com/oapi-codegen/runtime v1.6.0/go.mod h1:GwV7hC2hviaMzj+ITfHVRESK5J2W/GefVwIND/bMGvU=
+github.com/oapi-codegen/runtime v1.7.0 h1:t7358VYPvNbWJ9gdAkIK/smVeHpBf6yp8VTsaZsb/7k=
+github.com/oapi-codegen/runtime v1.7.0/go.mod h1:GwV7hC2hviaMzj+ITfHVRESK5J2W/GefVwIND/bMGvU=
 github.com/oasdiff/yaml v0.1.1 h1:6nHx+pn9gBRM6YpBlFZFQGCCd1nuvqOBtTD3KKTgGxY=
 github.com/oasdiff/yaml v0.1.1/go.mod h1:EYJNoyktvWMJ0Hmhx+6qTaqMOsalUaRGT8Sj1hNcegU=
 github.com/oasdiff/yaml3 v0.0.14 h1:aLJee3hxBK2H5wdXd9iPcIXb93Nty1Ge0pT171eHtkw=
@@ -175,8 +175,8 @@ github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo
 github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
 go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
 go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
-go.opentelemetry.io/contrib/bridges/otelzap v0.20.1 h1:piZS6uocc7ODKtb9Fq2ayIVOT+N8jfvWhfoA9QTxef4=
-go.opentelemetry.io/contrib/bridges/otelzap v0.20.1/go.mod h1:FfAgLPYhn6ZhkVFzS2BOAnJF0IAAw7GJUVB+ZVtMSyo=
+go.opentelemetry.io/contrib/bridges/otelzap v0.21.0 h1:p23nklcy3VVRcfZ2ce5AXQa6RHQPQvIMM+fW3GzXCU0=
+go.opentelemetry.io/contrib/bridges/otelzap v0.21.0/go.mod h1:7NPD4VToURMipQu1xgz6seTz8aXmbCqQNZs7bQADEjU=
 go.opentelemetry.io/otel v1.47.0 h1:j7ALJ/zgkS7Z6aeJW09p8VC9804bC+PpeTfCD4XPnOM=
 go.opentelemetry.io/otel v1.47.0/go.mod h1:8wS9O2qfXrYrzp6hIF/HOYJJf/wIhFPhR2xLuP+iXQU=
 go.opentelemetry.io/otel/log v1.47.0 h1:cOTS1CcLbSQeZKanGJ+0JpF/+t4PELi3O3bbl2lqCcI=
