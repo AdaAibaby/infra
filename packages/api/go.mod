@@ -45,7 +45,7 @@ require (
 	github.com/jellydator/ttlcache/v3 v3.4.0
 	github.com/launchdarkly/go-sdk-common/v3 v3.3.0
 	github.com/launchdarkly/go-server-sdk/v7 v7.13.0
-	github.com/oapi-codegen/gin-middleware v1.0.2
+	github.com/oapi-codegen/gin-middleware v1.1.0
 	github.com/oapi-codegen/runtime v1.7.0
 	github.com/posthog/posthog-go v0.0.0-20230801140217-d607812dee69
 	github.com/redis/go-redis/v9 v9.22.0
@@ -264,7 +264,7 @@ require (
 	github.com/lib/pq v1.12.3 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260330125221-c963978e514e // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
-	github.com/mailru/easyjson v0.9.1 // indirect
+	github.com/mailru/easyjson v0.9.2 // indirect
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mdlayher/netlink v1.7.3-0.20250113171957-fbb4dce95f42 // indirect

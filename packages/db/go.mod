@@ -72,7 +72,7 @@ require (
 	github.com/launchdarkly/go-jsonstream/v3 v3.1.0 // indirect
 	github.com/launchdarkly/go-sdk-common/v3 v3.3.0 // indirect
 	github.com/launchdarkly/go-test-helpers/v3 v3.1.0 // indirect
-	github.com/mailru/easyjson v0.9.1 // indirect
+	github.com/mailru/easyjson v0.9.2 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/mfridman/xflag v0.1.0 // indirect

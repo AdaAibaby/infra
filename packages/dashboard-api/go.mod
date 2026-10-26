@@ -23,7 +23,7 @@ require (
 	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/google/uuid v1.6.0
 	github.com/jackc/pgx/v5 v5.11.0
-	github.com/oapi-codegen/gin-middleware v1.0.2
+	github.com/oapi-codegen/gin-middleware v1.1.0
 	github.com/oapi-codegen/runtime v1.7.0
 	github.com/ory/client-go v1.22.42
 	github.com/riverqueue/river v0.49.0
@@ -106,7 +106,7 @@ require (
 	github.com/lib/pq v1.12.3 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260330125221-c963978e514e // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
-	github.com/mailru/easyjson v0.9.1 // indirect
+	github.com/mailru/easyjson v0.9.2 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/mfridman/interpolate v0.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
