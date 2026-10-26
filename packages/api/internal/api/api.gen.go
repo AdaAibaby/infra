@@ -510,6 +510,30 @@ type AdminBuildCancelResult struct {
 	FailedCount int `json:"failedCount"`
 }
 
+// AdminDefaultTemplate defines model for AdminDefaultTemplate.
+type AdminDefaultTemplate struct {
+	// Description Description of the default template
+	Description *string `json:"description"`
+
+	// TemplateID Identifier of the default template
+	TemplateID string `json:"templateID"`
+}
+
+// AdminDefaultTemplateCreateRequest defines model for AdminDefaultTemplateCreateRequest.
+type AdminDefaultTemplateCreateRequest struct {
+	// Description Description of the default template; blank is stored as none
+	Description *string `json:"description,omitempty"`
+
+	// TemplateID Identifier of the template to make a default template
+	TemplateID string `json:"templateID"`
+}
+
+// AdminDefaultTemplateUpdateRequest defines model for AdminDefaultTemplateUpdateRequest.
+type AdminDefaultTemplateUpdateRequest struct {
+	// Description New description of the default template; null or blank clears it
+	Description *string `json:"description"`
+}
+
 // AdminSandbox defines model for AdminSandbox.
 type AdminSandbox struct {
 	// SandboxID Identifier of the sandbox
@@ -620,6 +644,104 @@ type AdminTeamRunningSandboxCounts map[string]int64
 type AdminTeamSchedulingLabels struct {
 	// Labels The team's full set of labels. A request's labels replace the current ones.
 	Labels []string `json:"labels"`
+}
+
+// AdminTemplateAlias defines model for AdminTemplateAlias.
+type AdminTemplateAlias struct {
+	// Alias The alias
+	Alias string `json:"alias"`
+
+	// Id Identifier of the alias
+	Id openapi_types.UUID `json:"id"`
+
+	// IsRenamable Whether building the template under another name replaces the alias
+	IsRenamable bool `json:"isRenamable"`
+
+	// Namespace Namespace of the alias, or null for an alias that resolves for every team
+	Namespace *string `json:"namespace"`
+
+	// TemplateID Identifier of the template the alias resolves to
+	TemplateID string `json:"templateID"`
+}
+
+// AdminTemplateAliasCreateRequest defines model for AdminTemplateAliasCreateRequest.
+type AdminTemplateAliasCreateRequest struct {
+	// Alias The alias, without a namespace or tag
+	Alias string `json:"alias"`
+
+	// TemplateID Identifier of the template the alias resolves to
+	TemplateID string `json:"templateID"`
+}
+
+// AdminTemplateAliasDeleted defines model for AdminTemplateAliasDeleted.
+type AdminTemplateAliasDeleted struct {
+	// Alias The removed alias
+	Alias string `json:"alias"`
+
+	// AliasID Identifier of the removed alias
+	AliasID openapi_types.UUID `json:"aliasID"`
+
+	// TemplateID Identifier of the template the alias resolved to
+	TemplateID string `json:"templateID"`
+}
+
+// AdminTemplateAliases defines model for AdminTemplateAliases.
+type AdminTemplateAliases struct {
+	// Aliases All aliases of the template, those without a namespace first
+	Aliases []AdminTemplateAlias `json:"aliases"`
+
+	// Public Whether the template is public
+	Public bool              `json:"public"`
+	Team   AdminTemplateTeam `json:"team"`
+
+	// TemplateID Identifier of the template
+	TemplateID string `json:"templateID"`
+}
+
+// AdminTemplateLookup defines model for AdminTemplateLookup.
+type AdminTemplateLookup struct {
+	// Builds The template's newest builds of any tag and status, newest first, at most 100
+	Builds []TemplateBuild `json:"builds"`
+
+	// CreatedAt Time when the template was created
+	CreatedAt time.Time `json:"createdAt"`
+
+	// IsSnapshot Whether the template is a snapshot of a sandbox
+	IsSnapshot bool `json:"isSnapshot"`
+
+	// LastSpawnedAt Time when the template was last used
+	LastSpawnedAt *time.Time `json:"lastSpawnedAt"`
+
+	// MatchedBuildID The build the query matched, when it was a build ID
+	MatchedBuildID *openapi_types.UUID `json:"matchedBuildID"`
+
+	// Names Names of the template (namespace/alias format when namespaced)
+	Names []string `json:"names"`
+
+	// Public Whether the template is public
+	Public bool `json:"public"`
+
+	// SnapshotSandboxID The sandbox a snapshot template was taken from
+	SnapshotSandboxID *string `json:"snapshotSandboxID"`
+
+	// SpawnCount Number of times the template was used
+	SpawnCount int64             `json:"spawnCount"`
+	Team       AdminTemplateTeam `json:"team"`
+
+	// TemplateID Identifier of the template
+	TemplateID string `json:"templateID"`
+}
+
+// AdminTemplateTeam defines model for AdminTemplateTeam.
+type AdminTemplateTeam struct {
+	// Email Contact email of the team
+	Email string `json:"email"`
+
+	// Id Identifier of the team that owns the template
+	Id openapi_types.UUID `json:"id"`
+
+	// Name Name of the team
+	Name string `json:"name"`
 }
 
 // AssignTemplateTagsRequest defines model for AssignTemplateTagsRequest.
@@ -2324,6 +2446,9 @@ type WebhookDetail struct {
 	Url    string `json:"url"`
 }
 
+// AliasID defines model for aliasID.
+type AliasID = openapi_types.UUID
+
 // ApiKeyID defines model for apiKeyID.
 type ApiKeyID = string
 
@@ -2659,6 +2784,24 @@ type GetTemplatesTemplateIDTagsTagAssignmentsParams struct {
 	Limit *TagAssignmentsLimit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// GetUnstableAdminTemplatesAliasesParams defines parameters for GetUnstableAdminTemplatesAliases.
+type GetUnstableAdminTemplatesAliasesParams struct {
+	// Search Exact template ID or alias
+	Search string `form:"search" json:"search"`
+
+	// NextToken Cursor to start the list from
+	NextToken *PaginationNextToken `form:"nextToken,omitempty" json:"nextToken,omitempty"`
+
+	// Limit Maximum number of items to return per page
+	Limit *PaginationLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetUnstableAdminTemplatesLookupParams defines parameters for GetUnstableAdminTemplatesLookup.
+type GetUnstableAdminTemplatesLookupParams struct {
+	// Query Build ID, template ID, or template name
+	Query string `form:"query" json:"query"`
+}
+
 // GetUnstableTemplatesSearchParams defines parameters for GetUnstableTemplatesSearch.
 type GetUnstableTemplatesSearchParams struct {
 	// Search Case-insensitive substring match on the template ID, its aliases and its names.
@@ -2821,6 +2964,15 @@ type PostUnstableAdminTeamsQueryJSONRequestBody = AdminTeamListRequest
 
 // PutUnstableAdminTeamsTeamIDSchedulingLabelsJSONRequestBody defines body for PutUnstableAdminTeamsTeamIDSchedulingLabels for application/json ContentType.
 type PutUnstableAdminTeamsTeamIDSchedulingLabelsJSONRequestBody = AdminTeamSchedulingLabels
+
+// PostUnstableAdminTemplatesAliasesJSONRequestBody defines body for PostUnstableAdminTemplatesAliases for application/json ContentType.
+type PostUnstableAdminTemplatesAliasesJSONRequestBody = AdminTemplateAliasCreateRequest
+
+// PostUnstableAdminTemplatesDefaultsJSONRequestBody defines body for PostUnstableAdminTemplatesDefaults for application/json ContentType.
+type PostUnstableAdminTemplatesDefaultsJSONRequestBody = AdminDefaultTemplateCreateRequest
+
+// PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody defines body for PatchUnstableAdminTemplatesDefaultsTemplateID for application/json ContentType.
+type PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody = AdminDefaultTemplateUpdateRequest
 
 // ManagementSetProjectSettingsJSONRequestBody defines body for ManagementSetProjectSettings for application/json ContentType.
 type ManagementSetProjectSettingsJSONRequestBody = ManagementProjectSettingsRequest
@@ -3811,6 +3963,88 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /unstable/admin/teams/{teamID}/scheduling-labels (the `PutUnstableAdminTeamsTeamIDSchedulingLabels` operationId).
 	PutUnstableAdminTeamsTeamIDSchedulingLabels(ctx context.Context, teamID openapi_types.UUID, body PutUnstableAdminTeamsTeamIDSchedulingLabelsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUnstableAdminTemplatesAliases Search template aliases as admin
+	//
+	// Finds the templates whose ID equals `search`, or that own an alias equal to `search` in any namespace, with their owning team and all their aliases. Deleted templates are left out. Results are ordered by template ID; the next page's token is returned in `X-Next-Token`.
+	//
+	// Corresponds with GET /unstable/admin/templates/aliases (the `GetUnstableAdminTemplatesAliases` operationId).
+	GetUnstableAdminTemplatesAliases(ctx context.Context, params *GetUnstableAdminTemplatesAliasesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostUnstableAdminTemplatesAliasesWithBody Add a template alias without a namespace as admin
+	//
+	// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+	PostUnstableAdminTemplatesAliasesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostUnstableAdminTemplatesAliases Add a template alias without a namespace as admin
+	//
+	// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+	PostUnstableAdminTemplatesAliases(ctx context.Context, body PostUnstableAdminTemplatesAliasesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteUnstableAdminTemplatesAliasesAliasID Remove a template alias without a namespace as admin
+	//
+	// Removes an alias without a namespace. A namespaced alias is not removed and answers 404.
+	//
+	// Corresponds with DELETE /unstable/admin/templates/aliases/{aliasID} (the `DeleteUnstableAdminTemplatesAliasesAliasID` operationId).
+	DeleteUnstableAdminTemplatesAliasesAliasID(ctx context.Context, aliasID AliasID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostUnstableAdminTemplatesDefaultsWithBody Add a default template as admin
+	//
+	// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+	PostUnstableAdminTemplatesDefaultsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostUnstableAdminTemplatesDefaults Add a default template as admin
+	//
+	// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+	PostUnstableAdminTemplatesDefaults(ctx context.Context, body PostUnstableAdminTemplatesDefaultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteUnstableAdminTemplatesDefaultsTemplateID Remove a default template as admin
+	//
+	// Stops a template being one of the platform's default templates. The template itself is not changed. Returns 404 when the template is not a default template.
+	//
+	// Corresponds with DELETE /unstable/admin/templates/defaults/{templateID} (the `DeleteUnstableAdminTemplatesDefaultsTemplateID` operationId).
+	DeleteUnstableAdminTemplatesDefaultsTemplateID(ctx context.Context, templateID TemplateID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchUnstableAdminTemplatesDefaultsTemplateIDWithBody Update a default template as admin
+	//
+	// Updates the description of a default template. Returns 404 when the template is not a default template.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+	PatchUnstableAdminTemplatesDefaultsTemplateIDWithBody(ctx context.Context, templateID TemplateID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchUnstableAdminTemplatesDefaultsTemplateID Update a default template as admin
+	//
+	// Updates the description of a default template. Returns 404 when the template is not a default template.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+	PatchUnstableAdminTemplatesDefaultsTemplateID(ctx context.Context, templateID TemplateID, body PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUnstableAdminTemplatesLookup Look up a template as admin
+	//
+	// Resolves `query` as, in order: a build ID (a UUID, matched to the template of the build's newest assignment, with no fallback), a template ID, or a template name (`namespace/alias`, or an alias without a namespace). Returns the template with its owning team and its newest builds. Deleted templates are not found.
+	//
+	// Corresponds with GET /unstable/admin/templates/lookup (the `GetUnstableAdminTemplatesLookup` operationId).
+	GetUnstableAdminTemplatesLookup(ctx context.Context, params *GetUnstableAdminTemplatesLookupParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ManagementSetProjectSettingsWithBody Apply a project's settings revision.
 	//
@@ -5689,6 +5923,188 @@ func (c *Client) PutUnstableAdminTeamsTeamIDSchedulingLabelsWithBody(ctx context
 // Corresponds with PUT /unstable/admin/teams/{teamID}/scheduling-labels (the `PutUnstableAdminTeamsTeamIDSchedulingLabels` operationId).
 func (c *Client) PutUnstableAdminTeamsTeamIDSchedulingLabels(ctx context.Context, teamID openapi_types.UUID, body PutUnstableAdminTeamsTeamIDSchedulingLabelsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutUnstableAdminTeamsTeamIDSchedulingLabelsRequest(c.Server, teamID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUnstableAdminTemplatesAliases Search template aliases as admin
+//
+// Finds the templates whose ID equals `search`, or that own an alias equal to `search` in any namespace, with their owning team and all their aliases. Deleted templates are left out. Results are ordered by template ID; the next page's token is returned in `X-Next-Token`.
+//
+// Corresponds with GET /unstable/admin/templates/aliases (the `GetUnstableAdminTemplatesAliases` operationId).
+func (c *Client) GetUnstableAdminTemplatesAliases(ctx context.Context, params *GetUnstableAdminTemplatesAliasesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUnstableAdminTemplatesAliasesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostUnstableAdminTemplatesAliasesWithBody Add a template alias without a namespace as admin
+//
+// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+func (c *Client) PostUnstableAdminTemplatesAliasesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostUnstableAdminTemplatesAliasesRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostUnstableAdminTemplatesAliases Add a template alias without a namespace as admin
+//
+// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+func (c *Client) PostUnstableAdminTemplatesAliases(ctx context.Context, body PostUnstableAdminTemplatesAliasesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostUnstableAdminTemplatesAliasesRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteUnstableAdminTemplatesAliasesAliasID Remove a template alias without a namespace as admin
+//
+// Removes an alias without a namespace. A namespaced alias is not removed and answers 404.
+//
+// Corresponds with DELETE /unstable/admin/templates/aliases/{aliasID} (the `DeleteUnstableAdminTemplatesAliasesAliasID` operationId).
+func (c *Client) DeleteUnstableAdminTemplatesAliasesAliasID(ctx context.Context, aliasID AliasID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteUnstableAdminTemplatesAliasesAliasIDRequest(c.Server, aliasID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostUnstableAdminTemplatesDefaultsWithBody Add a default template as admin
+//
+// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+func (c *Client) PostUnstableAdminTemplatesDefaultsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostUnstableAdminTemplatesDefaultsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostUnstableAdminTemplatesDefaults Add a default template as admin
+//
+// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+func (c *Client) PostUnstableAdminTemplatesDefaults(ctx context.Context, body PostUnstableAdminTemplatesDefaultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostUnstableAdminTemplatesDefaultsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteUnstableAdminTemplatesDefaultsTemplateID Remove a default template as admin
+//
+// Stops a template being one of the platform's default templates. The template itself is not changed. Returns 404 when the template is not a default template.
+//
+// Corresponds with DELETE /unstable/admin/templates/defaults/{templateID} (the `DeleteUnstableAdminTemplatesDefaultsTemplateID` operationId).
+func (c *Client) DeleteUnstableAdminTemplatesDefaultsTemplateID(ctx context.Context, templateID TemplateID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteUnstableAdminTemplatesDefaultsTemplateIDRequest(c.Server, templateID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PatchUnstableAdminTemplatesDefaultsTemplateIDWithBody Update a default template as admin
+//
+// Updates the description of a default template. Returns 404 when the template is not a default template.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+func (c *Client) PatchUnstableAdminTemplatesDefaultsTemplateIDWithBody(ctx context.Context, templateID TemplateID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchUnstableAdminTemplatesDefaultsTemplateIDRequestWithBody(c.Server, templateID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PatchUnstableAdminTemplatesDefaultsTemplateID Update a default template as admin
+//
+// Updates the description of a default template. Returns 404 when the template is not a default template.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+func (c *Client) PatchUnstableAdminTemplatesDefaultsTemplateID(ctx context.Context, templateID TemplateID, body PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchUnstableAdminTemplatesDefaultsTemplateIDRequest(c.Server, templateID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUnstableAdminTemplatesLookup Look up a template as admin
+//
+// Resolves `query` as, in order: a build ID (a UUID, matched to the template of the build's newest assignment, with no fallback), a template ID, or a template name (`namespace/alias`, or an alias without a namespace). Returns the template with its owning team and its newest builds. Deleted templates are not found.
+//
+// Corresponds with GET /unstable/admin/templates/lookup (the `GetUnstableAdminTemplatesLookup` operationId).
+func (c *Client) GetUnstableAdminTemplatesLookup(ctx context.Context, params *GetUnstableAdminTemplatesLookupParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUnstableAdminTemplatesLookupRequest(c.Server, params)
 	if err != nil {
 		return nil, err
 	}
@@ -9805,6 +10221,325 @@ func NewPutUnstableAdminTeamsTeamIDSchedulingLabelsRequestWithBody(server string
 	return req, nil
 }
 
+// NewGetUnstableAdminTemplatesAliasesRequest constructs an http.Request for the GetUnstableAdminTemplatesAliases method
+func NewGetUnstableAdminTemplatesAliasesRequest(server string, params *GetUnstableAdminTemplatesAliasesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/templates/aliases")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "search", params.Search, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.NextToken != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "nextToken", *params.NextToken, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostUnstableAdminTemplatesAliasesRequest calls the generic PostUnstableAdminTemplatesAliases builder with application/json body
+func NewPostUnstableAdminTemplatesAliasesRequest(server string, body PostUnstableAdminTemplatesAliasesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostUnstableAdminTemplatesAliasesRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostUnstableAdminTemplatesAliasesRequestWithBody constructs an http.Request for the PostUnstableAdminTemplatesAliases method, with any body, and a specified content type
+func NewPostUnstableAdminTemplatesAliasesRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/templates/aliases")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteUnstableAdminTemplatesAliasesAliasIDRequest constructs an http.Request for the DeleteUnstableAdminTemplatesAliasesAliasID method
+func NewDeleteUnstableAdminTemplatesAliasesAliasIDRequest(server string, aliasID AliasID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "aliasID", aliasID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/templates/aliases/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostUnstableAdminTemplatesDefaultsRequest calls the generic PostUnstableAdminTemplatesDefaults builder with application/json body
+func NewPostUnstableAdminTemplatesDefaultsRequest(server string, body PostUnstableAdminTemplatesDefaultsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostUnstableAdminTemplatesDefaultsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostUnstableAdminTemplatesDefaultsRequestWithBody constructs an http.Request for the PostUnstableAdminTemplatesDefaults method, with any body, and a specified content type
+func NewPostUnstableAdminTemplatesDefaultsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/templates/defaults")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteUnstableAdminTemplatesDefaultsTemplateIDRequest constructs an http.Request for the DeleteUnstableAdminTemplatesDefaultsTemplateID method
+func NewDeleteUnstableAdminTemplatesDefaultsTemplateIDRequest(server string, templateID TemplateID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "templateID", templateID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/templates/defaults/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPatchUnstableAdminTemplatesDefaultsTemplateIDRequest calls the generic PatchUnstableAdminTemplatesDefaultsTemplateID builder with application/json body
+func NewPatchUnstableAdminTemplatesDefaultsTemplateIDRequest(server string, templateID TemplateID, body PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPatchUnstableAdminTemplatesDefaultsTemplateIDRequestWithBody(server, templateID, "application/json", bodyReader)
+}
+
+// NewPatchUnstableAdminTemplatesDefaultsTemplateIDRequestWithBody constructs an http.Request for the PatchUnstableAdminTemplatesDefaultsTemplateID method, with any body, and a specified content type
+func NewPatchUnstableAdminTemplatesDefaultsTemplateIDRequestWithBody(server string, templateID TemplateID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "templateID", templateID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/templates/defaults/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetUnstableAdminTemplatesLookupRequest constructs an http.Request for the GetUnstableAdminTemplatesLookup method
+func NewGetUnstableAdminTemplatesLookupRequest(server string, params *GetUnstableAdminTemplatesLookupParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/templates/lookup")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "query", params.Query, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewManagementSetProjectSettingsRequest calls the generic ManagementSetProjectSettings builder with application/json body
 func NewManagementSetProjectSettingsRequest(server string, projectID openapi_types.UUID, body ManagementSetProjectSettingsJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -11616,6 +12351,96 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /unstable/admin/teams/{teamID}/scheduling-labels (the `PutUnstableAdminTeamsTeamIDSchedulingLabels` operationId).
 	PutUnstableAdminTeamsTeamIDSchedulingLabelsWithResponse(ctx context.Context, teamID openapi_types.UUID, body PutUnstableAdminTeamsTeamIDSchedulingLabelsJSONRequestBody, reqEditors ...RequestEditorFn) (*PutUnstableAdminTeamsTeamIDSchedulingLabelsResponse, error)
+
+	// GetUnstableAdminTemplatesAliasesWithResponse Search template aliases as admin
+	//
+	// Finds the templates whose ID equals `search`, or that own an alias equal to `search` in any namespace, with their owning team and all their aliases. Deleted templates are left out. Results are ordered by template ID; the next page's token is returned in `X-Next-Token`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /unstable/admin/templates/aliases (the `GetUnstableAdminTemplatesAliases` operationId).
+	GetUnstableAdminTemplatesAliasesWithResponse(ctx context.Context, params *GetUnstableAdminTemplatesAliasesParams, reqEditors ...RequestEditorFn) (*GetUnstableAdminTemplatesAliasesResponse, error)
+
+	// PostUnstableAdminTemplatesAliasesWithBodyWithResponse Add a template alias without a namespace as admin
+	//
+	// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+	PostUnstableAdminTemplatesAliasesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesAliasesResponse, error)
+
+	// PostUnstableAdminTemplatesAliasesWithResponse Add a template alias without a namespace as admin
+	//
+	// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+	PostUnstableAdminTemplatesAliasesWithResponse(ctx context.Context, body PostUnstableAdminTemplatesAliasesJSONRequestBody, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesAliasesResponse, error)
+
+	// DeleteUnstableAdminTemplatesAliasesAliasIDWithResponse Remove a template alias without a namespace as admin
+	//
+	// Removes an alias without a namespace. A namespaced alias is not removed and answers 404.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /unstable/admin/templates/aliases/{aliasID} (the `DeleteUnstableAdminTemplatesAliasesAliasID` operationId).
+	DeleteUnstableAdminTemplatesAliasesAliasIDWithResponse(ctx context.Context, aliasID AliasID, reqEditors ...RequestEditorFn) (*DeleteUnstableAdminTemplatesAliasesAliasIDResponse, error)
+
+	// PostUnstableAdminTemplatesDefaultsWithBodyWithResponse Add a default template as admin
+	//
+	// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+	PostUnstableAdminTemplatesDefaultsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesDefaultsResponse, error)
+
+	// PostUnstableAdminTemplatesDefaultsWithResponse Add a default template as admin
+	//
+	// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+	PostUnstableAdminTemplatesDefaultsWithResponse(ctx context.Context, body PostUnstableAdminTemplatesDefaultsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesDefaultsResponse, error)
+
+	// DeleteUnstableAdminTemplatesDefaultsTemplateIDWithResponse Remove a default template as admin
+	//
+	// Stops a template being one of the platform's default templates. The template itself is not changed. Returns 404 when the template is not a default template.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /unstable/admin/templates/defaults/{templateID} (the `DeleteUnstableAdminTemplatesDefaultsTemplateID` operationId).
+	DeleteUnstableAdminTemplatesDefaultsTemplateIDWithResponse(ctx context.Context, templateID TemplateID, reqEditors ...RequestEditorFn) (*DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse, error)
+
+	// PatchUnstableAdminTemplatesDefaultsTemplateIDWithBodyWithResponse Update a default template as admin
+	//
+	// Updates the description of a default template. Returns 404 when the template is not a default template.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+	PatchUnstableAdminTemplatesDefaultsTemplateIDWithBodyWithResponse(ctx context.Context, templateID TemplateID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchUnstableAdminTemplatesDefaultsTemplateIDResponse, error)
+
+	// PatchUnstableAdminTemplatesDefaultsTemplateIDWithResponse Update a default template as admin
+	//
+	// Updates the description of a default template. Returns 404 when the template is not a default template.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+	PatchUnstableAdminTemplatesDefaultsTemplateIDWithResponse(ctx context.Context, templateID TemplateID, body PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchUnstableAdminTemplatesDefaultsTemplateIDResponse, error)
+
+	// GetUnstableAdminTemplatesLookupWithResponse Look up a template as admin
+	//
+	// Resolves `query` as, in order: a build ID (a UUID, matched to the template of the build's newest assignment, with no fallback), a template ID, or a template name (`namespace/alias`, or an alias without a namespace). Returns the template with its owning team and its newest builds. Deleted templates are not found.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /unstable/admin/templates/lookup (the `GetUnstableAdminTemplatesLookup` operationId).
+	GetUnstableAdminTemplatesLookupWithResponse(ctx context.Context, params *GetUnstableAdminTemplatesLookupParams, reqEditors ...RequestEditorFn) (*GetUnstableAdminTemplatesLookupResponse, error)
 
 	// ManagementSetProjectSettingsWithBodyWithResponse Apply a project's settings revision.
 	//
@@ -17528,6 +18353,489 @@ func (r PutUnstableAdminTeamsTeamIDSchedulingLabelsResponse) ContentType() strin
 	return ""
 }
 
+// GetUnstableAdminTemplatesAliasesResponse200Headers the declared response headers of an HTTP 200 response for GetUnstableAdminTemplatesAliases
+type GetUnstableAdminTemplatesAliasesResponse200Headers struct {
+	XNextToken *string
+}
+
+type GetUnstableAdminTemplatesAliasesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]AdminTemplateAliases
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetUnstableAdminTemplatesAliasesResponse200Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUnstableAdminTemplatesAliasesResponse) GetJSON200() *[]AdminTemplateAliases {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetUnstableAdminTemplatesAliasesResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetUnstableAdminTemplatesAliasesResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetUnstableAdminTemplatesAliasesResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUnstableAdminTemplatesAliasesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUnstableAdminTemplatesAliasesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUnstableAdminTemplatesAliasesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUnstableAdminTemplatesAliasesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostUnstableAdminTemplatesAliasesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *AdminTemplateAlias
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *N409
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostUnstableAdminTemplatesAliasesResponse) GetJSON201() *AdminTemplateAlias {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostUnstableAdminTemplatesAliasesResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostUnstableAdminTemplatesAliasesResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostUnstableAdminTemplatesAliasesResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PostUnstableAdminTemplatesAliasesResponse) GetJSON409() *N409 {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r PostUnstableAdminTemplatesAliasesResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r PostUnstableAdminTemplatesAliasesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostUnstableAdminTemplatesAliasesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostUnstableAdminTemplatesAliasesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostUnstableAdminTemplatesAliasesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteUnstableAdminTemplatesAliasesAliasIDResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdminTemplateAliasDeleted
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) GetJSON200() *AdminTemplateAliasDeleted {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostUnstableAdminTemplatesDefaultsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *AdminDefaultTemplate
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *N409
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostUnstableAdminTemplatesDefaultsResponse) GetJSON201() *AdminDefaultTemplate {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostUnstableAdminTemplatesDefaultsResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostUnstableAdminTemplatesDefaultsResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostUnstableAdminTemplatesDefaultsResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PostUnstableAdminTemplatesDefaultsResponse) GetJSON409() *N409 {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r PostUnstableAdminTemplatesDefaultsResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r PostUnstableAdminTemplatesDefaultsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostUnstableAdminTemplatesDefaultsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostUnstableAdminTemplatesDefaultsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostUnstableAdminTemplatesDefaultsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PatchUnstableAdminTemplatesDefaultsTemplateIDResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdminDefaultTemplate
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON200() *AdminDefaultTemplate {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetUnstableAdminTemplatesLookupResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdminTemplateLookup
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUnstableAdminTemplatesLookupResponse) GetJSON200() *AdminTemplateLookup {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetUnstableAdminTemplatesLookupResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetUnstableAdminTemplatesLookupResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetUnstableAdminTemplatesLookupResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetUnstableAdminTemplatesLookupResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUnstableAdminTemplatesLookupResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUnstableAdminTemplatesLookupResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUnstableAdminTemplatesLookupResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUnstableAdminTemplatesLookupResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ManagementSetProjectSettingsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -20331,6 +21639,156 @@ func (c *ClientWithResponses) PutUnstableAdminTeamsTeamIDSchedulingLabelsWithRes
 		return nil, err
 	}
 	return ParsePutUnstableAdminTeamsTeamIDSchedulingLabelsResponse(rsp)
+}
+
+// GetUnstableAdminTemplatesAliasesWithResponse Search template aliases as admin
+//
+// Finds the templates whose ID equals `search`, or that own an alias equal to `search` in any namespace, with their owning team and all their aliases. Deleted templates are left out. Results are ordered by template ID; the next page's token is returned in `X-Next-Token`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /unstable/admin/templates/aliases (the `GetUnstableAdminTemplatesAliases` operationId).
+func (c *ClientWithResponses) GetUnstableAdminTemplatesAliasesWithResponse(ctx context.Context, params *GetUnstableAdminTemplatesAliasesParams, reqEditors ...RequestEditorFn) (*GetUnstableAdminTemplatesAliasesResponse, error) {
+	rsp, err := c.GetUnstableAdminTemplatesAliases(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUnstableAdminTemplatesAliasesResponse(rsp)
+}
+
+// PostUnstableAdminTemplatesAliasesWithBodyWithResponse Add a template alias without a namespace as admin
+//
+// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+func (c *ClientWithResponses) PostUnstableAdminTemplatesAliasesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesAliasesResponse, error) {
+	rsp, err := c.PostUnstableAdminTemplatesAliasesWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostUnstableAdminTemplatesAliasesResponse(rsp)
+}
+
+// PostUnstableAdminTemplatesAliasesWithResponse Add a template alias without a namespace as admin
+//
+// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+func (c *ClientWithResponses) PostUnstableAdminTemplatesAliasesWithResponse(ctx context.Context, body PostUnstableAdminTemplatesAliasesJSONRequestBody, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesAliasesResponse, error) {
+	rsp, err := c.PostUnstableAdminTemplatesAliases(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostUnstableAdminTemplatesAliasesResponse(rsp)
+}
+
+// DeleteUnstableAdminTemplatesAliasesAliasIDWithResponse Remove a template alias without a namespace as admin
+//
+// Removes an alias without a namespace. A namespaced alias is not removed and answers 404.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /unstable/admin/templates/aliases/{aliasID} (the `DeleteUnstableAdminTemplatesAliasesAliasID` operationId).
+func (c *ClientWithResponses) DeleteUnstableAdminTemplatesAliasesAliasIDWithResponse(ctx context.Context, aliasID AliasID, reqEditors ...RequestEditorFn) (*DeleteUnstableAdminTemplatesAliasesAliasIDResponse, error) {
+	rsp, err := c.DeleteUnstableAdminTemplatesAliasesAliasID(ctx, aliasID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteUnstableAdminTemplatesAliasesAliasIDResponse(rsp)
+}
+
+// PostUnstableAdminTemplatesDefaultsWithBodyWithResponse Add a default template as admin
+//
+// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+func (c *ClientWithResponses) PostUnstableAdminTemplatesDefaultsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesDefaultsResponse, error) {
+	rsp, err := c.PostUnstableAdminTemplatesDefaultsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostUnstableAdminTemplatesDefaultsResponse(rsp)
+}
+
+// PostUnstableAdminTemplatesDefaultsWithResponse Add a default template as admin
+//
+// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+func (c *ClientWithResponses) PostUnstableAdminTemplatesDefaultsWithResponse(ctx context.Context, body PostUnstableAdminTemplatesDefaultsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesDefaultsResponse, error) {
+	rsp, err := c.PostUnstableAdminTemplatesDefaults(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostUnstableAdminTemplatesDefaultsResponse(rsp)
+}
+
+// DeleteUnstableAdminTemplatesDefaultsTemplateIDWithResponse Remove a default template as admin
+//
+// Stops a template being one of the platform's default templates. The template itself is not changed. Returns 404 when the template is not a default template.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /unstable/admin/templates/defaults/{templateID} (the `DeleteUnstableAdminTemplatesDefaultsTemplateID` operationId).
+func (c *ClientWithResponses) DeleteUnstableAdminTemplatesDefaultsTemplateIDWithResponse(ctx context.Context, templateID TemplateID, reqEditors ...RequestEditorFn) (*DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse, error) {
+	rsp, err := c.DeleteUnstableAdminTemplatesDefaultsTemplateID(ctx, templateID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteUnstableAdminTemplatesDefaultsTemplateIDResponse(rsp)
+}
+
+// PatchUnstableAdminTemplatesDefaultsTemplateIDWithBodyWithResponse Update a default template as admin
+//
+// Updates the description of a default template. Returns 404 when the template is not a default template.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+func (c *ClientWithResponses) PatchUnstableAdminTemplatesDefaultsTemplateIDWithBodyWithResponse(ctx context.Context, templateID TemplateID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchUnstableAdminTemplatesDefaultsTemplateIDResponse, error) {
+	rsp, err := c.PatchUnstableAdminTemplatesDefaultsTemplateIDWithBody(ctx, templateID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchUnstableAdminTemplatesDefaultsTemplateIDResponse(rsp)
+}
+
+// PatchUnstableAdminTemplatesDefaultsTemplateIDWithResponse Update a default template as admin
+//
+// Updates the description of a default template. Returns 404 when the template is not a default template.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+func (c *ClientWithResponses) PatchUnstableAdminTemplatesDefaultsTemplateIDWithResponse(ctx context.Context, templateID TemplateID, body PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchUnstableAdminTemplatesDefaultsTemplateIDResponse, error) {
+	rsp, err := c.PatchUnstableAdminTemplatesDefaultsTemplateID(ctx, templateID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchUnstableAdminTemplatesDefaultsTemplateIDResponse(rsp)
+}
+
+// GetUnstableAdminTemplatesLookupWithResponse Look up a template as admin
+//
+// Resolves `query` as, in order: a build ID (a UUID, matched to the template of the build's newest assignment, with no fallback), a template ID, or a template name (`namespace/alias`, or an alias without a namespace). Returns the template with its owning team and its newest builds. Deleted templates are not found.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /unstable/admin/templates/lookup (the `GetUnstableAdminTemplatesLookup` operationId).
+func (c *ClientWithResponses) GetUnstableAdminTemplatesLookupWithResponse(ctx context.Context, params *GetUnstableAdminTemplatesLookupParams, reqEditors ...RequestEditorFn) (*GetUnstableAdminTemplatesLookupResponse, error) {
+	rsp, err := c.GetUnstableAdminTemplatesLookup(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUnstableAdminTemplatesLookupResponse(rsp)
 }
 
 // ManagementSetProjectSettingsWithBodyWithResponse Apply a project's settings revision.
@@ -25733,6 +27191,393 @@ func ParsePutUnstableAdminTeamsTeamIDSchedulingLabelsResponse(rsp *http.Response
 	return response, nil
 }
 
+// ParseGetUnstableAdminTemplatesAliasesResponse parses an HTTP response from a GetUnstableAdminTemplatesAliasesWithResponse call
+func ParseGetUnstableAdminTemplatesAliasesResponse(rsp *http.Response) (*GetUnstableAdminTemplatesAliasesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUnstableAdminTemplatesAliasesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []AdminTemplateAliases
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetUnstableAdminTemplatesAliasesResponse200Headers
+		if values := rsp.Header.Values("X-Next-Token"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Next-Token", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XNextToken = &value
+		}
+		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
+// ParsePostUnstableAdminTemplatesAliasesResponse parses an HTTP response from a PostUnstableAdminTemplatesAliasesWithResponse call
+func ParsePostUnstableAdminTemplatesAliasesResponse(rsp *http.Response) (*PostUnstableAdminTemplatesAliasesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostUnstableAdminTemplatesAliasesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest AdminTemplateAlias
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest N409
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteUnstableAdminTemplatesAliasesAliasIDResponse parses an HTTP response from a DeleteUnstableAdminTemplatesAliasesAliasIDWithResponse call
+func ParseDeleteUnstableAdminTemplatesAliasesAliasIDResponse(rsp *http.Response) (*DeleteUnstableAdminTemplatesAliasesAliasIDResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteUnstableAdminTemplatesAliasesAliasIDResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdminTemplateAliasDeleted
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostUnstableAdminTemplatesDefaultsResponse parses an HTTP response from a PostUnstableAdminTemplatesDefaultsWithResponse call
+func ParsePostUnstableAdminTemplatesDefaultsResponse(rsp *http.Response) (*PostUnstableAdminTemplatesDefaultsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostUnstableAdminTemplatesDefaultsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest AdminDefaultTemplate
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest N409
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteUnstableAdminTemplatesDefaultsTemplateIDResponse parses an HTTP response from a DeleteUnstableAdminTemplatesDefaultsTemplateIDWithResponse call
+func ParseDeleteUnstableAdminTemplatesDefaultsTemplateIDResponse(rsp *http.Response) (*DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePatchUnstableAdminTemplatesDefaultsTemplateIDResponse parses an HTTP response from a PatchUnstableAdminTemplatesDefaultsTemplateIDWithResponse call
+func ParsePatchUnstableAdminTemplatesDefaultsTemplateIDResponse(rsp *http.Response) (*PatchUnstableAdminTemplatesDefaultsTemplateIDResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PatchUnstableAdminTemplatesDefaultsTemplateIDResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdminDefaultTemplate
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetUnstableAdminTemplatesLookupResponse parses an HTTP response from a GetUnstableAdminTemplatesLookupWithResponse call
+func ParseGetUnstableAdminTemplatesLookupResponse(rsp *http.Response) (*GetUnstableAdminTemplatesLookupResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUnstableAdminTemplatesLookupResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdminTemplateLookup
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParseManagementSetProjectSettingsResponse parses an HTTP response from a ManagementSetProjectSettingsWithResponse call
 func ParseManagementSetProjectSettingsResponse(rsp *http.Response) (*ManagementSetProjectSettingsResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -27245,6 +29090,27 @@ type ServerInterface interface {
 	// PutUnstableAdminTeamsTeamIDSchedulingLabels Replace a team's sandbox scheduling labels
 	// (PUT /unstable/admin/teams/{teamID}/scheduling-labels)
 	PutUnstableAdminTeamsTeamIDSchedulingLabels(c *gin.Context, teamID openapi_types.UUID)
+	// GetUnstableAdminTemplatesAliases Search template aliases as admin
+	// (GET /unstable/admin/templates/aliases)
+	GetUnstableAdminTemplatesAliases(c *gin.Context, params GetUnstableAdminTemplatesAliasesParams)
+	// PostUnstableAdminTemplatesAliases Add a template alias without a namespace as admin
+	// (POST /unstable/admin/templates/aliases)
+	PostUnstableAdminTemplatesAliases(c *gin.Context)
+	// DeleteUnstableAdminTemplatesAliasesAliasID Remove a template alias without a namespace as admin
+	// (DELETE /unstable/admin/templates/aliases/{aliasID})
+	DeleteUnstableAdminTemplatesAliasesAliasID(c *gin.Context, aliasID AliasID)
+	// PostUnstableAdminTemplatesDefaults Add a default template as admin
+	// (POST /unstable/admin/templates/defaults)
+	PostUnstableAdminTemplatesDefaults(c *gin.Context)
+	// DeleteUnstableAdminTemplatesDefaultsTemplateID Remove a default template as admin
+	// (DELETE /unstable/admin/templates/defaults/{templateID})
+	DeleteUnstableAdminTemplatesDefaultsTemplateID(c *gin.Context, templateID TemplateID)
+	// PatchUnstableAdminTemplatesDefaultsTemplateID Update a default template as admin
+	// (PATCH /unstable/admin/templates/defaults/{templateID})
+	PatchUnstableAdminTemplatesDefaultsTemplateID(c *gin.Context, templateID TemplateID)
+	// GetUnstableAdminTemplatesLookup Look up a template as admin
+	// (GET /unstable/admin/templates/lookup)
+	GetUnstableAdminTemplatesLookup(c *gin.Context, params GetUnstableAdminTemplatesLookupParams)
 	// ManagementSetProjectSettings Apply a project's settings revision.
 	// (PUT /unstable/management/projects/{projectID}/settings)
 	ManagementSetProjectSettings(c *gin.Context, projectID openapi_types.UUID)
@@ -29491,6 +31357,177 @@ func (siw *ServerInterfaceWrapper) PutUnstableAdminTeamsTeamIDSchedulingLabels(c
 	siw.Handler.PutUnstableAdminTeamsTeamIDSchedulingLabels(c, teamID)
 }
 
+// GetUnstableAdminTemplatesAliases operation middleware
+func (siw *ServerInterfaceWrapper) GetUnstableAdminTemplatesAliases(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetUnstableAdminTemplatesAliasesParams
+
+	// ------------- Required query parameter "search" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "search", c.Request.URL.Query(), &params.Search, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter search: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "nextToken" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "nextToken", c.Request.URL.Query(), &params.NextToken, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter nextToken: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	// ------------- Optional query parameter "limit" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, false, "limit", c.Request.URL.Query(), &params.Limit, runtime.BindQueryParameterOptions{Type: "integer", Format: "int32"})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter limit: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetUnstableAdminTemplatesAliases(c, params)
+}
+
+// PostUnstableAdminTemplatesAliases operation middleware
+func (siw *ServerInterfaceWrapper) PostUnstableAdminTemplatesAliases(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostUnstableAdminTemplatesAliases(c)
+}
+
+// DeleteUnstableAdminTemplatesAliasesAliasID operation middleware
+func (siw *ServerInterfaceWrapper) DeleteUnstableAdminTemplatesAliasesAliasID(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "aliasID" -------------
+	var aliasID AliasID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "aliasID", c.Param("aliasID"), &aliasID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "uuid", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter aliasID: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.DeleteUnstableAdminTemplatesAliasesAliasID(c, aliasID)
+}
+
+// PostUnstableAdminTemplatesDefaults operation middleware
+func (siw *ServerInterfaceWrapper) PostUnstableAdminTemplatesDefaults(c *gin.Context) {
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PostUnstableAdminTemplatesDefaults(c)
+}
+
+// DeleteUnstableAdminTemplatesDefaultsTemplateID operation middleware
+func (siw *ServerInterfaceWrapper) DeleteUnstableAdminTemplatesDefaultsTemplateID(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "templateID" -------------
+	var templateID TemplateID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateID", c.Param("templateID"), &templateID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter templateID: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.DeleteUnstableAdminTemplatesDefaultsTemplateID(c, templateID)
+}
+
+// PatchUnstableAdminTemplatesDefaultsTemplateID operation middleware
+func (siw *ServerInterfaceWrapper) PatchUnstableAdminTemplatesDefaultsTemplateID(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// ------------- Path parameter "templateID" -------------
+	var templateID TemplateID
+
+	err = runtime.BindStyledParameterWithOptions("simple", "templateID", c.Param("templateID"), &templateID, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationPath, Explode: false, Required: true, Type: "string", Format: "", ValueIsUnescaped: true})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter templateID: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.PatchUnstableAdminTemplatesDefaultsTemplateID(c, templateID)
+}
+
+// GetUnstableAdminTemplatesLookup operation middleware
+func (siw *ServerInterfaceWrapper) GetUnstableAdminTemplatesLookup(c *gin.Context) {
+
+	var err error
+	_ = err
+
+	// Parameter object where we will unmarshal all parameters from the context
+	var params GetUnstableAdminTemplatesLookupParams
+
+	// ------------- Required query parameter "query" -------------
+
+	err = runtime.BindQueryParameterWithOptions("form", true, true, "query", c.Request.URL.Query(), &params.Query, runtime.BindQueryParameterOptions{Type: "string", Format: ""})
+	if err != nil {
+		siw.ErrorHandler(c, fmt.Errorf("Invalid format for parameter query: %w", err), http.StatusBadRequest)
+		return
+	}
+
+	for _, middleware := range siw.HandlerMiddlewares {
+		middleware(c)
+		if c.IsAborted() {
+			return
+		}
+	}
+
+	siw.Handler.GetUnstableAdminTemplatesLookup(c, params)
+}
+
 // ManagementSetProjectSettings operation middleware
 func (siw *ServerInterfaceWrapper) ManagementSetProjectSettings(c *gin.Context) {
 
@@ -30112,6 +32149,13 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 	router.POST(options.BaseURL+"/unstable/admin/teams/query", wrapper.PostUnstableAdminTeamsQuery)
 	router.GET(options.BaseURL+"/unstable/admin/teams/:teamID", wrapper.GetUnstableAdminTeamsTeamID)
 	router.PUT(options.BaseURL+"/unstable/admin/teams/:teamID/scheduling-labels", wrapper.PutUnstableAdminTeamsTeamIDSchedulingLabels)
+	router.GET(options.BaseURL+"/unstable/admin/templates/aliases", wrapper.GetUnstableAdminTemplatesAliases)
+	router.POST(options.BaseURL+"/unstable/admin/templates/aliases", wrapper.PostUnstableAdminTemplatesAliases)
+	router.DELETE(options.BaseURL+"/unstable/admin/templates/aliases/:aliasID", wrapper.DeleteUnstableAdminTemplatesAliasesAliasID)
+	router.POST(options.BaseURL+"/unstable/admin/templates/defaults", wrapper.PostUnstableAdminTemplatesDefaults)
+	router.DELETE(options.BaseURL+"/unstable/admin/templates/defaults/:templateID", wrapper.DeleteUnstableAdminTemplatesDefaultsTemplateID)
+	router.PATCH(options.BaseURL+"/unstable/admin/templates/defaults/:templateID", wrapper.PatchUnstableAdminTemplatesDefaultsTemplateID)
+	router.GET(options.BaseURL+"/unstable/admin/templates/lookup", wrapper.GetUnstableAdminTemplatesLookup)
 	router.GET(options.BaseURL+"/api-keys", wrapper.GetApiKeys)
 	router.POST(options.BaseURL+"/api-keys", wrapper.PostApiKeys)
 	router.DELETE(options.BaseURL+"/api-keys/:apiKeyID", wrapper.DeleteApiKeysApiKeyID)
@@ -30146,418 +32190,440 @@ func RegisterHandlersWithOptions(router gin.IRouter, si ServerInterface, options
 // const string: with thousands of chunks the chained `+` fold is several
 // times slower for the Go compiler than parsing a slice literal.
 var swaggerSpec = []string{
-	"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",
+	"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",
 }
 
 // decodeSpec returns the embedded OpenAPI spec as raw JSON bytes,

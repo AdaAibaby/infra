@@ -388,6 +388,46 @@ func TestTemplateSearchRouteStaysOutOfTheSDKs(t *testing.T) {
 	assert.Equal(t, list.Get.Security, search.Get.Security)
 }
 
+// The admin template routes change what every team resolves (aliases without a
+// namespace, default templates) or read any team's templates, so they accept
+// only the admin token or an admin JWT, with no team header.
+func TestAdminTemplateRoutesAreAdminOnly(t *testing.T) {
+	t.Parallel()
+
+	swagger, err := GetSpec()
+	require.NoError(t, err)
+
+	for _, route := range []struct {
+		method string
+		path   string
+	}{
+		{http.MethodGet, "/unstable/admin/templates/aliases"},
+		{http.MethodPost, "/unstable/admin/templates/aliases"},
+		{http.MethodDelete, "/unstable/admin/templates/aliases/{aliasID}"},
+		{http.MethodPost, "/unstable/admin/templates/defaults"},
+		{http.MethodPatch, "/unstable/admin/templates/defaults/{templateID}"},
+		{http.MethodDelete, "/unstable/admin/templates/defaults/{templateID}"},
+		{http.MethodGet, "/unstable/admin/templates/lookup"},
+	} {
+		pathItem := swagger.Paths.Value(route.path)
+		require.NotNil(t, pathItem, route.path)
+		operation := pathItem.GetOperation(route.method)
+		require.NotNil(t, operation, "%s %s", route.method, route.path)
+		require.NotNil(t, operation.Security, "%s %s", route.method, route.path)
+
+		var requirements [][]string
+		for _, requirement := range *operation.Security {
+			schemes := make([]string, 0, len(requirement))
+			for scheme := range requirement {
+				schemes = append(schemes, scheme)
+			}
+			requirements = append(requirements, schemes)
+		}
+		require.ElementsMatch(t, [][]string{{"AdminApiKeyAuth"}, {"AdminJWTAuth"}}, requirements, "%s %s", route.method, route.path)
+		require.Equal(t, []string{"admin"}, operation.Tags, "%s %s stays out of the SDKs", route.method, route.path)
+	}
+}
+
 func TestTemplateBuildMinimumFreeDiskContract(t *testing.T) {
 	t.Parallel()
 

@@ -505,6 +505,30 @@ type AdminBuildCancelResult struct {
 	FailedCount int `json:"failedCount"`
 }
 
+// AdminDefaultTemplate defines model for AdminDefaultTemplate.
+type AdminDefaultTemplate struct {
+	// Description Description of the default template
+	Description *string `json:"description"`
+
+	// TemplateID Identifier of the default template
+	TemplateID string `json:"templateID"`
+}
+
+// AdminDefaultTemplateCreateRequest defines model for AdminDefaultTemplateCreateRequest.
+type AdminDefaultTemplateCreateRequest struct {
+	// Description Description of the default template; blank is stored as none
+	Description *string `json:"description,omitempty"`
+
+	// TemplateID Identifier of the template to make a default template
+	TemplateID string `json:"templateID"`
+}
+
+// AdminDefaultTemplateUpdateRequest defines model for AdminDefaultTemplateUpdateRequest.
+type AdminDefaultTemplateUpdateRequest struct {
+	// Description New description of the default template; null or blank clears it
+	Description *string `json:"description"`
+}
+
 // AdminSandbox defines model for AdminSandbox.
 type AdminSandbox struct {
 	// SandboxID Identifier of the sandbox
@@ -615,6 +639,104 @@ type AdminTeamRunningSandboxCounts map[string]int64
 type AdminTeamSchedulingLabels struct {
 	// Labels The team's full set of labels. A request's labels replace the current ones.
 	Labels []string `json:"labels"`
+}
+
+// AdminTemplateAlias defines model for AdminTemplateAlias.
+type AdminTemplateAlias struct {
+	// Alias The alias
+	Alias string `json:"alias"`
+
+	// Id Identifier of the alias
+	Id openapi_types.UUID `json:"id"`
+
+	// IsRenamable Whether building the template under another name replaces the alias
+	IsRenamable bool `json:"isRenamable"`
+
+	// Namespace Namespace of the alias, or null for an alias that resolves for every team
+	Namespace *string `json:"namespace"`
+
+	// TemplateID Identifier of the template the alias resolves to
+	TemplateID string `json:"templateID"`
+}
+
+// AdminTemplateAliasCreateRequest defines model for AdminTemplateAliasCreateRequest.
+type AdminTemplateAliasCreateRequest struct {
+	// Alias The alias, without a namespace or tag
+	Alias string `json:"alias"`
+
+	// TemplateID Identifier of the template the alias resolves to
+	TemplateID string `json:"templateID"`
+}
+
+// AdminTemplateAliasDeleted defines model for AdminTemplateAliasDeleted.
+type AdminTemplateAliasDeleted struct {
+	// Alias The removed alias
+	Alias string `json:"alias"`
+
+	// AliasID Identifier of the removed alias
+	AliasID openapi_types.UUID `json:"aliasID"`
+
+	// TemplateID Identifier of the template the alias resolved to
+	TemplateID string `json:"templateID"`
+}
+
+// AdminTemplateAliases defines model for AdminTemplateAliases.
+type AdminTemplateAliases struct {
+	// Aliases All aliases of the template, those without a namespace first
+	Aliases []AdminTemplateAlias `json:"aliases"`
+
+	// Public Whether the template is public
+	Public bool              `json:"public"`
+	Team   AdminTemplateTeam `json:"team"`
+
+	// TemplateID Identifier of the template
+	TemplateID string `json:"templateID"`
+}
+
+// AdminTemplateLookup defines model for AdminTemplateLookup.
+type AdminTemplateLookup struct {
+	// Builds The template's newest builds of any tag and status, newest first, at most 100
+	Builds []TemplateBuild `json:"builds"`
+
+	// CreatedAt Time when the template was created
+	CreatedAt time.Time `json:"createdAt"`
+
+	// IsSnapshot Whether the template is a snapshot of a sandbox
+	IsSnapshot bool `json:"isSnapshot"`
+
+	// LastSpawnedAt Time when the template was last used
+	LastSpawnedAt *time.Time `json:"lastSpawnedAt"`
+
+	// MatchedBuildID The build the query matched, when it was a build ID
+	MatchedBuildID *openapi_types.UUID `json:"matchedBuildID"`
+
+	// Names Names of the template (namespace/alias format when namespaced)
+	Names []string `json:"names"`
+
+	// Public Whether the template is public
+	Public bool `json:"public"`
+
+	// SnapshotSandboxID The sandbox a snapshot template was taken from
+	SnapshotSandboxID *string `json:"snapshotSandboxID"`
+
+	// SpawnCount Number of times the template was used
+	SpawnCount int64             `json:"spawnCount"`
+	Team       AdminTemplateTeam `json:"team"`
+
+	// TemplateID Identifier of the template
+	TemplateID string `json:"templateID"`
+}
+
+// AdminTemplateTeam defines model for AdminTemplateTeam.
+type AdminTemplateTeam struct {
+	// Email Contact email of the team
+	Email string `json:"email"`
+
+	// Id Identifier of the team that owns the template
+	Id openapi_types.UUID `json:"id"`
+
+	// Name Name of the team
+	Name string `json:"name"`
 }
 
 // AssignTemplateTagsRequest defines model for AssignTemplateTagsRequest.
@@ -859,6 +981,15 @@ type MachineInfo struct {
 
 	// CpuModelName CPU model name of the node
 	CpuModelName string `json:"cpuModelName"`
+}
+
+// ManagementProjectSettingsRequest defines model for ManagementProjectSettingsRequest.
+type ManagementProjectSettingsRequest struct {
+	// Revision Monotonic per-project revision. Older or duplicate revisions succeed without changing stored state.
+	Revision int64 `json:"revision"`
+
+	// Settings The project's stored settings. PUT replaces the complete document.
+	Settings ProjectSettings `json:"settings"`
 }
 
 // MaxTeamMetric Team metric with timestamp
@@ -1116,6 +1247,11 @@ type NodeStatusChange struct {
 
 // OrderDirection Sort direction
 type OrderDirection string
+
+// ProjectSettings The project's stored settings. PUT replaces the complete document.
+type ProjectSettings struct {
+	SandboxSettings SandboxSettings `json:"sandboxSettings"`
+}
 
 // ResumedSandbox defines model for ResumedSandbox.
 type ResumedSandbox struct {
@@ -1543,6 +1679,12 @@ type SandboxPauseRequest struct {
 type SandboxRefreshRequest struct {
 	// Duration Duration for which the sandbox should be kept alive in seconds
 	Duration *int `json:"duration,omitempty"`
+}
+
+// SandboxSettings defines model for SandboxSettings.
+type SandboxSettings struct {
+	// DefaultAllowPublicTraffic Whether new sandboxes without an explicit network.allowPublicTraffic accept traffic without a traffic access token. Omission uses the public default. Existing sandboxes, resumes and forks keep their settings.
+	DefaultAllowPublicTraffic *bool `json:"defaultAllowPublicTraffic,omitempty"`
 }
 
 // SandboxSnapshotRequest defines model for SandboxSnapshotRequest.
@@ -2299,6 +2441,9 @@ type WebhookDetail struct {
 	Url    string `json:"url"`
 }
 
+// AliasID defines model for aliasID.
+type AliasID = openapi_types.UUID
+
 // ApiKeyID defines model for apiKeyID.
 type ApiKeyID = string
 
@@ -2634,6 +2779,24 @@ type GetTemplatesTemplateIDTagsTagAssignmentsParams struct {
 	Limit *TagAssignmentsLimit `form:"limit,omitempty" json:"limit,omitempty"`
 }
 
+// GetUnstableAdminTemplatesAliasesParams defines parameters for GetUnstableAdminTemplatesAliases.
+type GetUnstableAdminTemplatesAliasesParams struct {
+	// Search Exact template ID or alias
+	Search string `form:"search" json:"search"`
+
+	// NextToken Cursor to start the list from
+	NextToken *PaginationNextToken `form:"nextToken,omitempty" json:"nextToken,omitempty"`
+
+	// Limit Maximum number of items to return per page
+	Limit *PaginationLimit `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetUnstableAdminTemplatesLookupParams defines parameters for GetUnstableAdminTemplatesLookup.
+type GetUnstableAdminTemplatesLookupParams struct {
+	// Query Build ID, template ID, or template name
+	Query string `form:"query" json:"query"`
+}
+
 // GetUnstableTemplatesSearchParams defines parameters for GetUnstableTemplatesSearch.
 type GetUnstableTemplatesSearchParams struct {
 	// Search Case-insensitive substring match on the template ID, its aliases and its names.
@@ -2796,6 +2959,18 @@ type PostUnstableAdminTeamsQueryJSONRequestBody = AdminTeamListRequest
 
 // PutUnstableAdminTeamsTeamIDSchedulingLabelsJSONRequestBody defines body for PutUnstableAdminTeamsTeamIDSchedulingLabels for application/json ContentType.
 type PutUnstableAdminTeamsTeamIDSchedulingLabelsJSONRequestBody = AdminTeamSchedulingLabels
+
+// PostUnstableAdminTemplatesAliasesJSONRequestBody defines body for PostUnstableAdminTemplatesAliases for application/json ContentType.
+type PostUnstableAdminTemplatesAliasesJSONRequestBody = AdminTemplateAliasCreateRequest
+
+// PostUnstableAdminTemplatesDefaultsJSONRequestBody defines body for PostUnstableAdminTemplatesDefaults for application/json ContentType.
+type PostUnstableAdminTemplatesDefaultsJSONRequestBody = AdminDefaultTemplateCreateRequest
+
+// PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody defines body for PatchUnstableAdminTemplatesDefaultsTemplateID for application/json ContentType.
+type PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody = AdminDefaultTemplateUpdateRequest
+
+// ManagementSetProjectSettingsJSONRequestBody defines body for ManagementSetProjectSettings for application/json ContentType.
+type ManagementSetProjectSettingsJSONRequestBody = ManagementProjectSettingsRequest
 
 // PostV2SandboxesJSONRequestBody defines body for PostV2Sandboxes for application/json ContentType.
 type PostV2SandboxesJSONRequestBody = NewSandboxV2
@@ -3783,6 +3958,106 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /unstable/admin/teams/{teamID}/scheduling-labels (the `PutUnstableAdminTeamsTeamIDSchedulingLabels` operationId).
 	PutUnstableAdminTeamsTeamIDSchedulingLabels(ctx context.Context, teamID openapi_types.UUID, body PutUnstableAdminTeamsTeamIDSchedulingLabelsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUnstableAdminTemplatesAliases Search template aliases as admin
+	//
+	// Finds the templates whose ID equals `search`, or that own an alias equal to `search` in any namespace, with their owning team and all their aliases. Deleted templates are left out. Results are ordered by template ID; the next page's token is returned in `X-Next-Token`.
+	//
+	// Corresponds with GET /unstable/admin/templates/aliases (the `GetUnstableAdminTemplatesAliases` operationId).
+	GetUnstableAdminTemplatesAliases(ctx context.Context, params *GetUnstableAdminTemplatesAliasesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostUnstableAdminTemplatesAliasesWithBody Add a template alias without a namespace as admin
+	//
+	// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+	PostUnstableAdminTemplatesAliasesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostUnstableAdminTemplatesAliases Add a template alias without a namespace as admin
+	//
+	// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+	PostUnstableAdminTemplatesAliases(ctx context.Context, body PostUnstableAdminTemplatesAliasesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteUnstableAdminTemplatesAliasesAliasID Remove a template alias without a namespace as admin
+	//
+	// Removes an alias without a namespace. A namespaced alias is not removed and answers 404.
+	//
+	// Corresponds with DELETE /unstable/admin/templates/aliases/{aliasID} (the `DeleteUnstableAdminTemplatesAliasesAliasID` operationId).
+	DeleteUnstableAdminTemplatesAliasesAliasID(ctx context.Context, aliasID AliasID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostUnstableAdminTemplatesDefaultsWithBody Add a default template as admin
+	//
+	// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+	PostUnstableAdminTemplatesDefaultsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PostUnstableAdminTemplatesDefaults Add a default template as admin
+	//
+	// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+	PostUnstableAdminTemplatesDefaults(ctx context.Context, body PostUnstableAdminTemplatesDefaultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// DeleteUnstableAdminTemplatesDefaultsTemplateID Remove a default template as admin
+	//
+	// Stops a template being one of the platform's default templates. The template itself is not changed. Returns 404 when the template is not a default template.
+	//
+	// Corresponds with DELETE /unstable/admin/templates/defaults/{templateID} (the `DeleteUnstableAdminTemplatesDefaultsTemplateID` operationId).
+	DeleteUnstableAdminTemplatesDefaultsTemplateID(ctx context.Context, templateID TemplateID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchUnstableAdminTemplatesDefaultsTemplateIDWithBody Update a default template as admin
+	//
+	// Updates the description of a default template. Returns 404 when the template is not a default template.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+	PatchUnstableAdminTemplatesDefaultsTemplateIDWithBody(ctx context.Context, templateID TemplateID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// PatchUnstableAdminTemplatesDefaultsTemplateID Update a default template as admin
+	//
+	// Updates the description of a default template. Returns 404 when the template is not a default template.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+	PatchUnstableAdminTemplatesDefaultsTemplateID(ctx context.Context, templateID TemplateID, body PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUnstableAdminTemplatesLookup Look up a template as admin
+	//
+	// Resolves `query` as, in order: a build ID (a UUID, matched to the template of the build's newest assignment, with no fallback), a template ID, or a template name (`namespace/alias`, or an alias without a namespace). Returns the template with its owning team and its newest builds. Deleted templates are not found.
+	//
+	// Corresponds with GET /unstable/admin/templates/lookup (the `GetUnstableAdminTemplatesLookup` operationId).
+	GetUnstableAdminTemplatesLookup(ctx context.Context, params *GetUnstableAdminTemplatesLookupParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ManagementSetProjectSettingsWithBody Apply a project's settings revision.
+	//
+	// Replaces the complete project settings document when the revision is newer than the stored revision. Omitted settings are removed. Older and duplicate revisions leave the stored document unchanged. Every successful delivery invalidates the cached team. Answers 404 when the project is missing or deleted.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /unstable/management/projects/{projectID}/settings (the `ManagementSetProjectSettings` operationId).
+	ManagementSetProjectSettingsWithBody(ctx context.Context, projectID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ManagementSetProjectSettings Apply a project's settings revision.
+	//
+	// Replaces the complete project settings document when the revision is newer than the stored revision. Omitted settings are removed. Older and duplicate revisions leave the stored document unchanged. Every successful delivery invalidates the cached team. Answers 404 when the project is missing or deleted.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /unstable/management/projects/{projectID}/settings (the `ManagementSetProjectSettings` operationId).
+	ManagementSetProjectSettings(ctx context.Context, projectID openapi_types.UUID, body ManagementSetProjectSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetUnstableTeamsTeamIDLimits Team limits
 	//
@@ -5643,6 +5918,226 @@ func (c *Client) PutUnstableAdminTeamsTeamIDSchedulingLabelsWithBody(ctx context
 // Corresponds with PUT /unstable/admin/teams/{teamID}/scheduling-labels (the `PutUnstableAdminTeamsTeamIDSchedulingLabels` operationId).
 func (c *Client) PutUnstableAdminTeamsTeamIDSchedulingLabels(ctx context.Context, teamID openapi_types.UUID, body PutUnstableAdminTeamsTeamIDSchedulingLabelsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPutUnstableAdminTeamsTeamIDSchedulingLabelsRequest(c.Server, teamID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUnstableAdminTemplatesAliases Search template aliases as admin
+//
+// Finds the templates whose ID equals `search`, or that own an alias equal to `search` in any namespace, with their owning team and all their aliases. Deleted templates are left out. Results are ordered by template ID; the next page's token is returned in `X-Next-Token`.
+//
+// Corresponds with GET /unstable/admin/templates/aliases (the `GetUnstableAdminTemplatesAliases` operationId).
+func (c *Client) GetUnstableAdminTemplatesAliases(ctx context.Context, params *GetUnstableAdminTemplatesAliasesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUnstableAdminTemplatesAliasesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostUnstableAdminTemplatesAliasesWithBody Add a template alias without a namespace as admin
+//
+// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+func (c *Client) PostUnstableAdminTemplatesAliasesWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostUnstableAdminTemplatesAliasesRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostUnstableAdminTemplatesAliases Add a template alias without a namespace as admin
+//
+// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+func (c *Client) PostUnstableAdminTemplatesAliases(ctx context.Context, body PostUnstableAdminTemplatesAliasesJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostUnstableAdminTemplatesAliasesRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteUnstableAdminTemplatesAliasesAliasID Remove a template alias without a namespace as admin
+//
+// Removes an alias without a namespace. A namespaced alias is not removed and answers 404.
+//
+// Corresponds with DELETE /unstable/admin/templates/aliases/{aliasID} (the `DeleteUnstableAdminTemplatesAliasesAliasID` operationId).
+func (c *Client) DeleteUnstableAdminTemplatesAliasesAliasID(ctx context.Context, aliasID AliasID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteUnstableAdminTemplatesAliasesAliasIDRequest(c.Server, aliasID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostUnstableAdminTemplatesDefaultsWithBody Add a default template as admin
+//
+// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+func (c *Client) PostUnstableAdminTemplatesDefaultsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostUnstableAdminTemplatesDefaultsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PostUnstableAdminTemplatesDefaults Add a default template as admin
+//
+// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+func (c *Client) PostUnstableAdminTemplatesDefaults(ctx context.Context, body PostUnstableAdminTemplatesDefaultsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostUnstableAdminTemplatesDefaultsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// DeleteUnstableAdminTemplatesDefaultsTemplateID Remove a default template as admin
+//
+// Stops a template being one of the platform's default templates. The template itself is not changed. Returns 404 when the template is not a default template.
+//
+// Corresponds with DELETE /unstable/admin/templates/defaults/{templateID} (the `DeleteUnstableAdminTemplatesDefaultsTemplateID` operationId).
+func (c *Client) DeleteUnstableAdminTemplatesDefaultsTemplateID(ctx context.Context, templateID TemplateID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewDeleteUnstableAdminTemplatesDefaultsTemplateIDRequest(c.Server, templateID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PatchUnstableAdminTemplatesDefaultsTemplateIDWithBody Update a default template as admin
+//
+// Updates the description of a default template. Returns 404 when the template is not a default template.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+func (c *Client) PatchUnstableAdminTemplatesDefaultsTemplateIDWithBody(ctx context.Context, templateID TemplateID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchUnstableAdminTemplatesDefaultsTemplateIDRequestWithBody(c.Server, templateID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// PatchUnstableAdminTemplatesDefaultsTemplateID Update a default template as admin
+//
+// Updates the description of a default template. Returns 404 when the template is not a default template.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+func (c *Client) PatchUnstableAdminTemplatesDefaultsTemplateID(ctx context.Context, templateID TemplateID, body PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPatchUnstableAdminTemplatesDefaultsTemplateIDRequest(c.Server, templateID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUnstableAdminTemplatesLookup Look up a template as admin
+//
+// Resolves `query` as, in order: a build ID (a UUID, matched to the template of the build's newest assignment, with no fallback), a template ID, or a template name (`namespace/alias`, or an alias without a namespace). Returns the template with its owning team and its newest builds. Deleted templates are not found.
+//
+// Corresponds with GET /unstable/admin/templates/lookup (the `GetUnstableAdminTemplatesLookup` operationId).
+func (c *Client) GetUnstableAdminTemplatesLookup(ctx context.Context, params *GetUnstableAdminTemplatesLookupParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUnstableAdminTemplatesLookupRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ManagementSetProjectSettingsWithBody Apply a project's settings revision.
+//
+// Replaces the complete project settings document when the revision is newer than the stored revision. Omitted settings are removed. Older and duplicate revisions leave the stored document unchanged. Every successful delivery invalidates the cached team. Answers 404 when the project is missing or deleted.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /unstable/management/projects/{projectID}/settings (the `ManagementSetProjectSettings` operationId).
+func (c *Client) ManagementSetProjectSettingsWithBody(ctx context.Context, projectID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewManagementSetProjectSettingsRequestWithBody(c.Server, projectID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ManagementSetProjectSettings Apply a project's settings revision.
+//
+// Replaces the complete project settings document when the revision is newer than the stored revision. Omitted settings are removed. Older and duplicate revisions leave the stored document unchanged. Every successful delivery invalidates the cached team. Answers 404 when the project is missing or deleted.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /unstable/management/projects/{projectID}/settings (the `ManagementSetProjectSettings` operationId).
+func (c *Client) ManagementSetProjectSettings(ctx context.Context, projectID openapi_types.UUID, body ManagementSetProjectSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewManagementSetProjectSettingsRequest(c.Server, projectID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -9721,6 +10216,372 @@ func NewPutUnstableAdminTeamsTeamIDSchedulingLabelsRequestWithBody(server string
 	return req, nil
 }
 
+// NewGetUnstableAdminTemplatesAliasesRequest constructs an http.Request for the GetUnstableAdminTemplatesAliases method
+func NewGetUnstableAdminTemplatesAliasesRequest(server string, params *GetUnstableAdminTemplatesAliasesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/templates/aliases")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "search", params.Search, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if params.NextToken != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "nextToken", *params.NextToken, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostUnstableAdminTemplatesAliasesRequest calls the generic PostUnstableAdminTemplatesAliases builder with application/json body
+func NewPostUnstableAdminTemplatesAliasesRequest(server string, body PostUnstableAdminTemplatesAliasesJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostUnstableAdminTemplatesAliasesRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostUnstableAdminTemplatesAliasesRequestWithBody constructs an http.Request for the PostUnstableAdminTemplatesAliases method, with any body, and a specified content type
+func NewPostUnstableAdminTemplatesAliasesRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/templates/aliases")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteUnstableAdminTemplatesAliasesAliasIDRequest constructs an http.Request for the DeleteUnstableAdminTemplatesAliasesAliasID method
+func NewDeleteUnstableAdminTemplatesAliasesAliasIDRequest(server string, aliasID AliasID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "aliasID", aliasID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/templates/aliases/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPostUnstableAdminTemplatesDefaultsRequest calls the generic PostUnstableAdminTemplatesDefaults builder with application/json body
+func NewPostUnstableAdminTemplatesDefaultsRequest(server string, body PostUnstableAdminTemplatesDefaultsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostUnstableAdminTemplatesDefaultsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewPostUnstableAdminTemplatesDefaultsRequestWithBody constructs an http.Request for the PostUnstableAdminTemplatesDefaults method, with any body, and a specified content type
+func NewPostUnstableAdminTemplatesDefaultsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/templates/defaults")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewDeleteUnstableAdminTemplatesDefaultsTemplateIDRequest constructs an http.Request for the DeleteUnstableAdminTemplatesDefaultsTemplateID method
+func NewDeleteUnstableAdminTemplatesDefaultsTemplateIDRequest(server string, templateID TemplateID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "templateID", templateID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/templates/defaults/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewPatchUnstableAdminTemplatesDefaultsTemplateIDRequest calls the generic PatchUnstableAdminTemplatesDefaultsTemplateID builder with application/json body
+func NewPatchUnstableAdminTemplatesDefaultsTemplateIDRequest(server string, templateID TemplateID, body PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPatchUnstableAdminTemplatesDefaultsTemplateIDRequestWithBody(server, templateID, "application/json", bodyReader)
+}
+
+// NewPatchUnstableAdminTemplatesDefaultsTemplateIDRequestWithBody constructs an http.Request for the PatchUnstableAdminTemplatesDefaultsTemplateID method, with any body, and a specified content type
+func NewPatchUnstableAdminTemplatesDefaultsTemplateIDRequestWithBody(server string, templateID TemplateID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "templateID", templateID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/templates/defaults/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPatch, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewGetUnstableAdminTemplatesLookupRequest constructs an http.Request for the GetUnstableAdminTemplatesLookup method
+func NewGetUnstableAdminTemplatesLookupRequest(server string, params *GetUnstableAdminTemplatesLookupParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/templates/lookup")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if queryFrag, err := runtime.StyleParamWithOptions("form", true, "query", params.Query, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+			return nil, err
+		} else {
+			for _, qp := range strings.Split(queryFrag, "&") {
+				rawQueryFragments = append(rawQueryFragments, qp)
+			}
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewManagementSetProjectSettingsRequest calls the generic ManagementSetProjectSettings builder with application/json body
+func NewManagementSetProjectSettingsRequest(server string, projectID openapi_types.UUID, body ManagementSetProjectSettingsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewManagementSetProjectSettingsRequestWithBody(server, projectID, "application/json", bodyReader)
+}
+
+// NewManagementSetProjectSettingsRequestWithBody constructs an http.Request for the ManagementSetProjectSettings method, with any body, and a specified content type
+func NewManagementSetProjectSettingsRequestWithBody(server string, projectID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "projectID", projectID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/management/projects/%s/settings", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewGetUnstableTeamsTeamIDLimitsRequest constructs an http.Request for the GetUnstableTeamsTeamIDLimits method
 func NewGetUnstableTeamsTeamIDLimitsRequest(server string, teamID TeamID) (*http.Request, error) {
 	var err error
@@ -11485,6 +12346,114 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /unstable/admin/teams/{teamID}/scheduling-labels (the `PutUnstableAdminTeamsTeamIDSchedulingLabels` operationId).
 	PutUnstableAdminTeamsTeamIDSchedulingLabelsWithResponse(ctx context.Context, teamID openapi_types.UUID, body PutUnstableAdminTeamsTeamIDSchedulingLabelsJSONRequestBody, reqEditors ...RequestEditorFn) (*PutUnstableAdminTeamsTeamIDSchedulingLabelsResponse, error)
+
+	// GetUnstableAdminTemplatesAliasesWithResponse Search template aliases as admin
+	//
+	// Finds the templates whose ID equals `search`, or that own an alias equal to `search` in any namespace, with their owning team and all their aliases. Deleted templates are left out. Results are ordered by template ID; the next page's token is returned in `X-Next-Token`.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /unstable/admin/templates/aliases (the `GetUnstableAdminTemplatesAliases` operationId).
+	GetUnstableAdminTemplatesAliasesWithResponse(ctx context.Context, params *GetUnstableAdminTemplatesAliasesParams, reqEditors ...RequestEditorFn) (*GetUnstableAdminTemplatesAliasesResponse, error)
+
+	// PostUnstableAdminTemplatesAliasesWithBodyWithResponse Add a template alias without a namespace as admin
+	//
+	// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+	PostUnstableAdminTemplatesAliasesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesAliasesResponse, error)
+
+	// PostUnstableAdminTemplatesAliasesWithResponse Add a template alias without a namespace as admin
+	//
+	// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+	PostUnstableAdminTemplatesAliasesWithResponse(ctx context.Context, body PostUnstableAdminTemplatesAliasesJSONRequestBody, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesAliasesResponse, error)
+
+	// DeleteUnstableAdminTemplatesAliasesAliasIDWithResponse Remove a template alias without a namespace as admin
+	//
+	// Removes an alias without a namespace. A namespaced alias is not removed and answers 404.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /unstable/admin/templates/aliases/{aliasID} (the `DeleteUnstableAdminTemplatesAliasesAliasID` operationId).
+	DeleteUnstableAdminTemplatesAliasesAliasIDWithResponse(ctx context.Context, aliasID AliasID, reqEditors ...RequestEditorFn) (*DeleteUnstableAdminTemplatesAliasesAliasIDResponse, error)
+
+	// PostUnstableAdminTemplatesDefaultsWithBodyWithResponse Add a default template as admin
+	//
+	// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+	PostUnstableAdminTemplatesDefaultsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesDefaultsResponse, error)
+
+	// PostUnstableAdminTemplatesDefaultsWithResponse Add a default template as admin
+	//
+	// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+	PostUnstableAdminTemplatesDefaultsWithResponse(ctx context.Context, body PostUnstableAdminTemplatesDefaultsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesDefaultsResponse, error)
+
+	// DeleteUnstableAdminTemplatesDefaultsTemplateIDWithResponse Remove a default template as admin
+	//
+	// Stops a template being one of the platform's default templates. The template itself is not changed. Returns 404 when the template is not a default template.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /unstable/admin/templates/defaults/{templateID} (the `DeleteUnstableAdminTemplatesDefaultsTemplateID` operationId).
+	DeleteUnstableAdminTemplatesDefaultsTemplateIDWithResponse(ctx context.Context, templateID TemplateID, reqEditors ...RequestEditorFn) (*DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse, error)
+
+	// PatchUnstableAdminTemplatesDefaultsTemplateIDWithBodyWithResponse Update a default template as admin
+	//
+	// Updates the description of a default template. Returns 404 when the template is not a default template.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+	PatchUnstableAdminTemplatesDefaultsTemplateIDWithBodyWithResponse(ctx context.Context, templateID TemplateID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchUnstableAdminTemplatesDefaultsTemplateIDResponse, error)
+
+	// PatchUnstableAdminTemplatesDefaultsTemplateIDWithResponse Update a default template as admin
+	//
+	// Updates the description of a default template. Returns 404 when the template is not a default template.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+	PatchUnstableAdminTemplatesDefaultsTemplateIDWithResponse(ctx context.Context, templateID TemplateID, body PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchUnstableAdminTemplatesDefaultsTemplateIDResponse, error)
+
+	// GetUnstableAdminTemplatesLookupWithResponse Look up a template as admin
+	//
+	// Resolves `query` as, in order: a build ID (a UUID, matched to the template of the build's newest assignment, with no fallback), a template ID, or a template name (`namespace/alias`, or an alias without a namespace). Returns the template with its owning team and its newest builds. Deleted templates are not found.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /unstable/admin/templates/lookup (the `GetUnstableAdminTemplatesLookup` operationId).
+	GetUnstableAdminTemplatesLookupWithResponse(ctx context.Context, params *GetUnstableAdminTemplatesLookupParams, reqEditors ...RequestEditorFn) (*GetUnstableAdminTemplatesLookupResponse, error)
+
+	// ManagementSetProjectSettingsWithBodyWithResponse Apply a project's settings revision.
+	//
+	// Replaces the complete project settings document when the revision is newer than the stored revision. Omitted settings are removed. Older and duplicate revisions leave the stored document unchanged. Every successful delivery invalidates the cached team. Answers 404 when the project is missing or deleted.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /unstable/management/projects/{projectID}/settings (the `ManagementSetProjectSettings` operationId).
+	ManagementSetProjectSettingsWithBodyWithResponse(ctx context.Context, projectID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ManagementSetProjectSettingsResponse, error)
+
+	// ManagementSetProjectSettingsWithResponse Apply a project's settings revision.
+	//
+	// Replaces the complete project settings document when the revision is newer than the stored revision. Omitted settings are removed. Older and duplicate revisions leave the stored document unchanged. Every successful delivery invalidates the cached team. Answers 404 when the project is missing or deleted.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /unstable/management/projects/{projectID}/settings (the `ManagementSetProjectSettings` operationId).
+	ManagementSetProjectSettingsWithResponse(ctx context.Context, projectID openapi_types.UUID, body ManagementSetProjectSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*ManagementSetProjectSettingsResponse, error)
 
 	// GetUnstableTeamsTeamIDLimitsWithResponse Team limits
 	//
@@ -17379,6 +18348,551 @@ func (r PutUnstableAdminTeamsTeamIDSchedulingLabelsResponse) ContentType() strin
 	return ""
 }
 
+// GetUnstableAdminTemplatesAliasesResponse200Headers the declared response headers of an HTTP 200 response for GetUnstableAdminTemplatesAliases
+type GetUnstableAdminTemplatesAliasesResponse200Headers struct {
+	XNextToken *string
+}
+
+type GetUnstableAdminTemplatesAliasesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *[]AdminTemplateAliases
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+	// Headers200 the parsed response headers for an HTTP 200 response
+	Headers200 *GetUnstableAdminTemplatesAliasesResponse200Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUnstableAdminTemplatesAliasesResponse) GetJSON200() *[]AdminTemplateAliases {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetUnstableAdminTemplatesAliasesResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetUnstableAdminTemplatesAliasesResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetUnstableAdminTemplatesAliasesResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUnstableAdminTemplatesAliasesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUnstableAdminTemplatesAliasesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUnstableAdminTemplatesAliasesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUnstableAdminTemplatesAliasesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostUnstableAdminTemplatesAliasesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *AdminTemplateAlias
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *N409
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostUnstableAdminTemplatesAliasesResponse) GetJSON201() *AdminTemplateAlias {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostUnstableAdminTemplatesAliasesResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostUnstableAdminTemplatesAliasesResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostUnstableAdminTemplatesAliasesResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PostUnstableAdminTemplatesAliasesResponse) GetJSON409() *N409 {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r PostUnstableAdminTemplatesAliasesResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r PostUnstableAdminTemplatesAliasesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostUnstableAdminTemplatesAliasesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostUnstableAdminTemplatesAliasesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostUnstableAdminTemplatesAliasesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteUnstableAdminTemplatesAliasesAliasIDResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdminTemplateAliasDeleted
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) GetJSON200() *AdminTemplateAliasDeleted {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteUnstableAdminTemplatesAliasesAliasIDResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PostUnstableAdminTemplatesDefaultsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON201 the response for an HTTP 201 `application/json` response
+	JSON201 *AdminDefaultTemplate
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON409 the response for an HTTP 409 `application/json` response
+	JSON409 *N409
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+}
+
+// GetJSON201 returns the response for an HTTP 201 `application/json` response
+func (r PostUnstableAdminTemplatesDefaultsResponse) GetJSON201() *AdminDefaultTemplate {
+	return r.JSON201
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PostUnstableAdminTemplatesDefaultsResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PostUnstableAdminTemplatesDefaultsResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PostUnstableAdminTemplatesDefaultsResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON409 returns the response for an HTTP 409 `application/json` response
+func (r PostUnstableAdminTemplatesDefaultsResponse) GetJSON409() *N409 {
+	return r.JSON409
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r PostUnstableAdminTemplatesDefaultsResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r PostUnstableAdminTemplatesDefaultsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PostUnstableAdminTemplatesDefaultsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PostUnstableAdminTemplatesDefaultsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PostUnstableAdminTemplatesDefaultsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type PatchUnstableAdminTemplatesDefaultsTemplateIDResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdminDefaultTemplate
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON200() *AdminDefaultTemplate {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r PatchUnstableAdminTemplatesDefaultsTemplateIDResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type GetUnstableAdminTemplatesLookupResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdminTemplateLookup
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUnstableAdminTemplatesLookupResponse) GetJSON200() *AdminTemplateLookup {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetUnstableAdminTemplatesLookupResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetUnstableAdminTemplatesLookupResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetUnstableAdminTemplatesLookupResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetUnstableAdminTemplatesLookupResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUnstableAdminTemplatesLookupResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUnstableAdminTemplatesLookupResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUnstableAdminTemplatesLookupResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUnstableAdminTemplatesLookupResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ManagementSetProjectSettingsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ManagementSetProjectSettingsResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ManagementSetProjectSettingsResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ManagementSetProjectSettingsResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ManagementSetProjectSettingsResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ManagementSetProjectSettingsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ManagementSetProjectSettingsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ManagementSetProjectSettingsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ManagementSetProjectSettingsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // GetUnstableTeamsTeamIDLimitsResponse429Headers the declared response headers of an HTTP 429 response for GetUnstableTeamsTeamIDLimits
 type GetUnstableTeamsTeamIDLimitsResponse429Headers struct {
 	RetryAfter *int
@@ -20120,6 +21634,186 @@ func (c *ClientWithResponses) PutUnstableAdminTeamsTeamIDSchedulingLabelsWithRes
 		return nil, err
 	}
 	return ParsePutUnstableAdminTeamsTeamIDSchedulingLabelsResponse(rsp)
+}
+
+// GetUnstableAdminTemplatesAliasesWithResponse Search template aliases as admin
+//
+// Finds the templates whose ID equals `search`, or that own an alias equal to `search` in any namespace, with their owning team and all their aliases. Deleted templates are left out. Results are ordered by template ID; the next page's token is returned in `X-Next-Token`.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /unstable/admin/templates/aliases (the `GetUnstableAdminTemplatesAliases` operationId).
+func (c *ClientWithResponses) GetUnstableAdminTemplatesAliasesWithResponse(ctx context.Context, params *GetUnstableAdminTemplatesAliasesParams, reqEditors ...RequestEditorFn) (*GetUnstableAdminTemplatesAliasesResponse, error) {
+	rsp, err := c.GetUnstableAdminTemplatesAliases(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUnstableAdminTemplatesAliasesResponse(rsp)
+}
+
+// PostUnstableAdminTemplatesAliasesWithBodyWithResponse Add a template alias without a namespace as admin
+//
+// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+func (c *ClientWithResponses) PostUnstableAdminTemplatesAliasesWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesAliasesResponse, error) {
+	rsp, err := c.PostUnstableAdminTemplatesAliasesWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostUnstableAdminTemplatesAliasesResponse(rsp)
+}
+
+// PostUnstableAdminTemplatesAliasesWithResponse Add a template alias without a namespace as admin
+//
+// Adds an alias without a namespace to a template, so the template resolves by that name for every team. The alias follows the rules of template names (lowercase letters, digits, `-` and `_`) and cannot equal a template ID. Returns 404 when the template does not exist and 409 when the alias is taken.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /unstable/admin/templates/aliases (the `PostUnstableAdminTemplatesAliases` operationId).
+func (c *ClientWithResponses) PostUnstableAdminTemplatesAliasesWithResponse(ctx context.Context, body PostUnstableAdminTemplatesAliasesJSONRequestBody, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesAliasesResponse, error) {
+	rsp, err := c.PostUnstableAdminTemplatesAliases(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostUnstableAdminTemplatesAliasesResponse(rsp)
+}
+
+// DeleteUnstableAdminTemplatesAliasesAliasIDWithResponse Remove a template alias without a namespace as admin
+//
+// Removes an alias without a namespace. A namespaced alias is not removed and answers 404.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /unstable/admin/templates/aliases/{aliasID} (the `DeleteUnstableAdminTemplatesAliasesAliasID` operationId).
+func (c *ClientWithResponses) DeleteUnstableAdminTemplatesAliasesAliasIDWithResponse(ctx context.Context, aliasID AliasID, reqEditors ...RequestEditorFn) (*DeleteUnstableAdminTemplatesAliasesAliasIDResponse, error) {
+	rsp, err := c.DeleteUnstableAdminTemplatesAliasesAliasID(ctx, aliasID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteUnstableAdminTemplatesAliasesAliasIDResponse(rsp)
+}
+
+// PostUnstableAdminTemplatesDefaultsWithBodyWithResponse Add a default template as admin
+//
+// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+func (c *ClientWithResponses) PostUnstableAdminTemplatesDefaultsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesDefaultsResponse, error) {
+	rsp, err := c.PostUnstableAdminTemplatesDefaultsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostUnstableAdminTemplatesDefaultsResponse(rsp)
+}
+
+// PostUnstableAdminTemplatesDefaultsWithResponse Add a default template as admin
+//
+// Makes a template one of the platform's default templates. Returns 404 when the template does not exist and 409 when it is already a default template.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /unstable/admin/templates/defaults (the `PostUnstableAdminTemplatesDefaults` operationId).
+func (c *ClientWithResponses) PostUnstableAdminTemplatesDefaultsWithResponse(ctx context.Context, body PostUnstableAdminTemplatesDefaultsJSONRequestBody, reqEditors ...RequestEditorFn) (*PostUnstableAdminTemplatesDefaultsResponse, error) {
+	rsp, err := c.PostUnstableAdminTemplatesDefaults(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostUnstableAdminTemplatesDefaultsResponse(rsp)
+}
+
+// DeleteUnstableAdminTemplatesDefaultsTemplateIDWithResponse Remove a default template as admin
+//
+// Stops a template being one of the platform's default templates. The template itself is not changed. Returns 404 when the template is not a default template.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /unstable/admin/templates/defaults/{templateID} (the `DeleteUnstableAdminTemplatesDefaultsTemplateID` operationId).
+func (c *ClientWithResponses) DeleteUnstableAdminTemplatesDefaultsTemplateIDWithResponse(ctx context.Context, templateID TemplateID, reqEditors ...RequestEditorFn) (*DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse, error) {
+	rsp, err := c.DeleteUnstableAdminTemplatesDefaultsTemplateID(ctx, templateID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseDeleteUnstableAdminTemplatesDefaultsTemplateIDResponse(rsp)
+}
+
+// PatchUnstableAdminTemplatesDefaultsTemplateIDWithBodyWithResponse Update a default template as admin
+//
+// Updates the description of a default template. Returns 404 when the template is not a default template.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+func (c *ClientWithResponses) PatchUnstableAdminTemplatesDefaultsTemplateIDWithBodyWithResponse(ctx context.Context, templateID TemplateID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PatchUnstableAdminTemplatesDefaultsTemplateIDResponse, error) {
+	rsp, err := c.PatchUnstableAdminTemplatesDefaultsTemplateIDWithBody(ctx, templateID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchUnstableAdminTemplatesDefaultsTemplateIDResponse(rsp)
+}
+
+// PatchUnstableAdminTemplatesDefaultsTemplateIDWithResponse Update a default template as admin
+//
+// Updates the description of a default template. Returns 404 when the template is not a default template.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PATCH /unstable/admin/templates/defaults/{templateID} (the `PatchUnstableAdminTemplatesDefaultsTemplateID` operationId).
+func (c *ClientWithResponses) PatchUnstableAdminTemplatesDefaultsTemplateIDWithResponse(ctx context.Context, templateID TemplateID, body PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody, reqEditors ...RequestEditorFn) (*PatchUnstableAdminTemplatesDefaultsTemplateIDResponse, error) {
+	rsp, err := c.PatchUnstableAdminTemplatesDefaultsTemplateID(ctx, templateID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePatchUnstableAdminTemplatesDefaultsTemplateIDResponse(rsp)
+}
+
+// GetUnstableAdminTemplatesLookupWithResponse Look up a template as admin
+//
+// Resolves `query` as, in order: a build ID (a UUID, matched to the template of the build's newest assignment, with no fallback), a template ID, or a template name (`namespace/alias`, or an alias without a namespace). Returns the template with its owning team and its newest builds. Deleted templates are not found.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /unstable/admin/templates/lookup (the `GetUnstableAdminTemplatesLookup` operationId).
+func (c *ClientWithResponses) GetUnstableAdminTemplatesLookupWithResponse(ctx context.Context, params *GetUnstableAdminTemplatesLookupParams, reqEditors ...RequestEditorFn) (*GetUnstableAdminTemplatesLookupResponse, error) {
+	rsp, err := c.GetUnstableAdminTemplatesLookup(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUnstableAdminTemplatesLookupResponse(rsp)
+}
+
+// ManagementSetProjectSettingsWithBodyWithResponse Apply a project's settings revision.
+//
+// Replaces the complete project settings document when the revision is newer than the stored revision. Omitted settings are removed. Older and duplicate revisions leave the stored document unchanged. Every successful delivery invalidates the cached team. Answers 404 when the project is missing or deleted.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /unstable/management/projects/{projectID}/settings (the `ManagementSetProjectSettings` operationId).
+func (c *ClientWithResponses) ManagementSetProjectSettingsWithBodyWithResponse(ctx context.Context, projectID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ManagementSetProjectSettingsResponse, error) {
+	rsp, err := c.ManagementSetProjectSettingsWithBody(ctx, projectID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseManagementSetProjectSettingsResponse(rsp)
+}
+
+// ManagementSetProjectSettingsWithResponse Apply a project's settings revision.
+//
+// Replaces the complete project settings document when the revision is newer than the stored revision. Omitted settings are removed. Older and duplicate revisions leave the stored document unchanged. Every successful delivery invalidates the cached team. Answers 404 when the project is missing or deleted.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /unstable/management/projects/{projectID}/settings (the `ManagementSetProjectSettings` operationId).
+func (c *ClientWithResponses) ManagementSetProjectSettingsWithResponse(ctx context.Context, projectID openapi_types.UUID, body ManagementSetProjectSettingsJSONRequestBody, reqEditors ...RequestEditorFn) (*ManagementSetProjectSettingsResponse, error) {
+	rsp, err := c.ManagementSetProjectSettings(ctx, projectID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseManagementSetProjectSettingsResponse(rsp)
 }
 
 // GetUnstableTeamsTeamIDLimitsWithResponse Team limits
@@ -25487,6 +27181,443 @@ func ParsePutUnstableAdminTeamsTeamIDSchedulingLabelsResponse(rsp *http.Response
 			headers.RetryAfter = &value
 		}
 		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetUnstableAdminTemplatesAliasesResponse parses an HTTP response from a GetUnstableAdminTemplatesAliasesWithResponse call
+func ParseGetUnstableAdminTemplatesAliasesResponse(rsp *http.Response) (*GetUnstableAdminTemplatesAliasesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUnstableAdminTemplatesAliasesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest []AdminTemplateAliases
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 200:
+		var headers GetUnstableAdminTemplatesAliasesResponse200Headers
+		if values := rsp.Header.Values("X-Next-Token"); len(values) > 0 {
+			var value string
+			if err := runtime.BindStyledParameterWithOptions("simple", "X-Next-Token", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.XNextToken = &value
+		}
+		response.Headers200 = &headers
+	}
+
+	return response, nil
+}
+
+// ParsePostUnstableAdminTemplatesAliasesResponse parses an HTTP response from a PostUnstableAdminTemplatesAliasesWithResponse call
+func ParsePostUnstableAdminTemplatesAliasesResponse(rsp *http.Response) (*PostUnstableAdminTemplatesAliasesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostUnstableAdminTemplatesAliasesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest AdminTemplateAlias
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest N409
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteUnstableAdminTemplatesAliasesAliasIDResponse parses an HTTP response from a DeleteUnstableAdminTemplatesAliasesAliasIDWithResponse call
+func ParseDeleteUnstableAdminTemplatesAliasesAliasIDResponse(rsp *http.Response) (*DeleteUnstableAdminTemplatesAliasesAliasIDResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteUnstableAdminTemplatesAliasesAliasIDResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdminTemplateAliasDeleted
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePostUnstableAdminTemplatesDefaultsResponse parses an HTTP response from a PostUnstableAdminTemplatesDefaultsWithResponse call
+func ParsePostUnstableAdminTemplatesDefaultsResponse(rsp *http.Response) (*PostUnstableAdminTemplatesDefaultsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PostUnstableAdminTemplatesDefaultsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 201:
+		var dest AdminDefaultTemplate
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON201 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 409:
+		var dest N409
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseDeleteUnstableAdminTemplatesDefaultsTemplateIDResponse parses an HTTP response from a DeleteUnstableAdminTemplatesDefaultsTemplateIDWithResponse call
+func ParseDeleteUnstableAdminTemplatesDefaultsTemplateIDResponse(rsp *http.Response) (*DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &DeleteUnstableAdminTemplatesDefaultsTemplateIDResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParsePatchUnstableAdminTemplatesDefaultsTemplateIDResponse parses an HTTP response from a PatchUnstableAdminTemplatesDefaultsTemplateIDWithResponse call
+func ParsePatchUnstableAdminTemplatesDefaultsTemplateIDResponse(rsp *http.Response) (*PatchUnstableAdminTemplatesDefaultsTemplateIDResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &PatchUnstableAdminTemplatesDefaultsTemplateIDResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdminDefaultTemplate
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetUnstableAdminTemplatesLookupResponse parses an HTTP response from a GetUnstableAdminTemplatesLookupWithResponse call
+func ParseGetUnstableAdminTemplatesLookupResponse(rsp *http.Response) (*GetUnstableAdminTemplatesLookupResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUnstableAdminTemplatesLookupResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdminTemplateLookup
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseManagementSetProjectSettingsResponse parses an HTTP response from a ManagementSetProjectSettingsWithResponse call
+func ParseManagementSetProjectSettingsResponse(rsp *http.Response) (*ManagementSetProjectSettingsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ManagementSetProjectSettingsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
 	}
 
 	return response, nil

@@ -121,6 +121,10 @@ delivery or cache refresh is pending.
 - **Resources**: sandboxes (create/list/kill/pause/resume/connect/timeout/metrics/logs),
   templates and builds, teams, volumes, API keys, secrets, sandbox events and webhooks,
   admin operations.
+- **Default templates**: `env_defaults` names the platform's default templates. Admin routes
+  under `/unstable/admin/templates` add, describe and remove default templates and aliases
+  without a namespace, and clear the alias cache after each alias change so name resolution
+  sees it at once.
 - **Spec document**: `GET /openapi.json` serves, without authentication, the spec the request
   validator runs. An `ETag` over the document answers a matching `If-None-Match` with 304. It is
   registered before the validator, which rejects undeclared paths.
