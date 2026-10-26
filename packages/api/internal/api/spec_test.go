@@ -10,6 +10,7 @@ import (
 
 	"github.com/getkin/kin-openapi/openapi3filter"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	middleware "github.com/oapi-codegen/gin-middleware"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -426,6 +427,53 @@ func TestAdminTemplateRoutesAreAdminOnly(t *testing.T) {
 		require.ElementsMatch(t, [][]string{{"AdminApiKeyAuth"}, {"AdminJWTAuth"}}, requirements, "%s %s", route.method, route.path)
 		require.Equal(t, []string{"admin"}, operation.Tags, "%s %s stays out of the SDKs", route.method, route.path)
 	}
+}
+
+// The builds routes are for E2B's own clients like the template search, take
+// the credentials of the template list, and the statuses path is not read as
+// a build ID.
+func TestBuildsRoutesStayOutOfTheSDKs(t *testing.T) {
+	t.Parallel()
+
+	swagger, err := GetSpec()
+	require.NoError(t, err)
+	swagger.Servers = nil
+
+	list := swagger.Paths.Value("/v2/templates")
+	require.NotNil(t, list)
+	require.NotNil(t, list.Get)
+
+	sdkTags := []string{"sandboxes", "snapshots", "templates", "tags", "auth", "volumes", "secrets"}
+	for _, path := range []string{"/unstable/builds", "/unstable/builds/statuses", "/unstable/builds/{buildID}"} {
+		item := swagger.Paths.Value(path)
+		require.NotNil(t, item, path)
+		require.NotNil(t, item.Get, path)
+		require.Equal(t, []string{"unstable"}, item.Get.Tags, path)
+		assert.NotContains(t, sdkTags, item.Get.Tags[0], path)
+		assert.Equal(t, list.Get.Security, item.Get.Security, path)
+	}
+
+	var matched string
+	r := gin.New()
+	r.Use(middleware.OapiRequestValidatorWithOptions(swagger, &middleware.Options{
+		Options: openapi3filter.Options{
+			AuthenticationFunc: func(_ context.Context, input *openapi3filter.AuthenticationInput) error {
+				matched = input.RequestValidationInput.Route.Path
+
+				return nil
+			},
+		},
+		SilenceServersWarning: true,
+	}))
+	r.GET("/*any", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	rr := httptest.NewRecorder()
+	r.ServeHTTP(rr, httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/unstable/builds/statuses?build_ids="+uuid.NewString(), nil))
+
+	require.Equal(t, http.StatusOK, rr.Code, rr.Body.String())
+	assert.Equal(t, "/unstable/builds/statuses", matched)
 }
 
 func TestTemplateBuildMinimumFreeDiskContract(t *testing.T) {

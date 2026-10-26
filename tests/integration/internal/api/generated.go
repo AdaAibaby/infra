@@ -79,6 +79,27 @@ func (e AdminTeamListSortField) Valid() bool {
 	}
 }
 
+// Defines values for BuildStatus.
+const (
+	BuildStatusBuilding BuildStatus = "building"
+	BuildStatusFailed   BuildStatus = "failed"
+	BuildStatusSuccess  BuildStatus = "success"
+)
+
+// Valid indicates whether the value is a known member of the BuildStatus enum.
+func (e BuildStatus) Valid() bool {
+	switch e {
+	case BuildStatusBuilding:
+		return true
+	case BuildStatusFailed:
+		return true
+	case BuildStatusSuccess:
+		return true
+	default:
+		return false
+	}
+}
+
 // Defines values for GCPRegistryType.
 const (
 	Gcp GCPRegistryType = "gcp"
@@ -757,6 +778,24 @@ type AssignedTemplateTags struct {
 	Tags []string `json:"tags"`
 }
 
+// BuildInfo defines model for BuildInfo.
+type BuildInfo struct {
+	// CreatedAt Build creation timestamp in RFC3339 format.
+	CreatedAt time.Time `json:"createdAt"`
+
+	// FinishedAt Build completion timestamp in RFC3339 format, if finished.
+	FinishedAt *time.Time `json:"finishedAt"`
+
+	// Names Template names related to this build, if available.
+	Names *[]string `json:"names,omitempty"`
+
+	// Status Build status as the builds list reports it.
+	Status BuildStatus `json:"status"`
+
+	// StatusMessage Failure message when status is `failed`, otherwise `null`.
+	StatusMessage *string `json:"statusMessage"`
+}
+
 // BuildLogEntry defines model for BuildLogEntry.
 type BuildLogEntry struct {
 	// Level State of the sandbox
@@ -772,6 +811,24 @@ type BuildLogEntry struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
+// BuildStatus Build status as the builds list reports it.
+type BuildStatus string
+
+// BuildStatusItem defines model for BuildStatusItem.
+type BuildStatusItem struct {
+	// FinishedAt Build completion timestamp in RFC3339 format, if finished.
+	FinishedAt *time.Time `json:"finishedAt"`
+
+	// Id Identifier of the build.
+	Id openapi_types.UUID `json:"id"`
+
+	// Status Build status as the builds list reports it.
+	Status BuildStatus `json:"status"`
+
+	// StatusMessage Failure message when status is `failed`, otherwise `null`.
+	StatusMessage *string `json:"statusMessage"`
+}
+
 // BuildStatusReason defines model for BuildStatusReason.
 type BuildStatusReason struct {
 	// LogEntries Log entries related to the status reason
@@ -782,6 +839,20 @@ type BuildStatusReason struct {
 
 	// Step Step that failed
 	Step *string `json:"step,omitempty"`
+}
+
+// BuildsListResponse defines model for BuildsListResponse.
+type BuildsListResponse struct {
+	Data []ListedBuild `json:"data"`
+
+	// NextCursor Cursor to pass to the next list request, or `null` if there is no next page.
+	NextCursor *string `json:"nextCursor"`
+}
+
+// BuildsStatusesResponse defines model for BuildsStatusesResponse.
+type BuildsStatusesResponse struct {
+	// BuildStatuses List of build statuses
+	BuildStatuses []BuildStatusItem `json:"buildStatuses"`
 }
 
 // CPUCount CPU cores for the sandbox
@@ -918,6 +989,42 @@ type IdentifierMaskingDetails struct {
 
 	// ValueLength Length of the token or key
 	ValueLength int `json:"valueLength"`
+}
+
+// ListedBuild defines model for ListedBuild.
+type ListedBuild struct {
+	// CpuCount CPU cores configured for the build.
+	CpuCount int64 `json:"cpuCount"`
+
+	// CreatedAt Build creation timestamp in RFC3339 format.
+	CreatedAt time.Time `json:"createdAt"`
+
+	// DiskSizeMB Disk size in MiB configured for the build, if recorded.
+	DiskSizeMB *int64 `json:"diskSizeMB"`
+
+	// EnvdVersion envd version the build was created with, if recorded.
+	EnvdVersion *string `json:"envdVersion"`
+
+	// FinishedAt Build completion timestamp in RFC3339 format, if finished.
+	FinishedAt *time.Time `json:"finishedAt"`
+
+	// Id Identifier of the build.
+	Id openapi_types.UUID `json:"id"`
+
+	// MemoryMB Memory in MiB configured for the build.
+	MemoryMB int64 `json:"memoryMB"`
+
+	// Status Build status as the builds list reports it.
+	Status BuildStatus `json:"status"`
+
+	// StatusMessage Failure message when status is `failed`, otherwise `null`.
+	StatusMessage *string `json:"statusMessage"`
+
+	// Template Template alias when present, otherwise template ID.
+	Template string `json:"template"`
+
+	// TemplateId Identifier of the template.
+	TemplateId string `json:"templateId"`
 }
 
 // ListedSandbox defines model for ListedSandbox.
@@ -2450,6 +2557,21 @@ type ApiKeyID = string
 // BuildID defines model for buildID.
 type BuildID = string
 
+// BuildIDOrTemplate defines model for buildIDOrTemplate.
+type BuildIDOrTemplate = string
+
+// BuildIDs defines model for buildIDs.
+type BuildIDs = []openapi_types.UUID
+
+// BuildStatuses defines model for buildStatuses.
+type BuildStatuses = []BuildStatus
+
+// BuildsCursor defines model for buildsCursor.
+type BuildsCursor = string
+
+// BuildsLimit defines model for buildsLimit.
+type BuildsLimit = int32
+
 // ClusterID defines model for clusterID.
 type ClusterID = openapi_types.UUID
 
@@ -2795,6 +2917,27 @@ type GetUnstableAdminTemplatesAliasesParams struct {
 type GetUnstableAdminTemplatesLookupParams struct {
 	// Query Build ID, template ID, or template name
 	Query string `form:"query" json:"query"`
+}
+
+// GetUnstableBuildsParams defines parameters for GetUnstableBuilds.
+type GetUnstableBuildsParams struct {
+	// BuildIdOrTemplate Optional filter by build identifier, template identifier, or template alias.
+	BuildIdOrTemplate *BuildIDOrTemplate `form:"build_id_or_template,omitempty" json:"build_id_or_template,omitempty"`
+
+	// Statuses Comma-separated list of build statuses to include.
+	Statuses *BuildStatuses `form:"statuses,omitempty" json:"statuses,omitempty"`
+
+	// Limit Maximum number of builds to return per page.
+	Limit *BuildsLimit `form:"limit,omitempty" json:"limit,omitempty"`
+
+	// Cursor Cursor returned by the previous list response in `created_at|build_id` format.
+	Cursor *BuildsCursor `form:"cursor,omitempty" json:"cursor,omitempty"`
+}
+
+// GetUnstableBuildsStatusesParams defines parameters for GetUnstableBuildsStatuses.
+type GetUnstableBuildsStatusesParams struct {
+	// BuildIds Comma-separated list of build IDs to get statuses for.
+	BuildIds BuildIDs `form:"build_ids" json:"build_ids"`
 }
 
 // GetUnstableTemplatesSearchParams defines parameters for GetUnstableTemplatesSearch.
@@ -4044,6 +4187,27 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /unstable/admin/templates/lookup (the `GetUnstableAdminTemplatesLookup` operationId).
 	GetUnstableAdminTemplatesLookup(ctx context.Context, params *GetUnstableAdminTemplatesLookupParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUnstableBuilds List team builds
+	//
+	// Lists the team's builds, newest first, with an optional filter by build ID, template ID or template alias and by status. `nextCursor` continues the listing. For E2B's own clients: it may change or disappear without notice.
+	//
+	// Corresponds with GET /unstable/builds (the `GetUnstableBuilds` operationId).
+	GetUnstableBuilds(ctx context.Context, params *GetUnstableBuildsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUnstableBuildsStatuses Build statuses
+	//
+	// Returns the statuses of the team's builds with the given IDs; IDs of other teams' builds are left out. For E2B's own clients: it may change or disappear without notice.
+	//
+	// Corresponds with GET /unstable/builds/statuses (the `GetUnstableBuildsStatuses` operationId).
+	GetUnstableBuildsStatuses(ctx context.Context, params *GetUnstableBuildsStatusesParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetUnstableBuildsBuildID Build details
+	//
+	// Returns a build of the team with the names of its template. For E2B's own clients: it may change or disappear without notice.
+	//
+	// Corresponds with GET /unstable/builds/{buildID} (the `GetUnstableBuildsBuildID` operationId).
+	GetUnstableBuildsBuildID(ctx context.Context, buildID BuildID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ManagementSetProjectSettingsWithBody Apply a project's settings revision.
 	//
@@ -6104,6 +6268,57 @@ func (c *Client) PatchUnstableAdminTemplatesDefaultsTemplateID(ctx context.Conte
 // Corresponds with GET /unstable/admin/templates/lookup (the `GetUnstableAdminTemplatesLookup` operationId).
 func (c *Client) GetUnstableAdminTemplatesLookup(ctx context.Context, params *GetUnstableAdminTemplatesLookupParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetUnstableAdminTemplatesLookupRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUnstableBuilds List team builds
+//
+// Lists the team's builds, newest first, with an optional filter by build ID, template ID or template alias and by status. `nextCursor` continues the listing. For E2B's own clients: it may change or disappear without notice.
+//
+// Corresponds with GET /unstable/builds (the `GetUnstableBuilds` operationId).
+func (c *Client) GetUnstableBuilds(ctx context.Context, params *GetUnstableBuildsParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUnstableBuildsRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUnstableBuildsStatuses Build statuses
+//
+// Returns the statuses of the team's builds with the given IDs; IDs of other teams' builds are left out. For E2B's own clients: it may change or disappear without notice.
+//
+// Corresponds with GET /unstable/builds/statuses (the `GetUnstableBuildsStatuses` operationId).
+func (c *Client) GetUnstableBuildsStatuses(ctx context.Context, params *GetUnstableBuildsStatusesParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUnstableBuildsStatusesRequest(c.Server, params)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// GetUnstableBuildsBuildID Build details
+//
+// Returns a build of the team with the names of its template. For E2B's own clients: it may change or disappear without notice.
+//
+// Corresponds with GET /unstable/builds/{buildID} (the `GetUnstableBuildsBuildID` operationId).
+func (c *Client) GetUnstableBuildsBuildID(ctx context.Context, buildID BuildID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetUnstableBuildsBuildIDRequest(c.Server, buildID)
 	if err != nil {
 		return nil, err
 	}
@@ -10539,6 +10754,184 @@ func NewGetUnstableAdminTemplatesLookupRequest(server string, params *GetUnstabl
 	return req, nil
 }
 
+// NewGetUnstableBuildsRequest constructs an http.Request for the GetUnstableBuilds method
+func NewGetUnstableBuildsRequest(server string, params *GetUnstableBuildsParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/builds")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.BuildIdOrTemplate != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "build_id_or_template", *params.BuildIdOrTemplate, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Statuses != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "statuses", *params.Statuses, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Limit != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "limit", *params.Limit, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "integer", Format: "int32"}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if params.Cursor != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", true, "cursor", *params.Cursor, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "string", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetUnstableBuildsStatusesRequest constructs an http.Request for the GetUnstableBuildsStatuses method
+func NewGetUnstableBuildsStatusesRequest(server string, params *GetUnstableBuildsStatusesParams) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/builds/statuses")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	if params != nil {
+		// queryValues collects non-styled parameters (passthrough, JSON)
+		// that are safe to round-trip through url.Values.Encode().
+		queryValues := queryURL.Query()
+		// rawQueryFragments collects pre-encoded query fragments from
+		// styled parameters, preserving literal commas as delimiters
+		// per the OpenAPI spec (e.g. "color=blue,black,brown").
+		var rawQueryFragments []string
+
+		if params.BuildIds != nil {
+
+			if queryFrag, err := runtime.StyleParamWithOptions("form", false, "build_ids", params.BuildIds, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationQuery, Type: "array", Format: ""}); err != nil {
+				return nil, err
+			} else {
+				for _, qp := range strings.Split(queryFrag, "&") {
+					rawQueryFragments = append(rawQueryFragments, qp)
+				}
+			}
+
+		}
+
+		if encoded := queryValues.Encode(); encoded != "" {
+			rawQueryFragments = append(rawQueryFragments, encoded)
+		}
+		queryURL.RawQuery = strings.Join(rawQueryFragments, "&")
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetUnstableBuildsBuildIDRequest constructs an http.Request for the GetUnstableBuildsBuildID method
+func NewGetUnstableBuildsBuildIDRequest(server string, buildID BuildID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "buildID", buildID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/builds/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewManagementSetProjectSettingsRequest calls the generic ManagementSetProjectSettings builder with application/json body
 func NewManagementSetProjectSettingsRequest(server string, projectID openapi_types.UUID, body ManagementSetProjectSettingsJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -12440,6 +12833,33 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /unstable/admin/templates/lookup (the `GetUnstableAdminTemplatesLookup` operationId).
 	GetUnstableAdminTemplatesLookupWithResponse(ctx context.Context, params *GetUnstableAdminTemplatesLookupParams, reqEditors ...RequestEditorFn) (*GetUnstableAdminTemplatesLookupResponse, error)
+
+	// GetUnstableBuildsWithResponse List team builds
+	//
+	// Lists the team's builds, newest first, with an optional filter by build ID, template ID or template alias and by status. `nextCursor` continues the listing. For E2B's own clients: it may change or disappear without notice.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /unstable/builds (the `GetUnstableBuilds` operationId).
+	GetUnstableBuildsWithResponse(ctx context.Context, params *GetUnstableBuildsParams, reqEditors ...RequestEditorFn) (*GetUnstableBuildsResponse, error)
+
+	// GetUnstableBuildsStatusesWithResponse Build statuses
+	//
+	// Returns the statuses of the team's builds with the given IDs; IDs of other teams' builds are left out. For E2B's own clients: it may change or disappear without notice.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /unstable/builds/statuses (the `GetUnstableBuildsStatuses` operationId).
+	GetUnstableBuildsStatusesWithResponse(ctx context.Context, params *GetUnstableBuildsStatusesParams, reqEditors ...RequestEditorFn) (*GetUnstableBuildsStatusesResponse, error)
+
+	// GetUnstableBuildsBuildIDWithResponse Build details
+	//
+	// Returns a build of the team with the names of its template. For E2B's own clients: it may change or disappear without notice.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with GET /unstable/builds/{buildID} (the `GetUnstableBuildsBuildID` operationId).
+	GetUnstableBuildsBuildIDWithResponse(ctx context.Context, buildID BuildID, reqEditors ...RequestEditorFn) (*GetUnstableBuildsBuildIDResponse, error)
 
 	// ManagementSetProjectSettingsWithBodyWithResponse Apply a project's settings revision.
 	//
@@ -18835,6 +19255,262 @@ func (r GetUnstableAdminTemplatesLookupResponse) ContentType() string {
 	return ""
 }
 
+// GetUnstableBuildsResponse429Headers the declared response headers of an HTTP 429 response for GetUnstableBuilds
+type GetUnstableBuildsResponse429Headers struct {
+	RetryAfter *int
+}
+
+type GetUnstableBuildsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *BuildsListResponse
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *N403
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetUnstableBuildsResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUnstableBuildsResponse) GetJSON200() *BuildsListResponse {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetUnstableBuildsResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetUnstableBuildsResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetUnstableBuildsResponse) GetJSON403() *N403 {
+	return r.JSON403
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetUnstableBuildsResponse) GetJSON429() *N429 {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetUnstableBuildsResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUnstableBuildsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUnstableBuildsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUnstableBuildsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUnstableBuildsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetUnstableBuildsStatusesResponse429Headers the declared response headers of an HTTP 429 response for GetUnstableBuildsStatuses
+type GetUnstableBuildsStatusesResponse429Headers struct {
+	RetryAfter *int
+}
+
+type GetUnstableBuildsStatusesResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *BuildsStatusesResponse
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *N403
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetUnstableBuildsStatusesResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUnstableBuildsStatusesResponse) GetJSON200() *BuildsStatusesResponse {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetUnstableBuildsStatusesResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetUnstableBuildsStatusesResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetUnstableBuildsStatusesResponse) GetJSON403() *N403 {
+	return r.JSON403
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetUnstableBuildsStatusesResponse) GetJSON429() *N429 {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetUnstableBuildsStatusesResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUnstableBuildsStatusesResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUnstableBuildsStatusesResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUnstableBuildsStatusesResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUnstableBuildsStatusesResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// GetUnstableBuildsBuildIDResponse429Headers the declared response headers of an HTTP 429 response for GetUnstableBuildsBuildID
+type GetUnstableBuildsBuildIDResponse429Headers struct {
+	RetryAfter *int
+}
+
+type GetUnstableBuildsBuildIDResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *BuildInfo
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON403 the response for an HTTP 403 `application/json` response
+	JSON403 *N403
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *GetUnstableBuildsBuildIDResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r GetUnstableBuildsBuildIDResponse) GetJSON200() *BuildInfo {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetUnstableBuildsBuildIDResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r GetUnstableBuildsBuildIDResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON403 returns the response for an HTTP 403 `application/json` response
+func (r GetUnstableBuildsBuildIDResponse) GetJSON403() *N403 {
+	return r.JSON403
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r GetUnstableBuildsBuildIDResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r GetUnstableBuildsBuildIDResponse) GetJSON429() *N429 {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r GetUnstableBuildsBuildIDResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r GetUnstableBuildsBuildIDResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r GetUnstableBuildsBuildIDResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetUnstableBuildsBuildIDResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r GetUnstableBuildsBuildIDResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 type ManagementSetProjectSettingsResponse struct {
 	Body         []byte
 	HTTPResponse *http.Response
@@ -21788,6 +22464,51 @@ func (c *ClientWithResponses) GetUnstableAdminTemplatesLookupWithResponse(ctx co
 		return nil, err
 	}
 	return ParseGetUnstableAdminTemplatesLookupResponse(rsp)
+}
+
+// GetUnstableBuildsWithResponse List team builds
+//
+// Lists the team's builds, newest first, with an optional filter by build ID, template ID or template alias and by status. `nextCursor` continues the listing. For E2B's own clients: it may change or disappear without notice.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /unstable/builds (the `GetUnstableBuilds` operationId).
+func (c *ClientWithResponses) GetUnstableBuildsWithResponse(ctx context.Context, params *GetUnstableBuildsParams, reqEditors ...RequestEditorFn) (*GetUnstableBuildsResponse, error) {
+	rsp, err := c.GetUnstableBuilds(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUnstableBuildsResponse(rsp)
+}
+
+// GetUnstableBuildsStatusesWithResponse Build statuses
+//
+// Returns the statuses of the team's builds with the given IDs; IDs of other teams' builds are left out. For E2B's own clients: it may change or disappear without notice.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /unstable/builds/statuses (the `GetUnstableBuildsStatuses` operationId).
+func (c *ClientWithResponses) GetUnstableBuildsStatusesWithResponse(ctx context.Context, params *GetUnstableBuildsStatusesParams, reqEditors ...RequestEditorFn) (*GetUnstableBuildsStatusesResponse, error) {
+	rsp, err := c.GetUnstableBuildsStatuses(ctx, params, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUnstableBuildsStatusesResponse(rsp)
+}
+
+// GetUnstableBuildsBuildIDWithResponse Build details
+//
+// Returns a build of the team with the names of its template. For E2B's own clients: it may change or disappear without notice.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with GET /unstable/builds/{buildID} (the `GetUnstableBuildsBuildID` operationId).
+func (c *ClientWithResponses) GetUnstableBuildsBuildIDWithResponse(ctx context.Context, buildID BuildID, reqEditors ...RequestEditorFn) (*GetUnstableBuildsBuildIDResponse, error) {
+	rsp, err := c.GetUnstableBuildsBuildID(ctx, buildID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetUnstableBuildsBuildIDResponse(rsp)
 }
 
 // ManagementSetProjectSettingsWithBodyWithResponse Apply a project's settings revision.
@@ -27572,6 +28293,235 @@ func ParseGetUnstableAdminTemplatesLookupResponse(rsp *http.Response) (*GetUnsta
 		}
 		response.JSON500 = &dest
 
+	}
+
+	return response, nil
+}
+
+// ParseGetUnstableBuildsResponse parses an HTTP response from a GetUnstableBuildsWithResponse call
+func ParseGetUnstableBuildsResponse(rsp *http.Response) (*GetUnstableBuildsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUnstableBuildsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BuildsListResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest N403
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetUnstableBuildsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetUnstableBuildsStatusesResponse parses an HTTP response from a GetUnstableBuildsStatusesWithResponse call
+func ParseGetUnstableBuildsStatusesResponse(rsp *http.Response) (*GetUnstableBuildsStatusesResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUnstableBuildsStatusesResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BuildsStatusesResponse
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest N403
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetUnstableBuildsStatusesResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseGetUnstableBuildsBuildIDResponse parses an HTTP response from a GetUnstableBuildsBuildIDWithResponse call
+func ParseGetUnstableBuildsBuildIDResponse(rsp *http.Response) (*GetUnstableBuildsBuildIDResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetUnstableBuildsBuildIDResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest BuildInfo
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 403:
+		var dest N403
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON403 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers GetUnstableBuildsBuildIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
 	}
 
 	return response, nil
