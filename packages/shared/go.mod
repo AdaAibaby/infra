@@ -44,7 +44,7 @@ require (
 	github.com/launchdarkly/go-server-sdk/v7 v7.13.0
 	github.com/miekg/dns v1.1.72
 	github.com/ngrok/firewall_toolkit v0.0.18
-	github.com/oapi-codegen/runtime v1.7.0
+	github.com/oapi-codegen/runtime v1.8.0
 	github.com/orcaman/concurrent-map/v2 v2.0.1
 	github.com/pierrec/lz4/v4 v4.1.26
 	github.com/pkg/xattr v0.4.12
