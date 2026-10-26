@@ -113,18 +113,17 @@ var ErrWaitForEnvdTimeout = errors.New("syncing took too long")
 // ErrFcProcessExited is the cancel cause used when the Firecracker process exits during WaitForEnvd.
 var ErrFcProcessExited = errors.New("fc process exited prematurely")
 
-var SandboxHttpTransport = otelhttp.NewTransport(
+var sandboxHttpTransport = otelhttp.NewTransport(
 	&http.Transport{
 		DisableKeepAlives: true,
 		ForceAttemptHTTP2: false,
+		// A transparent gunzip would let the body caps count expanded bytes only.
+		DisableCompression: true,
 	},
 )
 
 // Http client that should be used for requests to sandboxes.
-var sandboxHttpClient = http.Client{
-	Timeout:   10 * time.Second,
-	Transport: SandboxHttpTransport,
-}
+var sandboxHttpClient = envdHTTPClient(sandboxHttpTransport, 10*time.Second)
 
 type Config struct {
 	// TODO: Remove when the rootfs path is constant.

@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"sync"
@@ -73,11 +72,8 @@ func attachShell(ctx context.Context, sbx *sandbox.Sandbox) error {
 	}
 
 	envdURL := fmt.Sprintf("http://%s:%d", sbx.Slot.HostIPString(), consts.DefaultEnvdServerPort)
-	hc := http.Client{
-		// No request timeout — interactive sessions can be long-lived.
-		Transport: sandbox.SandboxHttpTransport,
-	}
-	processC := processconnect.NewProcessClient(&hc, envdURL)
+	// No request timeout — interactive sessions can be long-lived.
+	processC := sandbox.NewEnvdProcessClient(envdURL, 0)
 
 	cols, rows, err := term.GetSize(int(os.Stdout.Fd()))
 	if err != nil || cols == 0 || rows == 0 {

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"maps"
-	"net/http"
 	"strings"
 	"time"
 
@@ -22,7 +21,6 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/template/metadata"
 	"github.com/e2b-dev/infra/packages/shared/pkg/grpc"
 	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/envd/process"
-	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/envd/process/processconnect"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 )
@@ -154,13 +152,8 @@ func runCommandWithAllOptions(
 		},
 	})
 
-	hc := http.Client{
-		Timeout:   commandHardTimeout,
-		Transport: sandbox.SandboxHttpTransport,
-	}
-
 	proxyHost := fmt.Sprintf("http://localhost%s", proxy.GetAddr())
-	processC := processconnect.NewProcessClient(&hc, proxyHost)
+	processC := sandbox.NewEnvdProcessClient(proxyHost, commandHardTimeout)
 	err := grpc.SetSandboxHeader(runCmdReq.Header(), proxyHost, sandboxID)
 	if err != nil {
 		return fmt.Errorf("failed to set sandbox header: %w", err)

@@ -502,7 +502,7 @@ func (s *Sandbox) CallEnvdUpgrade(ctx context.Context, localSrcPath, guestBinPat
 	// Timeout (10s) — it would preempt the deliverTimeout ctx above and cut the
 	// upgrade off before envd finishes reading the body and exec'ing. The ctx
 	// deadline is the sole delivery budget.
-	resp, err := (&http.Client{Transport: sandboxHttpClient.Transport}).Do(req)
+	resp, err := NewEnvdHTTPClient(0).Do(req)
 	if err != nil {
 		// envd reads the whole body, then execs without responding, so a
 		// transport error AFTER the request reached it (connection reset/EOF) is

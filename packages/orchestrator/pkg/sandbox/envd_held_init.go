@@ -212,8 +212,10 @@ func newHeldInitClient(baseURL string, connectTimeout, budget time.Duration) (*h
 		MaxConnsPerHost:       1,
 		MaxIdleConnsPerHost:   1,
 		ExpectContinueTimeout: budget,
+		DisableCompression:    true,
 	}
-	h.client = &http.Client{Transport: otelhttp.NewTransport(h.transport)}
+	client := envdHTTPClient(otelhttp.NewTransport(h.transport), 0)
+	h.client = &client
 
 	return h, nil
 }
