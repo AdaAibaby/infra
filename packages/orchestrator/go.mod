@@ -52,7 +52,7 @@ require (
 	github.com/launchdarkly/go-server-sdk/v7 v7.13.0
 	github.com/mdlayher/netlink v1.11.2
 	github.com/moby/go-archive v0.3.3
-	github.com/moby/moby/api v1.55.0
+	github.com/moby/moby/api v1.56.1
 	github.com/ngrok/firewall_toolkit v0.0.18
 	github.com/oapi-codegen/gin-middleware v1.1.0
 	github.com/oapi-codegen/runtime v1.8.0
