@@ -19,7 +19,7 @@ require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260825204119-511051f7f437.2
 	buf.build/gen/go/grpc/grpc/protocolbuffers/go v1.36.12-20260923205556-5fcf876e6ed8.2
 	buf.build/go/protovalidate v1.4.0
-	github.com/Masterminds/semver/v3 v3.4.0
+	github.com/Masterminds/semver/v3 v3.5.0
 	github.com/asaskevich/govalidator v0.0.0-20230301143203-a9d515a09cc2
 	github.com/bsm/redislock v0.9.4
 	github.com/caarlos0/env/v11 v11.3.1
