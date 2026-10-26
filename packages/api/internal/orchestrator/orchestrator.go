@@ -34,8 +34,6 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
 )
 
-const statusLogInterval = time.Second * 20
-
 // trackedWorkBound is the longest a tracked pause can hold its count: the
 // pause budget, then the terminal build-status write, which opens a fresh
 // budget once the pause context has expired. A tracked resume create fits
@@ -249,7 +247,6 @@ func New(
 		return nil, fmt.Errorf("failed to setup metrics: %w", err)
 	}
 
-	go o.startStatusLogging(ctx)
 	go o.updateBestOfKConfig(ctx)
 
 	return &o, nil
@@ -259,56 +256,6 @@ func New(
 // initial cluster registry gate, and projected those snapshots into placement.
 func (o *Orchestrator) StartupReady() <-chan struct{} {
 	return o.startup.Ready()
-}
-
-func (o *Orchestrator) startStatusLogging(ctx context.Context) {
-	ticker := time.NewTicker(statusLogInterval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			logger.L().Info(ctx, "Stopping status logging")
-
-			return
-		case <-ticker.C:
-			connectedNodes := make([]map[string]any, 0, o.nodes.Count())
-			templateManagers := make([]map[string]any, 0)
-
-			for _, nodeItem := range o.nodes.Items() {
-				if nodeItem == nil {
-					connectedNodes = append(connectedNodes, map[string]any{
-						"id": "nil",
-					})
-				} else {
-					connectedNodes = append(connectedNodes, map[string]any{
-						"id":        nodeItem.ID,
-						"status":    nodeItem.Status(),
-						"sandboxes": nodeItem.Metrics().SandboxCount,
-					})
-				}
-			}
-
-			for _, cluster := range o.clusters.GetClusters() {
-				for _, templateManager := range cluster.GetTemplateBuilders() {
-					info := templateManager.GetInfo()
-					templateManagers = append(templateManagers, map[string]any{
-						"cluster_id":          templateManager.ClusterID,
-						"node_id":             templateManager.NodeID,
-						"service_instance_id": info.ServiceInstanceID,
-						"status":              info.Status.String(),
-					})
-				}
-			}
-
-			logger.L().Info(ctx, "API internal status",
-				zap.Int("nodes_count", o.nodes.Count()),
-				zap.Any("nodes", connectedNodes),
-				zap.Int("template_managers_count", len(templateManagers)),
-				zap.Any("template_managers", templateManagers),
-			)
-		}
-	}
 }
 
 // TrackWork registers an operation that outlives its caller. It reports false
