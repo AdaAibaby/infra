@@ -356,7 +356,7 @@ require (
 	github.com/sercand/kuberesolver/v6 v6.0.0 // indirect
 	github.com/sethvargo/go-retry v0.3.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.6 // indirect
-	github.com/shopspring/decimal v1.4.0 // indirect
+	github.com/shopspring/decimal v1.6.0 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/sony/gobreaker/v2 v2.3.0 // indirect
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect

@@ -285,7 +285,7 @@ require (
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.3 // indirect
 	github.com/segmentio/asm v1.2.1 // indirect
 	github.com/sergi/go-diff v1.4.0 // indirect
-	github.com/shopspring/decimal v1.4.0 // indirect
+	github.com/shopspring/decimal v1.6.0 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/speakeasy-api/jsonpath v0.6.3 // indirect
 	github.com/speakeasy-api/openapi v1.24.0 // indirect
