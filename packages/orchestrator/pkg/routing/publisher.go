@@ -1,5 +1,5 @@
 // Package routing publishes the orchestrator-owned sandbox routing record
-// (sandbox:routing:{sandboxID}) that client-proxy can read to reach the node.
+// (sandbox:routing:{sandboxID}) that client-proxy reads to reach the sandbox.
 //
 // The record exists exactly while the sandbox is in the live registry: it is
 // written on MarkRunning and deleted on MarkStopping. Both are best-effort: a
@@ -122,6 +122,7 @@ func (p *Publisher) OnInsert(ctx context.Context, sbx *sandbox.Sandbox) {
 		ExecutionID:      sbx.Runtime.ExecutionID,
 		StartedAt:        sbx.GetStartedAt(),
 		MaxLengthInHours: sbx.Config.MaxSandboxLengthHours,
+		NetworkPlacement: catalog.NetworkPlacementOf(sbx.NetworkPlacement),
 	}
 
 	// Same TTL the API uses today: the full max length from now. MarkStopping

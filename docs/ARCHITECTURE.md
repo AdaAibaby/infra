@@ -461,9 +461,13 @@ below).
 The record on a hit, or the `ResumeSandbox` answer on a miss, is the sandbox's route, placement
 included. A miss uses the resume answer directly and does not read the record again. A legacy
 (no placement) or egress-router route goes to `orchestrator_ip` on the orchestrator proxy port,
-never to the placement's ingress endpoint. A full-router route answers 503
-`sandbox_feature_unsupported` without a Retry-After header and before anything is dialed. An
-unknown mode or a missing `orchestrator_ip` answers the not-found page.
+never to the placement's ingress endpoint. A full-router route goes to the Router's ingress
+endpoint saved in its placement, never to an orchestrator, over the same pooled, kept-alive
+connections as the orchestrator hop: the proxies never resend a request themselves (only its
+dial is retried), and net/http's resend of a bodyless idempotent request whose reused connection
+closed before any response is accepted on both hops. A full-router route without that endpoint,
+an unknown mode or a missing `orchestrator_ip` answers the not-found page before anything is
+dialed.
 
 Concurrent requests that miss the record for the same sandbox, port and credentials share one
 **resume flight** per client-proxy process: the first request's call runs detached from its
@@ -921,12 +925,15 @@ auto-resume path (`ResumeSandbox` gRPC to the API).
 The TTL of the record is `sandbox_max_length_in_hours` from the write time. The record is
 deleted earlier in every normal stop path.
 
-A routed sandbox adds `lifecycle_id` (its Firecracker process) and `network_placement` with the
-mode, Router, Portable IP and ingress endpoint (`ingress_address`, `ingress_port`). The endpoint is
-the Router for full-router and the worker for egress-router. The record carries location only. The
-orchestrator owns the Router configuration, which never travels through this record. An absent
-placement means the legacy per-worker network. The orchestrator publisher does not write a
-placement yet.
+A routed sandbox adds `network_placement` with the mode, Router and ingress endpoint
+(`ingress_address`, `ingress_port`), as reported when that VM becomes live, including create,
+resume and checkpoint starts. The endpoint is the Router for full-router and the worker for
+egress-router, and it is fixed for the Router's ID. A new endpoint is a new Router, which only a
+reassignment of the sandbox can name. A replacement Router has a new ID and may reuse its
+predecessor's endpoint. The record carries location only. The orchestrator owns the Router
+configuration, which never travels through this record. An absent placement means the legacy
+per-worker network. The publisher omits `lifecycle_id` and leaves `network_placement.portable_ip`
+empty, serialized as `""`.
 
 The API keeps the placement returned by the winning orchestrator create on its own sandbox record
 in Redis (`networkPlacement`), and callers that join the same start get the same placement. A new
@@ -942,7 +949,7 @@ without a placement is a legacy sandbox and is answered with `orchestrator_ip` a
 A placement from another execution, an unknown mode, or a full-router placement without Router,
 address and port fails the RPC. A full-router answer has an empty `orchestrator_ip` and never
 looks up an orchestrator. Egress-router and legacy answers still carry `orchestrator_ip`.
-client-proxy reads this placement and refuses full-router routes, as does the orchestrator proxy.
+client-proxy forwards full-router routes to the Router. The orchestrator proxy refuses them.
 
 ### Volume content
 

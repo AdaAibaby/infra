@@ -342,6 +342,20 @@ func (c *Client) StringFlag(ctx context.Context, flag StringFlag, contexts ...ld
 	return getFlag(ctx, c.ld, c.ld.StringVariationCtx, flag, c.allContexts(ctx, contexts))
 }
 
+// StringFlagOverride returns the value and whether the client supplied a
+// variation, distinguishing a configured fallback value from a failed evaluation.
+func (c *Client) StringFlagOverride(ctx context.Context, flag StringFlag, contexts ...ldcontext.Context) (string, bool) {
+	if c.ld == nil || !c.ld.Initialized() {
+		return flag.Fallback(), false
+	}
+	value, detail, err := c.ld.StringVariationDetailCtx(ctx, flag.Key(), mergeContexts(ctx, c.allContexts(ctx, contexts)), flag.Fallback())
+	if err != nil {
+		logger.L().Warn(ctx, "error evaluating flag", zap.Error(err), zap.String("flag", flag.Key()))
+	}
+
+	return value, err == nil && !detail.IsDefaultValue()
+}
+
 type typedFlag[T any] interface {
 	Key() string
 	Fallback() T

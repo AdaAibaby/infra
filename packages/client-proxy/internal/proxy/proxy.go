@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/http"
 	"net/url"
@@ -47,15 +48,21 @@ const (
 	autoResumeErrored
 )
 
-// routeNodeIP returns the orchestrator IP for legacy and egress-router
-// routes. Full-router and unknown modes must never fall back to orchestrator
-// ingress.
-func routeNodeIP(sandboxId string, route *catalog.SandboxInfo) (string, error) {
+// routeHost returns the host and port a route's traffic goes to: the
+// orchestrator proxy for legacy and egress-router routes, the Router's
+// ingress endpoint saved in a full-router placement. A full-router route
+// without that endpoint, or an unknown mode, never falls back to the
+// orchestrator.
+func routeHost(route *catalog.SandboxInfo, orchestratorProxyPort uint16) (string, error) {
 	if placement := route.NetworkPlacement; placement != nil {
 		switch placement.NetworkMode {
 		case catalog.NetworkModeEgressRouter:
 		case catalog.NetworkModeFullRouter:
-			return "", reverseproxy.NewErrSandboxPlacementRefused(sandboxId, "full-router ingress is not served by client-proxy", proxygrpc.PlacementFeatureUnsupported, http.StatusServiceUnavailable)
+			if placement.IngressAddress == "" || placement.IngressPort == 0 || placement.IngressPort > math.MaxUint16 {
+				return "", fmt.Errorf("%w: full-router placement without its Router's ingress", ErrNodeRouteUnavailable)
+			}
+
+			return net.JoinHostPort(placement.IngressAddress, strconv.FormatUint(uint64(placement.IngressPort), 10)), nil
 		default:
 			return "", fmt.Errorf("%w: unsupported network mode %q", ErrNodeRouteUnavailable, placement.NetworkMode)
 		}
@@ -66,7 +73,7 @@ func routeNodeIP(sandboxId string, route *catalog.SandboxInfo) (string, error) {
 		return "", ErrNodeRouteUnavailable
 	}
 
-	return nodeIP, nil
+	return net.JoinHostPort(nodeIP, strconv.Itoa(int(orchestratorProxyPort))), nil
 }
 
 func clientProxyMaskRequestHost(ctx context.Context, featureFlags *featureflags.Client, host string, sandboxID string, port uint64) *string {
@@ -205,10 +212,10 @@ func NewClientProxy(meterProvider metric.MeterProvider, serviceName string, port
 
 			trafficAccessToken := r.Header.Get(proxygrpc.MetadataTrafficAccessToken)
 			envdAccessToken := r.Header.Get(proxygrpc.MetadataEnvdHTTPAccessToken)
-			var nodeIP string
+			var host string
 			route, err := catalogResolution(ctx, sandboxId, port, trafficAccessToken, envdAccessToken, catalog, resumer)
 			if err == nil {
-				nodeIP, err = routeNodeIP(sandboxId, route)
+				host, err = routeHost(route, orchestratorProxyPort)
 			}
 			if err != nil {
 				if resumeDeniedErr, ok := errors.AsType[*reverseproxy.SandboxResumePermissionDeniedError](err); ok {
@@ -259,7 +266,7 @@ func NewClientProxy(meterProvider metric.MeterProvider, serviceName string, port
 
 			url := &url.URL{
 				Scheme: "http",
-				Host:   net.JoinHostPort(nodeIP, strconv.Itoa(int(orchestratorProxyPort))),
+				Host:   host,
 			}
 
 			l = l.With(

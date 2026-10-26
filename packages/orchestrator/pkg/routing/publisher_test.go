@@ -12,6 +12,7 @@ import (
 
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network"
+	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/orchestrator"
 	catalog "github.com/e2b-dev/infra/packages/shared/pkg/sandbox-catalog"
 	"github.com/e2b-dev/infra/packages/shared/pkg/sandboxtypes"
 )
@@ -290,10 +291,12 @@ func TestPublisher_ViaSandboxMap(t *testing.T) {
 	sandboxes.Subscribe(p)
 
 	sbx := testSandbox(t, "sbx-1", "lc-1", sandboxtypes.SandboxTypeSandbox)
+	sbx.NetworkPlacement = &orchestrator.SandboxNetworkPlacement{ExecutionId: testExecutionID, NetworkMode: "full-router", RouterId: "router-1", IngressAddress: "10.8.0.2", IngressPort: 5010}
 
 	sandboxes.MarkRunning(t.Context(), sbx)
-	_, err := c.GetSandbox(t.Context(), "sbx-1")
+	got, err := c.GetSandbox(t.Context(), "sbx-1")
 	require.NoError(t, err)
+	require.Equal(t, &catalog.NetworkPlacement{NetworkMode: catalog.NetworkModeFullRouter, RouterID: "router-1", IngressAddress: "10.8.0.2", IngressPort: 5010}, got.NetworkPlacement, "the record carries where the sandbox is reached")
 
 	// A stale lifecycle ID must not remove the live sandbox nor its record.
 	require.False(t, sandboxes.MarkStopping(t.Context(), "sbx-1", "lc-stale"))
