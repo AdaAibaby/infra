@@ -36,6 +36,11 @@ type CompressConfig struct {
 	// encoder's frame-sized buffer instead of an exact-length copy. Set only
 	// by the compress-right-sized-frames kill switch.
 	FrameSizedOutput bool
+
+	// PerUploadCompressors makes each upload build its own compressor pool
+	// instead of sharing one across uploads with the same config. Set only by
+	// the compress-shared-compressors kill switch.
+	PerUploadCompressors bool
 }
 
 // CompressionType returns the parsed CompressionType.

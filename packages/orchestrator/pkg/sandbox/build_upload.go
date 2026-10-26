@@ -315,6 +315,7 @@ func resolveCompressConfig(ctx context.Context, base storage.CompressConfig, ff 
 
 	if ff != nil {
 		resolved.FrameSizedOutput = !ff.BoolFlag(ctx, featureflags.CompressRightSizedFramesFlag)
+		resolved.PerUploadCompressors = !ff.BoolFlag(ctx, featureflags.CompressSharedCompressorsFlag)
 	}
 
 	return resolved, useV4, nil

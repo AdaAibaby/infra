@@ -70,24 +70,26 @@ func TestResolveCompressConfig_V4_FlagOn(t *testing.T) {
 	require.True(t, resolveV4(t, ff))
 }
 
+// newTestFlagsClient returns a flags client whose flags setup sets; flags it
+// leaves unset evaluate to their code defaults.
+func newTestFlagsClient(t *testing.T, setup func(td *ldtestdata.TestDataSource)) *featureflags.Client {
+	t.Helper()
+
+	td := ldtestdata.DataSource()
+	setup(td)
+	ff, err := featureflags.NewClientWithDatasource(td)
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = ff.Close(context.WithoutCancel(t.Context()))
+	})
+
+	return ff
+}
+
 func TestResolveCompressConfig_RightSizedFramesKillSwitch(t *testing.T) {
 	t.Parallel()
 
 	base := storage.CompressConfig{Enabled: true, Type: "zstd", FrameSizeKB: 2048}
-
-	newFF := func(t *testing.T, setup func(td *ldtestdata.TestDataSource)) *featureflags.Client {
-		t.Helper()
-
-		td := ldtestdata.DataSource()
-		setup(td)
-		ff, err := featureflags.NewClientWithDatasource(td)
-		require.NoError(t, err)
-		t.Cleanup(func() {
-			_ = ff.Close(context.WithoutCancel(t.Context()))
-		})
-
-		return ff
-	}
 
 	tests := []struct {
 		name  string
@@ -107,7 +109,7 @@ func TestResolveCompressConfig_RightSizedFramesKillSwitch(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			cfg, _, err := resolveCompressConfig(t.Context(), base, newFF(t, tc.setup), storage.RootfsName, 4096, storage.UseCasePause)
+			cfg, _, err := resolveCompressConfig(t.Context(), base, newTestFlagsClient(t, tc.setup), storage.RootfsName, 4096, storage.UseCasePause)
 			require.NoError(t, err)
 			require.Equal(t, tc.want, cfg.FrameSizedOutput)
 		})
@@ -119,6 +121,44 @@ func TestResolveCompressConfig_RightSizedFramesKillSwitch(t *testing.T) {
 		cfg, _, err := resolveCompressConfig(t.Context(), base, nil, storage.RootfsName, 4096, storage.UseCasePause)
 		require.NoError(t, err)
 		require.False(t, cfg.FrameSizedOutput)
+	})
+}
+
+func TestResolveCompressConfig_SharedCompressorsKillSwitch(t *testing.T) {
+	t.Parallel()
+
+	base := storage.CompressConfig{Enabled: true, Type: "zstd", FrameSizeKB: 2048}
+
+	tests := []struct {
+		name  string
+		setup func(td *ldtestdata.TestDataSource)
+		want  bool
+	}{
+		{"flag unset defaults to shared", func(*ldtestdata.TestDataSource) {}, false},
+		{"flag on", func(td *ldtestdata.TestDataSource) {
+			td.Update(td.Flag(featureflags.CompressSharedCompressorsFlag.Key()).VariationForAll(true))
+		}, false},
+		{"flag off restores per-upload compressors", func(td *ldtestdata.TestDataSource) {
+			td.Update(td.Flag(featureflags.CompressSharedCompressorsFlag.Key()).VariationForAll(false))
+		}, true},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			cfg, _, err := resolveCompressConfig(t.Context(), base, newTestFlagsClient(t, tc.setup), storage.RootfsName, 4096, storage.UseCasePause)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, cfg.PerUploadCompressors)
+		})
+	}
+
+	t.Run("nil client", func(t *testing.T) {
+		t.Parallel()
+
+		cfg, _, err := resolveCompressConfig(t.Context(), base, nil, storage.RootfsName, 4096, storage.UseCasePause)
+		require.NoError(t, err)
+		require.False(t, cfg.PerUploadCompressors)
 	})
 }
 
