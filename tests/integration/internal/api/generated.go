@@ -2846,11 +2846,15 @@ type GetV2SandboxesParams struct {
 type PostV2SandboxesParams struct {
 	// IdempotencyKey Optional team-scoped key for retrying sandbox creation. Use 1 to 255 lowercase ASCII
 	// letters, digits, or hyphens (a-z, 0-9, -), such as a lowercase UUID. When idempotency is enabled,
-	// matching retries replay the original status and body, including errors, for the retention period.
+	// matching retries replay a completed status and body for the retention period. A creation
+	// failure explicitly classified as safe to retry (Should-Retry: true) permits a fresh
+	// attempt with the same key and parameters. Only one attempt can run at a time.
 	// Different request parameters return 409 with error_code idempotency_request_mismatch.
 	// An in-progress request returns 409 with error_code idempotency_in_progress; an unknown
 	// outcome returns 422 with error_code idempotency_outcome_unknown. These retries do not execute the request again.
-	// Retries do not extend retention. After the key expires, it can start a new creation.
+	// Retries do not extend retention. If a fresh attempt's request deadline plus response
+	// persistence budget would exceed the remaining retention, the previous error is replayed.
+	// After the key expires, it can start a new creation.
 	IdempotencyKey *string `json:"Idempotency-Key,omitempty"`
 }
 

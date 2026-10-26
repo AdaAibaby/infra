@@ -17,6 +17,7 @@ import (
 	"github.com/e2b-dev/infra/packages/auth/pkg/auth"
 	"github.com/e2b-dev/infra/packages/auth/pkg/types"
 	authqueries "github.com/e2b-dev/infra/packages/db/pkg/auth/queries"
+	"github.com/e2b-dev/infra/packages/shared/pkg/apierrors"
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	sharedmiddleware "github.com/e2b-dev/infra/packages/shared/pkg/middleware"
 	redisutils "github.com/e2b-dev/infra/packages/shared/pkg/redis"
@@ -53,13 +54,15 @@ func TestGenericExecutor(t *testing.T) {
 		if c.GetHeader("X-Deny") == "true" {
 			c.AbortWithStatus(http.StatusForbidden)
 		}
-		Execute(c, body, func() {
+		Execute(c, body, func() *apierrors.APIError {
 			calls++
 			c.Header("Location", "/widgets/"+c.Param("id"))
 			c.Header("ETag", `"created"`)
 			c.Header("X-Request-ID", "handler-request-id")
 			c.Header("RateLimit-Remaining", "handler-limit")
 			c.JSON(http.StatusCreated, body)
+
+			return nil
 		})
 	}
 	r.POST("/widgets/:id", widget)
@@ -96,10 +99,12 @@ func TestGenericExecutor(t *testing.T) {
 	r.POST("/blobs", func(c *gin.Context) {
 		body, err := io.ReadAll(c.Request.Body)
 		require.NoError(t, err)
-		Execute(c, body, func() {
+		Execute(c, body, func() *apierrors.APIError {
 			calls++
 			_, err := c.Writer.Write(body)
 			require.NoError(t, err)
+
+			return nil
 		})
 	})
 	blob := string([]byte{0, 255, 'a'})
@@ -115,9 +120,11 @@ func TestGenericExecutor(t *testing.T) {
 	require.Equal(t, http.StatusConflict, changed.Code)
 
 	r.DELETE("/widgets/:id", func(c *gin.Context) {
-		Execute(c, nil, func() {
+		Execute(c, nil, func() *apierrors.APIError {
 			calls++
 			c.Status(http.StatusNoContent)
+
+			return nil
 		})
 	})
 	for range 2 {
@@ -159,9 +166,11 @@ func TestExecutorRouteEnablement(t *testing.T) {
 			r.Use(sharedmiddleware.RequestTimeout(time.Minute), middleware(faultStore{reserveErr: errors.New("redis unavailable")}, flags))
 			calls := 0
 			r.POST("/widgets/:id", func(c *gin.Context) {
-				Execute(c, nil, func() {
+				Execute(c, nil, func() *apierrors.APIError {
 					calls++
 					c.Status(http.StatusNoContent)
+
+					return nil
 				})
 			})
 			w := request(t.Context(), r, "/widgets/one", "", []string{"key"})
@@ -175,7 +184,11 @@ func TestExecuteWithoutMiddleware(t *testing.T) {
 	t.Parallel()
 	r := gin.New()
 	r.POST("/widgets", func(c *gin.Context) {
-		Execute(c, nil, func() { c.Status(http.StatusCreated) })
+		Execute(c, nil, func() *apierrors.APIError {
+			c.Status(http.StatusCreated)
+
+			return nil
+		})
 	})
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, httptest.NewRequestWithContext(t.Context(), http.MethodPost, "/widgets", strings.NewReader("")))
@@ -191,7 +204,11 @@ func TestExecutorRequiresRequestDeadline(t *testing.T) {
 	})
 	r.Use(middleware(nil, flags))
 	r.POST("/v2/sandboxes", func(c *gin.Context) {
-		Execute(c, nil, func() { t.Error("executed without a request deadline") })
+		Execute(c, nil, func() *apierrors.APIError {
+			t.Error("executed without a request deadline")
+
+			return nil
+		})
 	})
 	w := request(t.Context(), r, "/v2/sandboxes", validBody, []string{"key"})
 	require.Equal(t, http.StatusServiceUnavailable, w.Code)
@@ -238,9 +255,11 @@ func TestExecuteUsesRequestContent(t *testing.T) {
 		if c.GetHeader("X-Unserializable") == "true" {
 			requestContent = func() {}
 		}
-		Execute(c, requestContent, func() {
+		Execute(c, requestContent, func() *apierrors.APIError {
 			calls++
 			c.Status(http.StatusAccepted)
+
+			return nil
 		})
 	})
 	first := request(t.Context(), r, "/operations", "", []string{"key"}, "X-Operation-Mode", "one")

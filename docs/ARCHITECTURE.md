@@ -717,6 +717,11 @@ chooses between the two loops for that guest.
 repeating sandbox creation while a Redis reservation exists. A generic executor owns reservation
 and response replay across API replicas. Participating handlers parse and authorize the request,
 then call `idempotency.Execute(c, requestContent, operation)` with all mutations inside the callback.
+The callback writes its success response and returns `nil`, or returns an `*apierrors.APIError`
+for the executor to send. Returning `CanRetry` promises that a fresh execution is safe: the
+failed attempt has no possible committed side effects. The executor uses this typed result,
+not the HTTP status or response header, to allow re-execution. A response already written by
+the callback is replay-only, even if the callback subsequently returns a retryable error.
 The executor buffers finite HTTP responses, so streaming and connection upgrades cannot use it.
 
 ##### Admission and request identity
@@ -759,12 +764,13 @@ reservation and server time together, then selects the response:
 |---|---|
 | New reservation | Run the operation callback. |
 | Different request fingerprint | Return 409 with `error_code: idempotency_request_mismatch`. |
-| Matching fingerprint with a cached response | Replay its status, body, and allowlisted headers. |
-| Matching fingerprint without a response, before its deadline | Return 409 with `error_code: idempotency_in_progress`. |
-| Matching fingerprint without a response, with an elapsed or unreadable deadline | Return 422 with `error_code: idempotency_outcome_unknown`. |
+| Matching fingerprint with a retryable result and enough retention remaining | Atomically acquire a new owner token and run the operation again. |
+| Matching fingerprint with a completed result, or insufficient retention for another attempt | Replay its status, body, and allowlisted headers. |
+| Matching fingerprint with an unfinished current attempt, before its deadline | Return 409 with `error_code: idempotency_in_progress`. |
+| Matching fingerprint with an unfinished current attempt and an elapsed or unreadable deadline | Return 422 with `error_code: idempotency_outcome_unknown`. |
 | Redis failure, invalid retention configuration, or missing request deadline | Return 503. |
 
-Retries against a reservation do not wait for or repeat the operation. The `error_code` field
+Retries against an active reservation do not wait for or repeat the operation. The `error_code` field
 distinguishes the two conflict cases without requiring clients to parse messages. An unknown
 outcome means the API cannot establish the result, so retrying with a new key can duplicate work.
 A late response from the owner remains replayable while the reservation exists. Admission and
@@ -773,14 +779,22 @@ retry errors do not replace the owner's cached result.
 ##### Response storage and delivery
 
 The executor captures the handler's status and body, then attempts to persist them before
-delivery. Redis stores one JSON value containing the status, base64-encoded body, allowlisted
-headers, and optional retryability value. Base64 preserves arbitrary response bytes; the separate serialized
-buffer lets Redis finish a write after the HTTP capture buffer has been released. The cache includes
-handler errors as well as successful responses, keeping retries attached to one attempt without
-inferring which errors permit safe re-execution.
+delivery. Redis stores one JSON value containing the status, base64-encoded body, and allowlisted
+headers, alongside the attempt's state. Base64 preserves arbitrary response bytes; the separate
+serialized buffer lets Redis finish a write after the HTTP capture buffer has been released.
+Successful, permanent, and unclassified results become complete and remain replayable. A returned
+`CanRetry` error becomes retryable. Its request fingerprint and original expiry remain fixed.
+
+The reservation script atomically claims a retryable record for one new owner and sets a fresh
+response deadline. Other matching requests see an in-progress attempt. The previous error stays
+stored while that attempt runs, but is not replayed by this executor unless the attempt is canceled
+before execution and releases ownership. A panic or uncertain completion therefore cannot turn
+the previous safe failure into permission to repeat an operation that may now have succeeded.
+Older API replicas replay the stored error; they cannot acquire retryable records for execution.
+Records written before retryable states were supported retain their original replay behavior.
 
 The handler edits response headers in place while the executor buffers status and body writes.
-`Content-Type`, when present, enters the cache. Replay applies that header over the current
+`Content-Type` and `Should-Retry`, when present, enter the cache. Replay applies those headers over the current
 request's headers, preserving fresh request IDs, rate limits, and cross-origin resource sharing
 (CORS) values. The capture pool reuses allocations up to 64 KiB and erases body contents before
 reuse because responses can contain credentials.
@@ -788,15 +802,17 @@ reuse because responses can contain credentials.
 Persistence has a detached five-second wait budget and retains request context values for
 tracing. If it fails, the API logs the failure and delivers the handler's response: a caller should
 receive a known creation result even when Redis cannot store it. Subsequent retries can replay
-only a stored response; otherwise they receive the pending or unknown-outcome error.
+a completed result or acquire a retryable result only if Redis stored it, even when its
+acknowledgement was lost. Otherwise they receive the pending or unknown-outcome error.
 
 ##### Cancellation and retention
 
 Before execution starts, cancellation or a reservation error triggers best-effort cleanup. The
-reservation worker waits for its Redis call to return before attempting deletion because socket
-I/O can outlive request cancellation. Cleanup gets its own five-second timeout and deletes only
-an unfinished record with the same owner token. Failed cleanup or an ambiguous Redis write can
-leave the reservation until expiry.
+reservation worker waits for its Redis call to return before attempting cleanup because socket
+I/O can outlive request cancellation. Cleanup gets its own five-second timeout and checks the
+owner token. It deletes a new, unused reservation or returns an unused retry attempt to the
+retryable state, preserving the earlier request fingerprint and response. Failed cleanup or an
+ambiguous Redis write can leave the reservation until expiry.
 
 Once execution starts, cancellation, a panic, or failed persistence leaves the reservation in
 place. An operation can have side effects before writing any response, so releasing its key
@@ -805,7 +821,9 @@ would allow duplicate work. The executor does not reconcile an unknown operation
 The `api-idempotency-ttl-seconds` flag sets retention, defaulting to 86,400 seconds when
 unavailable. Configured values must be positive integers. The executor sets the time to live
 (TTL) at reservation; completion, retries, flag changes, and deleting the sandbox do not extend
-or remove it. Operators must choose retention longer than the operation window: expiry permits
+or remove it. A retryable record is reclaimed only when its remaining TTL exceeds the next
+request's remaining deadline plus the five-second persistence budget; otherwise its previous
+error is replayed. Operators must choose retention longer than the operation window: expiry permits
 a new owner even if the first operation is still running. Redis eviction or data loss, a different
 key, and feature bypass also permit another execution. Redis capacity and access controls must
 account for cached response volume and the sandbox credentials those responses can contain.
@@ -817,10 +835,11 @@ whether the condition behind the error may clear, so that retrying the request c
 `true` for a transient failure such as missing capacity, a rate limit, or a creation still in
 progress (retry after `Retry-After` when present, otherwise with exponential backoff); `false`
 for a failure a retry cannot fix, such as a malformed request or a configuration fault, and for
-an outcome that is unknown, where a retry could create a second sandbox. The header says nothing
-about idempotency keys. The executor records every handler result under the key, success or
-error, and replays it for as long as the record lives; the caller decides whether a retry keeps
-the key or takes a new one, and the error code names the situation that decision depends on.
+an outcome that is unknown, where a retry could create a second sandbox. With idempotency enabled,
+callers keep the same key and parameters across retries. A known-safe creation failure permits
+another attempt under that key. An `idempotency_in_progress` response leaves the existing attempt
+untouched, and subsequent requests obtain its result or another in-progress response. Successes,
+permanent failures, and uncertain outcomes never permit a fresh attempt while the record lives.
 
 Each error carries its classification in `APIError.Retryable`, a `Retryability` enum, and the
 error writer (`httperror.Write`, behind `SendAPIError`) sets the header from it: `CanRetry` and

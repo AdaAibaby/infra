@@ -54,7 +54,11 @@ func (h createHandler) PostV2Sandboxes(c *gin.Context, _ api.PostV2SandboxesPara
 		return
 	}
 	c.Set("parsedCreateBody", body)
-	Execute(c, body, func() { h.create(c) })
+	Execute(c, body, func() *apierrors.APIError {
+		h.create(c)
+
+		return nil
+	})
 }
 
 func (h createHandler) PostSandboxes(c *gin.Context) { h.create(c) }
@@ -725,12 +729,12 @@ func TestResponseDeadlineFromOriginalRequest(t *testing.T) {
 					fingerprint = args[0].(string)
 					reservationOwner = args[1].(string)
 
-					return redis.NewCmdResult([]any{"true", "", "", "", ""}, nil)
+					return redis.NewCmdResult([]any{"true", "", "", "", "", ""}, nil)
 				}
 				assert.Equal(t, fingerprint, args[0])
 				assert.Equal(t, (time.Minute + completionTimeout).Milliseconds(), args[3])
 				// Redis keeps the original deadline even when a retry has a longer budget.
-				return redis.NewCmdResult([]any{"false", fingerprint, response, fmt.Sprint(responseDeadline.UnixMilli()), fmt.Sprint(time.Now().UnixMilli())}, nil)
+				return redis.NewCmdResult([]any{"false", fingerprint, response, fmt.Sprint(responseDeadline.UnixMilli()), fmt.Sprint(time.Now().UnixMilli()), ""}, nil)
 			case completeScript.Hash():
 				completeCalls++
 				assert.Equal(t, reservationOwner, args[0])
@@ -832,7 +836,7 @@ func TestMissingResponseAfterDeadline(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, expiresAt, afterExpiry)
 			original := cachedResponse{Status: http.StatusCreated, Body: []byte(`{"sandboxID":"original"}`), Headers: http.Header{"Content-Type": {"application/json"}}}
-			require.NoError(t, s.complete(t.Context(), key, "original", original))
+			require.NoError(t, s.complete(t.Context(), key, "original", original, false))
 			w := request(t.Context(), r, "/v2/sandboxes", validBody, []string{"key"})
 			require.Equal(t, original.Status, w.Code)
 			require.Equal(t, original.Body, w.Body.Bytes())
@@ -1027,7 +1031,7 @@ func (s *ownerStore) reserve(ctx context.Context, _, _, _ string, _ int, _ time.
 	return record{state: stateOwner}, ctx.Err()
 }
 
-func (*ownerStore) complete(ctx context.Context, _, _ string, _ cachedResponse) error {
+func (*ownerStore) complete(ctx context.Context, _, _ string, _ cachedResponse, _ bool) error {
 	return ctx.Err()
 }
 

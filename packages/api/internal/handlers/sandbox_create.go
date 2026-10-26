@@ -118,14 +118,14 @@ func (a *APIStore) PostV2Sandboxes(c *gin.Context, _ api.PostV2SandboxesParams) 
 		fingerprintBody.Network = &network
 	}
 
-	idempotency.Execute(c, fingerprintBody, func() {
+	idempotency.Execute(c, fingerprintBody, func() *apierrors.APIError {
 		sbx, apiErr := a.createSandbox(c, newSandboxFromV2(body), sandbox.SandboxTimeoutDefaultV2)
 		if apiErr != nil {
-			apierrors.SendAPIError(c, apiErr)
-
-			return
+			return apiErr
 		}
 		c.JSON(http.StatusCreated, sbx)
+
+		return nil
 	})
 }
 
