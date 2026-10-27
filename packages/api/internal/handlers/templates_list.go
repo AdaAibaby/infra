@@ -8,6 +8,7 @@ import (
 
 	"github.com/e2b-dev/infra/packages/api/internal/api"
 	"github.com/e2b-dev/infra/packages/db/queries"
+	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 )
 
@@ -40,9 +41,18 @@ func (a *APIStore) GetTemplates(c *gin.Context, params api.GetTemplatesParams) {
 		telemetry.WithTeamID(team.ID.String()),
 	)
 
+	capped := a.featureFlags.BoolFlag(ctx, featureflags.UnpaginatedTemplateListCapFlag, featureflags.TeamContext(team.ID.String()))
+
+	// A nil limit reads every template.
+	var limitPlusOne *int32
+	if capped {
+		limit := int32(templatesUnboundedMaxCount + 1)
+		limitPlusOne = &limit
+	}
+
 	envs, err := a.sqlcDB.GetTeamTemplates(ctx, queries.GetTeamTemplatesParams{
 		TeamID:       team.ID,
-		LimitPlusOne: templatesUnboundedMaxCount + 1,
+		LimitPlusOne: limitPlusOne,
 	})
 	if err != nil {
 		a.sendAPIStoreError(c, http.StatusInternalServerError, "Error when getting templates")
@@ -51,7 +61,7 @@ func (a *APIStore) GetTemplates(c *gin.Context, params api.GetTemplatesParams) {
 		return
 	}
 
-	if len(envs) > templatesUnboundedMaxCount {
+	if capped && len(envs) > templatesUnboundedMaxCount {
 		a.sendAPIStoreError(c, http.StatusBadRequest, fmt.Sprintf("Team has more than %d templates; update to the latest E2B SDK or list them with GET /v2/templates", templatesUnboundedMaxCount))
 		telemetry.ReportEvent(ctx, "template list exceeds the unbounded limit")
 

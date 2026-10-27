@@ -458,6 +458,10 @@ var (
 	// read, with the same store commands as before.
 	SandboxListMaxLagMsFlag = NewIntFlag("sandbox-list-max-lag-ms", 0)
 
+	// UnpaginatedTemplateListCapFlag caps GET /templates at 5000 templates; a
+	// team above it gets a 400 pointing at GET /v2/templates. Evaluated per team.
+	UnpaginatedTemplateListCapFlag = NewBoolFlag("unpaginated-template-list-cap", true)
+
 	NetworkTransformRulesFlag = NewBoolFlag("network-transform-rules", env.IsDevelopment())
 	MaxNetworkRuleDomains     = NewIntFlag("max-network-rule-domains", 10)
 

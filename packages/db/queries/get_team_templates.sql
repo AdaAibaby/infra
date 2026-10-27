@@ -38,4 +38,4 @@ WHERE
   e.team_id = sqlc.arg(team_id)
   AND e.source = 'template'
 ORDER BY e.created_at ASC
-LIMIT sqlc.arg(limit_plus_one)::int;
+LIMIT sqlc.narg(limit_plus_one)::int;

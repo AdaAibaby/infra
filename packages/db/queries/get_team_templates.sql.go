@@ -57,7 +57,7 @@ LIMIT $2::int
 
 type GetTeamTemplatesParams struct {
 	TeamID       uuid.UUID
-	LimitPlusOne int32
+	LimitPlusOne *int32
 }
 
 type GetTeamTemplatesRow struct {
