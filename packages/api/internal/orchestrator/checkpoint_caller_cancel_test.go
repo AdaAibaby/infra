@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 
 	"github.com/e2b-dev/infra/packages/api/internal/sandbox"
@@ -113,6 +115,35 @@ func checkpointFixture(t *testing.T, checkpoint func(context.Context) error, hoo
 	node.SetSandboxClient(client)
 
 	return f, client
+}
+
+// A checkpoint the node refuses because another is in flight comes back as
+// its own retryable refusal, with the sandbox restored to Running and its VM
+// untouched, for the fork and the snapshot-template caller alike.
+func TestCheckpoint_InProgressRefusalRestores(t *testing.T) {
+	t.Parallel()
+
+	for name, c := range checkpointCallers {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			refusal, err := status.New(codes.FailedPrecondition, "a checkpoint is already in progress for sandbox 'x'").WithDetails(
+				&orchestrator.UserError{Code: orchestrator.UserErrorCode_CHECKPOINT_IN_PROGRESS, HttpStatus: 503},
+			)
+			require.NoError(t, err)
+			f, client := checkpointFixture(t, func(context.Context) error { return refusal.Err() })
+
+			err = c.call(t.Context(), f.o, f.sbx.TeamID, f.sbx.SandboxID)
+			require.ErrorIs(t, err, PauseRefusedCheckpointInProgressError{})
+			require.ErrorIs(t, err, PauseQueueExhaustedError{})
+
+			assert.Equal(t, int32(1), client.checkpoints.Load())
+			assert.Zero(t, client.deletes.Load(), "the sandbox stays on its node")
+			stored, err := f.o.sandboxStore.Get(t.Context(), f.sbx.TeamID, f.sbx.SandboxID)
+			require.NoError(t, err)
+			assert.Equal(t, sandbox.StateRunning, stored.State)
+		})
+	}
 }
 
 // A checkpoint's work can outlive the request, so a draining replica refuses

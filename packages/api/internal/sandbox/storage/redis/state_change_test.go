@@ -1289,7 +1289,7 @@ func TestRestoreRunning_ReinstatesClampedExpiry(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, transition.Sandbox.EndTime.Before(sbx.EndTime), "a pause clamps a live sandbox's expiry to now")
 
-	restored, err := storage.RestoreRunning(ctx, transition, 10*time.Second)
+	restored, err := storage.RestoreRunning(ctx, transition, sandboxtypes.RestoreOpts{RetryAfter: 10 * time.Second})
 	require.NoError(t, err)
 	assert.Equal(t, sandboxtypes.StateRunning, restored.State)
 	assert.WithinDuration(t, sbx.EndTime, restored.EndTime, time.Millisecond)
@@ -1310,7 +1310,7 @@ func TestRestoreRunning_ReinstatesClampedExpiry(t *testing.T) {
 	// A second refusal keeps the first refusal's stamp.
 	transition, _, callback, err = storage.StartRemoving(ctx, sbx.TeamID, sbx.SandboxID, sandboxtypes.RemoveOpts{Action: sandboxtypes.StateActionPause})
 	require.NoError(t, err)
-	again, err := storage.RestoreRunning(ctx, transition, 10*time.Second)
+	again, err := storage.RestoreRunning(ctx, transition, sandboxtypes.RestoreOpts{RetryAfter: 10 * time.Second})
 	require.NoError(t, err)
 	assert.WithinDuration(t, restored.RefusedSince, again.RefusedSince, time.Millisecond, "a second refusal keeps the first stamp")
 	callback(ctx, errors.New("refused"))
@@ -1325,7 +1325,7 @@ func TestRestoreRunning_ReinstatesClampedExpiry(t *testing.T) {
 	require.NoError(t, err)
 	transition, _, callback, err = storage.StartRemoving(ctx, sbx.TeamID, sbx.SandboxID, sandboxtypes.RemoveOpts{Action: sandboxtypes.StateActionPause})
 	require.NoError(t, err)
-	fresh, err := storage.RestoreRunning(ctx, transition, 10*time.Second)
+	fresh, err := storage.RestoreRunning(ctx, transition, sandboxtypes.RestoreOpts{RetryAfter: 10 * time.Second})
 	require.NoError(t, err)
 	assert.WithinDuration(t, time.Now(), fresh.RefusedSince, time.Second, "a stale stamp is replaced, not counted against the new episode")
 	callback(ctx, errors.New("refused"))
@@ -1394,7 +1394,7 @@ func TestRestoreRunning_RefusesOtherStates(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	_, err = storage.RestoreRunning(ctx, transition, 10*time.Second)
+	_, err = storage.RestoreRunning(ctx, transition, sandboxtypes.RestoreOpts{RetryAfter: 10 * time.Second})
 	require.Error(t, err)
 
 	stored, err := storage.Get(ctx, sbx.TeamID, sbx.SandboxID)
@@ -1424,7 +1424,7 @@ func TestRestoreRunning_RefusesAnotherExecution(t *testing.T) {
 	resumed.EndTime = time.Now().Add(time.Hour)
 	require.NoError(t, storage.Add(ctx, resumed))
 
-	_, err = storage.RestoreRunning(ctx, transition, 10*time.Second)
+	_, err = storage.RestoreRunning(ctx, transition, sandboxtypes.RestoreOpts{RetryAfter: 10 * time.Second})
 	require.ErrorIs(t, err, sandboxtypes.ErrExecutionMismatch)
 
 	stored, err := storage.Get(ctx, sbx.TeamID, sbx.SandboxID)
@@ -1434,7 +1434,7 @@ func TestRestoreRunning_RefusesAnotherExecution(t *testing.T) {
 	assert.WithinDuration(t, resumed.EndTime, stored.EndTime, time.Millisecond)
 
 	transition.Sandbox.ExecutionID = ""
-	_, err = storage.RestoreRunning(ctx, transition, 0)
+	_, err = storage.RestoreRunning(ctx, transition, sandboxtypes.RestoreOpts{})
 	require.ErrorIs(t, err, sandboxtypes.ErrExecutionMismatch, "an empty pin does not match a record that carries an execution")
 }
 
@@ -1494,7 +1494,7 @@ func TestRestoreRunning_RefusesWhenTheRecordChangesUnderIt(t *testing.T) {
 	require.NoError(t, err)
 	callback(ctx, nil)
 
-	_, err = storage.RestoreRunning(ctx, transition, 10*time.Second)
+	_, err = storage.RestoreRunning(ctx, transition, sandboxtypes.RestoreOpts{RetryAfter: 10 * time.Second})
 	require.ErrorIs(t, err, sandboxtypes.ErrExecutionMismatch)
 
 	stored, err := storage.Get(ctx, sbx.TeamID, sbx.SandboxID)
@@ -1609,7 +1609,7 @@ func TestRestoredTransition_WaitersJoinersAndKillers(t *testing.T) {
 	}()
 	time.Sleep(200 * time.Millisecond)
 
-	_, err = storage.RestoreRunning(ctx, transition, 0)
+	_, err = storage.RestoreRunning(ctx, transition, sandboxtypes.RestoreOpts{})
 	require.NoError(t, err)
 	finish(ctx, sandboxtypes.ErrTransitionRestored)
 
@@ -1648,7 +1648,7 @@ func TestRestoreRunning_HeldSandboxLeavesTheExpiredWindow(t *testing.T) {
 	transition, _, callback, err := storage.StartRemoving(ctx, sbx.TeamID, sbx.SandboxID, sandboxtypes.RemoveOpts{Action: sandboxtypes.StateActionPause})
 	require.NoError(t, err)
 
-	_, err = storage.RestoreRunning(ctx, transition, 400*time.Millisecond)
+	_, err = storage.RestoreRunning(ctx, transition, sandboxtypes.RestoreOpts{RetryAfter: 400 * time.Millisecond})
 	require.NoError(t, err)
 	callback(ctx, errors.New("refused"))
 

@@ -104,6 +104,9 @@ func (o *Orchestrator) CheckpointSandbox(ctx context.Context, teamID uuid.UUID, 
 			switch st.Code() {
 			case codes.FailedPrecondition:
 				finish(nil)
+				if isCheckpointInProgress(err) {
+					return PauseRefusedCheckpointInProgressError{}
+				}
 
 				return fmt.Errorf("checkpoint rejected: %w", err)
 			case codes.ResourceExhausted:
@@ -176,7 +179,7 @@ func (o *Orchestrator) restoreCheckpointed(ctx context.Context, transition sandb
 		if network != nil {
 			logger.L().Warn(ctx, "Checkpoint reported another execution's network placement", logger.WithSandboxID(sbx.SandboxID))
 		}
-		_, err = o.sandboxStore.RestoreRunning(ctx, transition, 0)
+		_, err = o.sandboxStore.RestoreRunning(ctx, transition, sandbox.RestoreOpts{})
 	}
 	var stateChanged *sandbox.InvalidStateTransitionError
 	switch {

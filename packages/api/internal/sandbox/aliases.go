@@ -21,10 +21,13 @@ type (
 	TransitionEffect = sandboxtypes.TransitionEffect
 	StateTransition  = sandboxtypes.StateTransition
 
-	InvalidStateTransitionError = sandboxtypes.InvalidStateTransitionError
-	LimitExceededError          = sandboxtypes.LimitExceededError
-	NotRunningError             = sandboxtypes.NotRunningError
-	PauseQueueExhaustedError    = sandboxtypes.PauseQueueExhaustedError
+	InvalidStateTransitionError           = sandboxtypes.InvalidStateTransitionError
+	LimitExceededError                    = sandboxtypes.LimitExceededError
+	NotRunningError                       = sandboxtypes.NotRunningError
+	PauseQueueExhaustedError              = sandboxtypes.PauseQueueExhaustedError
+	PauseRefusedCheckpointInProgressError = sandboxtypes.PauseRefusedCheckpointInProgressError
+	RestoredTransitionError               = sandboxtypes.RestoredTransitionError
+	RestoreOpts                           = sandboxtypes.RestoreOpts
 )
 
 // State constants.

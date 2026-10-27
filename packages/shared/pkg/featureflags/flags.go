@@ -642,10 +642,12 @@ var (
 	OrchestratorGOGCPercentFlag = NewIntFlag("orchestrator-gogc-percent", -1)
 	// PauseRefusalRestoreFlag gates the API-side restore of a retryably
 	// refused pause: record kept, routing re-registered, state back to
-	// Running. Off (default), a refused pause still ends today's way — the
+	// Running. Off (default), a busy-node refusal still ends today's way — the
 	// record is removed, the live sandbox is reaped as an orphan shortly
 	// after, and the pause endpoint answers today's generic error rather than
-	// a 503 whose retry could not succeed. The fallback reads
+	// a 503 whose retry could not succeed. A refusal the node types as a
+	// checkpoint in flight restores whatever the flag says: the node has
+	// proven the sandbox alive and the refusal ends with the checkpoint. The fallback reads
 	// PAUSE_REFUSAL_RESTORE so a deployment without LaunchDarkly can turn it on.
 	PauseRefusalRestoreFlag = NewBoolFlag("pause-refusal-restore", envBoolOr("PAUSE_REFUSAL_RESTORE", false))
 	// CreateMemoryRefusalFlag changes what a create answers when the hugepage
@@ -823,8 +825,9 @@ var (
 	// refused for one). Same sign convention as PauseAdmissionGraceMs:
 	// negative = never degrade (retry for as long as the node refuses), 0 = no
 	// retries (degrade at the first refusal), positive = the budget. Only ever
-	// consulted on a refusal, and refusals only reach the evictor with
-	// PauseRefusalRestoreFlag on, so it is inert until that flag is.
+	// consulted on a busy-node refusal, which reaches the evictor only with
+	// PauseRefusalRestoreFlag on; a checkpoint-in-flight refusal reaches it
+	// regardless but never degrades and does not charge this budget.
 	AutoPauseOverstayBudgetMs = NewIntFlag("auto-pause-overstay-budget-milliseconds", 120000)
 
 	// MaxConcurrentSnapshotUpserts limits concurrent UpsertSnapshot calls (pause + snapshot template paths).

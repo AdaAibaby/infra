@@ -126,6 +126,13 @@ func (a *APIStore) PostSandboxesSandboxIDPause(c *gin.Context, sandboxID api.San
 		a.sendAPIStoreError(c, http.StatusConflict, fmt.Sprintf("Sandbox '%s' cannot be paused while in '%s' state", sandboxID, transErr.CurrentState))
 
 		return
+	// Reached only after the API restored the sandbox; the checkpoint that
+	// refused the pause ends on its own, so a plain retry succeeds.
+	case errors.Is(err, orchestrator.PauseRefusedCheckpointInProgressError{}):
+		pause.LogSkipped(ctx, sandboxID, teamID.String(), pause.ReasonRequest, pause.SkipReasonCheckpointInProgress, filesystemOnly)
+		a.sendAPIStoreError(c, http.StatusServiceUnavailable, fmt.Sprintf("Sandbox '%s' cannot be paused right now because it is being snapshotted, please retry", sandboxID))
+
+		return
 	// Reached only after the API restored the sandbox, so the retry can succeed.
 	case errors.Is(err, orchestrator.PauseQueueExhaustedError{}):
 		pause.LogSkipped(ctx, sandboxID, teamID.String(), pause.ReasonRequest, pause.SkipReasonAdmissionRefused, filesystemOnly)

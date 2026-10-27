@@ -146,7 +146,7 @@ func (o *Orchestrator) RemoveSandbox(ctx context.Context, teamID uuid.UUID, sand
 			}
 
 			if errors.Is(err, PauseQueueExhaustedError{}) {
-				return PauseQueueExhaustedError{}
+				return refusalOf(err)
 			}
 
 			if errors.Is(err, sandbox.ErrExecutionMismatch) {
@@ -201,13 +201,17 @@ func (o *Orchestrator) RemoveSandbox(ctx context.Context, teamID uuid.UUID, sand
 	err = o.removeSandboxFromNode(ctx, sbx, opts.Action, opts.Reason, opts.FilesystemOnly)
 	if err != nil {
 		if errors.Is(err, PauseQueueExhaustedError{}) {
-			if restoreOnRefusal {
-				outcome := o.restoreRefusedPause(context.WithoutCancel(ctx), transition)
+			refusal := refusalOf(err)
+			// A checkpoint in flight is the node's word that the sandbox is
+			// alive and the refusal ends with it, so the record is restored
+			// whatever the flag says for a busy node.
+			if restoreOnRefusal || errors.Is(err, PauseRefusedCheckpointInProgressError{}) {
+				outcome := o.restoreRefusedPause(context.WithoutCancel(ctx), transition, refusal)
 				o.recordRefusalRestore(ctx, sbx.TeamID.String(), outcome, opts.Eviction)
 				switch outcome {
 				case restoreOutcomeRestored:
 					preserveRecord = true
-					err = sandbox.ErrTransitionRestored
+					err = &sandbox.RestoredTransitionError{Refusal: refusal}
 				case restoreOutcomeSuperseded:
 					preserveRecord = true
 					err = sandbox.ErrTransitionRestored
@@ -230,7 +234,7 @@ func (o *Orchestrator) RemoveSandbox(ctx context.Context, teamID uuid.UUID, sand
 				return ErrSandboxOperationFailed
 			}
 
-			return PauseQueueExhaustedError{}
+			return refusal
 		}
 
 		fields := []zap.Field{
@@ -288,9 +292,14 @@ func (o *Orchestrator) killRefusedSandbox(ctx context.Context, sbx sandbox.Sandb
 // restoreRefusedPause puts the record back to Running after the node refused
 // the pause. Routing needs no repair: the node refuses before it stops the
 // sandbox, so its route was never removed.
-func (o *Orchestrator) restoreRefusedPause(ctx context.Context, transition sandbox.StateTransition) restoreOutcome {
+func (o *Orchestrator) restoreRefusedPause(ctx context.Context, transition sandbox.StateTransition, refusal error) restoreOutcome {
 	sbx := transition.Sandbox
-	_, err := o.sandboxStore.RestoreRunning(ctx, transition, refusalRetryAfter)
+	_, err := o.sandboxStore.RestoreRunning(ctx, transition, sandbox.RestoreOpts{
+		RetryAfter: refusalRetryAfter,
+		// A checkpoint holding the sandbox says nothing about the node's
+		// overstay, so the sweep is held without charging the budget.
+		HoldOnly: errors.Is(refusal, PauseRefusedCheckpointInProgressError{}),
+	})
 	if err != nil {
 		if errors.Is(err, sandbox.ErrExecutionMismatch) || errors.Is(err, sandbox.ErrRestoreConflict) {
 			logger.L().Warn(ctx, "Pause restore superseded", zap.Error(err), logger.WithSandboxID(sbx.SandboxID))
@@ -317,6 +326,16 @@ func (o *Orchestrator) restoreRefusedPause(ctx context.Context, transition sandb
 	}
 
 	return restoreOutcomeRestored
+}
+
+// refusalOf narrows a retryable pause refusal to its own type, unwrapped,
+// so the callers above tell a checkpoint in flight from a busy node.
+func refusalOf(err error) error {
+	if errors.Is(err, PauseRefusedCheckpointInProgressError{}) {
+		return PauseRefusedCheckpointInProgressError{}
+	}
+
+	return PauseQueueExhaustedError{}
 }
 
 func (o *Orchestrator) removeSandboxFromNode(

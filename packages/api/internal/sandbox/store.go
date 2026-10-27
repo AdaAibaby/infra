@@ -130,8 +130,8 @@ func (s *Store) StartRemoving(ctx context.Context, teamID uuid.UUID, sandboxID s
 	return s.storage.StartRemoving(ctx, teamID, sandboxID, opts)
 }
 
-func (s *Store) RestoreRunning(ctx context.Context, transition StateTransition, retryAfter time.Duration) (Sandbox, error) {
-	return s.storage.RestoreRunning(ctx, transition, retryAfter)
+func (s *Store) RestoreRunning(ctx context.Context, transition StateTransition, opts RestoreOpts) (Sandbox, error) {
+	return s.storage.RestoreRunning(ctx, transition, opts)
 }
 
 func (s *Store) RestoreCheckpointed(ctx context.Context, transition StateTransition, placement *orchestrator.SandboxNetworkPlacement) (Sandbox, error) {

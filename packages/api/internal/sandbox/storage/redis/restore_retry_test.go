@@ -53,7 +53,7 @@ func TestRestoreRunning_ReplayedWriteSucceeds(t *testing.T) {
 	require.NoError(t, err)
 	defer finish(t.Context(), sandboxtypes.ErrTransitionRestored)
 
-	restored, err := storage.RestoreRunning(t.Context(), transition, 10*time.Second)
+	restored, err := storage.RestoreRunning(t.Context(), transition, sandboxtypes.RestoreOpts{RetryAfter: 10 * time.Second})
 	require.NoError(t, err)
 	require.True(t, replayed.Load())
 	assert.Equal(t, sandboxtypes.StateRunning, restored.State)
@@ -89,7 +89,7 @@ func TestRestoreRunning_RetryIndexFailureKeepsRestoredSandbox(t *testing.T) {
 	defer finish(t.Context(), sandboxtypes.ErrTransitionRestored)
 
 	failIndexWrite.Store(true)
-	restored, err := storage.RestoreRunning(t.Context(), transition, 10*time.Second)
+	restored, err := storage.RestoreRunning(t.Context(), transition, sandboxtypes.RestoreOpts{RetryAfter: 10 * time.Second})
 	require.NoError(t, err)
 	require.False(t, failIndexWrite.Load())
 	stored, err := storage.Get(t.Context(), sbx.TeamID, sbx.SandboxID)

@@ -28,12 +28,27 @@ type Storage interface {
 	Reconcile(ctx context.Context, sandboxes []NodeSandbox, nodeID string) []NodeSandbox
 }
 
+// RestoreOpts says how a refused pause's record goes back to Running.
+type RestoreOpts struct {
+	// RetryAfter holds the sandbox out of every replica's eviction sweep for
+	// this long; zero leaves the retry window as it was.
+	RetryAfter time.Duration
+	// HoldOnly keeps the sweep off for RetryAfter without charging the
+	// refusal episode the evictor's overstay budget is measured against: for
+	// a refusal that says nothing about the node, such as a checkpoint
+	// holding the sandbox. A stamped episode ends, so the next node refusal
+	// counts from itself: a busy-node episode that was live before the
+	// checkpoint refusal is forgotten on purpose, since the checkpoint's own
+	// duration says nothing about the node.
+	HoldOnly bool
+}
+
 // StateTransitions is the removal state machine: start a transition, undo one
 // the node refused, end a checkpoint with the network it left running, or
 // wait one out.
 type StateTransitions interface {
 	StartRemoving(ctx context.Context, teamID uuid.UUID, sandboxID string, opts RemoveOpts) (StateTransition, bool, func(context.Context, error), error)
-	RestoreRunning(ctx context.Context, transition StateTransition, retryAfter time.Duration) (Sandbox, error)
+	RestoreRunning(ctx context.Context, transition StateTransition, opts RestoreOpts) (Sandbox, error)
 	// RestoreCheckpointed puts the record of a checkpoint's transition back
 	// to Running with placement, nil for the worker's own network, as
 	// RestoreRunning does without a retry window. It refuses a record that

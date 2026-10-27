@@ -33,6 +33,9 @@ var (
 
 	finishTransitionScript = redis.NewScript(`
 		redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3])
+		if ARGV[4] ~= '' then
+			redis.call('SET', KEYS[3], ARGV[4], 'EX', ARGV[3])
+		end
 		if redis.call('GET', KEYS[1]) == ARGV[1] then
 			return redis.call('DEL', KEYS[1])
 		end

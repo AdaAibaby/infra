@@ -68,6 +68,19 @@ func TestPause_RetryableRefusalMapsTo503(t *testing.T) {
 	assert.Contains(t, apiErr.Message, "node is busy, please retry")
 }
 
+// A pause refused for a checkpoint in flight is a 503 that names the
+// snapshot and asks for a plain retry, not the busy-node text.
+func TestPause_CheckpointInProgressMapsTo503(t *testing.T) {
+	t.Parallel()
+
+	recorder := postPause(t, orchestrator.PauseRefusedCheckpointInProgressError{})
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code)
+	var apiErr api.Error
+	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &apiErr))
+	assert.Contains(t, apiErr.Message, "being snapshotted, please retry")
+}
+
 // A wrapped refusal (the orchestrator chain wraps before returning) still maps.
 func TestPause_WrappedRetryableRefusalMapsTo503(t *testing.T) {
 	t.Parallel()

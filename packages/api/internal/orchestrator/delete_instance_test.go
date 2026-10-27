@@ -452,6 +452,46 @@ func TestRemoveSandbox_RefusalFlagOffRemovesToday(t *testing.T) {
 		3*time.Second, 10*time.Millisecond, "flag off keeps today's stopped-analytics emission")
 }
 
+// checkpointInProgressPauseErr is the node refusing a pause while a
+// checkpoint of the sandbox is in flight: the busy-node code with the
+// CHECKPOINT_IN_PROGRESS detail.
+func checkpointInProgressPauseErr(t *testing.T) error {
+	t.Helper()
+
+	refusal, err := status.New(codes.ResourceExhausted, "sandbox is being checkpointed, please retry").WithDetails(
+		&orchestrator.UserError{Code: orchestrator.UserErrorCode_CHECKPOINT_IN_PROGRESS, HttpStatus: 503},
+	)
+	require.NoError(t, err)
+
+	return refusal.Err()
+}
+
+// A pause refused for a checkpoint in flight restores the record with the
+// restore flag off: the node has said the sandbox is alive and the refusal
+// ends with the checkpoint, so neither the record nor the VM goes.
+func TestRemoveSandbox_CheckpointInProgressRestoresWithFlagOff(t *testing.T) {
+	t.Parallel()
+
+	f := newRefusalFixture(t, false, consts.LocalClusterID, checkpointInProgressPauseErr(t))
+	node, ok := f.o.nodes.Get(f.o.scopedNodeID(consts.LocalClusterID, "node-1"))
+	require.True(t, ok)
+	stub := &pauseStubClient{err: checkpointInProgressPauseErr(t)}
+	node.SetSandboxClient(stub)
+
+	err := f.removePause(t)
+	require.ErrorIs(t, err, PauseRefusedCheckpointInProgressError{})
+	require.ErrorIs(t, err, PauseQueueExhaustedError{})
+
+	stored, err := f.o.sandboxStore.Get(t.Context(), f.sbx.TeamID, f.sbx.SandboxID)
+	require.NoError(t, err, "the record must survive the refusal with the flag off")
+	assert.Equal(t, sandbox.StateRunning, stored.State)
+	assert.Zero(t, stub.deleteCount(), "the sandbox stays on its node through the checkpoint")
+	assert.Equal(t, map[string]int64{"restored/request": 1}, f.restoreOutcomes(t))
+
+	time.Sleep(300 * time.Millisecond)
+	assert.Zero(t, f.recorder.stoppedCount(), "a restored sandbox must not emit stopped analytics")
+}
+
 // A successful pause removes and emits exactly as before, flag on or not.
 func TestRemoveSandbox_SuccessRemovesAndEmits(t *testing.T) {
 	t.Parallel()

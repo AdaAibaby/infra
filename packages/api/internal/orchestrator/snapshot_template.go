@@ -131,6 +131,9 @@ func (o *Orchestrator) CreateSnapshotTemplate(ctx context.Context, teamID uuid.U
 				if isFilesystemOnlyDisabled(err) {
 					return SnapshotTemplateResult{}, FilesystemOnlyDisabledError{}
 				}
+				if isCheckpointInProgress(err) {
+					return SnapshotTemplateResult{}, PauseRefusedCheckpointInProgressError{}
+				}
 
 				return SnapshotTemplateResult{}, fmt.Errorf("checkpoint rejected: %w", err)
 			case codes.ResourceExhausted:
@@ -405,12 +408,23 @@ func (FilesystemOnlyDisabledError) Error() string {
 // Read through the gRPC status package: the gogo one used above for codes
 // cannot decode this detail type.
 func isFilesystemOnlyDisabled(err error) bool {
+	return hasUserErrorCode(err, orchestrator.UserErrorCode_FILESYSTEM_ONLY_CHECKPOINT_DISABLED)
+}
+
+// isCheckpointInProgress reports a node's refusal to snapshot while another
+// checkpoint of the same sandbox is in flight, by its typed detail: the Pause
+// and Checkpoint RPCs answer it with different codes and messages.
+func isCheckpointInProgress(err error) bool {
+	return hasUserErrorCode(err, orchestrator.UserErrorCode_CHECKPOINT_IN_PROGRESS)
+}
+
+func hasUserErrorCode(err error, code orchestrator.UserErrorCode) bool {
 	st, ok := grpcstatus.FromError(err)
 	if !ok {
 		return false
 	}
 	for _, detail := range st.Details() {
-		if userErr, ok := detail.(*orchestrator.UserError); ok && userErr.GetCode() == orchestrator.UserErrorCode_FILESYSTEM_ONLY_CHECKPOINT_DISABLED {
+		if userErr, ok := detail.(*orchestrator.UserError); ok && userErr.GetCode() == code {
 			return true
 		}
 	}

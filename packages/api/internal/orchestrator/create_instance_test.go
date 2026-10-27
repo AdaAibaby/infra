@@ -1352,7 +1352,7 @@ func TestCreateSandbox_RetainsWinningPlacement(t *testing.T) {
 			transition, _, finish, err := o.sandboxStore.StartRemoving(ctx, team.ID, sandboxID, sandbox.RemoveOpts{Action: sandbox.StateActionPause})
 			require.NoError(t, err)
 			requirePlacement(t, want, transition.Sandbox.NetworkPlacement)
-			restored, err := o.sandboxStore.RestoreRunning(ctx, transition, 0)
+			restored, err := o.sandboxStore.RestoreRunning(ctx, transition, sandbox.RestoreOpts{})
 			require.NoError(t, err)
 			finish(ctx, sandbox.ErrTransitionRestored)
 			requirePlacement(t, want, restored.NetworkPlacement)

@@ -210,6 +210,7 @@ type APIStore struct {
 	// pause handler's two calls — tests use it to assert the gate's wiring
 	// (refusal before RemoveSandbox) without a real orchestrator.
 	pauseBackendOverride   pauseOrchestrator
+	forkBackendOverride    forkOrchestrator
 	pauseLimiter           *pauselimit.Limiter
 	resumeBackendOverride  resumeWaitOrchestrator
 	connectBackendOverride connectOrchestrator

@@ -115,6 +115,26 @@ func TestPauseSandbox_FailsBuildWhenPauseRPCFails(t *testing.T) {
 	assert.True(t, hasFinishedAt, "a terminal build must record finished_at")
 }
 
+// A pause the node refuses for a checkpoint in flight keeps its own type
+// under the retryable refusal, and closes the build out like any refusal.
+func TestPauseSandbox_FailsBuildWhenCheckpointInProgress(t *testing.T) {
+	t.Parallel()
+
+	refusal, err := status.New(codes.ResourceExhausted, "sandbox is being checkpointed, please retry").WithDetails(
+		&orchestrator.UserError{Code: orchestrator.UserErrorCode_CHECKPOINT_IN_PROGRESS, HttpStatus: 503},
+	)
+	require.NoError(t, err)
+	o, db, node, sbx := newPauseFixture(t, refusal.Err())
+
+	err = o.pauseSandbox(t.Context(), node, sbx, false)
+	require.ErrorIs(t, err, PauseRefusedCheckpointInProgressError{})
+	require.ErrorIs(t, err, PauseQueueExhaustedError{}, "a checkpoint in flight is one of the retryable refusals")
+
+	buildStatus, hasFinishedAt := snapshotBuildStatus(t, db, sbx.SandboxID)
+	assert.Equal(t, string(types.BuildStatusFailed), buildStatus)
+	assert.True(t, hasFinishedAt, "a terminal build must record finished_at")
+}
+
 // A full pause queue returns a distinct error, and closes the build out too.
 func TestPauseSandbox_FailsBuildWhenPauseQueueExhausted(t *testing.T) {
 	t.Parallel()

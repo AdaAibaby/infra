@@ -26,6 +26,8 @@ import (
 // import cycle.
 type PauseQueueExhaustedError = sandbox.PauseQueueExhaustedError
 
+type PauseRefusedCheckpointInProgressError = sandbox.PauseRefusedCheckpointInProgressError
+
 func (o *Orchestrator) pauseSandbox(ctx context.Context, node *nodemanager.Node, sbx sandbox.Sandbox, filesystemOnly bool) error {
 	ctx, span := tracer.Start(ctx, "pause-sandbox")
 	defer span.End()
@@ -63,7 +65,7 @@ func (o *Orchestrator) pauseSandbox(ctx context.Context, node *nodemanager.Node,
 		if errors.Is(err, PauseQueueExhaustedError{}) {
 			telemetry.ReportEvent(ctx, "pause refused retryably", telemetry.WithSandboxID(sbx.SandboxID))
 
-			return PauseQueueExhaustedError{}
+			return err
 		}
 
 		telemetry.ReportCriticalError(ctx, "error pausing sandbox", err)
@@ -109,6 +111,10 @@ func snapshotInstance(ctx context.Context, node *nodemanager.Node, sbx sandbox.S
 
 	if st.Code() == codes.ResourceExhausted {
 		logger.L().Warn(ctx, "Pause refused by the node", logger.WithSandboxID(sbx.SandboxID), zap.String("node_message", st.Message()))
+
+		if isCheckpointInProgress(err) {
+			return PauseRefusedCheckpointInProgressError{}
+		}
 
 		return PauseQueueExhaustedError{}
 	}

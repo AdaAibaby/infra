@@ -196,7 +196,10 @@ func (e *Evictor) evictSandbox(ctx context.Context, sbx sandbox.Sandbox) {
 	}
 
 	err := e.removeSandbox(context.WithoutCancel(ctx), sbx.TeamID, sbx.SandboxID, opts)
-	if action == sandbox.StateActionPause && !opts.FilesystemOnly && errors.Is(err, sandbox.PauseQueueExhaustedError{}) {
+	// A checkpoint in flight says nothing about the node's memory and ends on
+	// its own, so it never degrades the pause: the next sweep retries it as is.
+	if action == sandbox.StateActionPause && !opts.FilesystemOnly && errors.Is(err, sandbox.PauseQueueExhaustedError{}) &&
+		!errors.Is(err, sandbox.PauseRefusedCheckpointInProgressError{}) {
 		degradeCause = e.degradeCause(ctx, sbx, time.Now())
 	}
 	if degradeCause != "" {
@@ -259,6 +262,8 @@ const (
 // a later sweep. Anything else is a failure.
 func pauseSkipReason(err error, state sandbox.State) (pause.SkipReason, bool) {
 	switch {
+	case errors.Is(err, sandbox.PauseRefusedCheckpointInProgressError{}):
+		return pause.SkipReasonCheckpointInProgress, true
 	case errors.Is(err, sandbox.PauseQueueExhaustedError{}):
 		return pause.SkipReasonAdmissionRefused, true
 	case errors.Is(err, sandbox.ErrDraining):

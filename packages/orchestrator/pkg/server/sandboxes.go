@@ -1171,7 +1171,7 @@ func (s *Server) Pause(ctx context.Context, in *orchestrator.SandboxPauseRequest
 		// the record on anything else, after which the sandbox the
 		// checkpoint resumes is killed as an orphan.
 		if s.heldByCheckpoint(in.GetSandboxId()) {
-			return nil, status.Errorf(codes.ResourceExhausted, "sandbox '%s' is being checkpointed, please retry", in.GetSandboxId())
+			return nil, checkpointInProgressStatus(codes.ResourceExhausted, "sandbox '%s' is being checkpointed, please retry", in.GetSandboxId()).Err()
 		}
 		telemetry.ReportCriticalError(ctx, "sandbox not found", nil, telemetry.WithSandboxID(in.GetSandboxId()))
 
@@ -1236,7 +1236,7 @@ func (s *Server) Pause(ctx context.Context, in *orchestrator.SandboxPauseRequest
 		// A checkpoint that reserved the sandbox between the read above and
 		// the marking gets the same retryable answer as a read that missed.
 		if s.heldByCheckpoint(in.GetSandboxId()) {
-			return nil, status.Errorf(codes.ResourceExhausted, "sandbox '%s' is being checkpointed, please retry", in.GetSandboxId())
+			return nil, checkpointInProgressStatus(codes.ResourceExhausted, "sandbox '%s' is being checkpointed, please retry", in.GetSandboxId()).Err()
 		}
 		telemetry.ReportCriticalError(ctx, "failed to mark sandbox as stopping", nil, telemetry.WithSandboxID(in.GetSandboxId()))
 
@@ -1726,7 +1726,7 @@ func (s *Server) checkpointInPlace(ctx context.Context, sbx *sandbox.Sandbox, in
 	// fresh on the same sandbox refuse each other. FailedPrecondition tells
 	// the API the sandbox is still healthy.
 	if !sbx.BeginCheckpoint() {
-		return nil, false, status.Errorf(codes.FailedPrecondition, "a checkpoint is already in progress for sandbox '%s'", in.GetSandboxId())
+		return nil, false, checkpointInProgressStatus(codes.FailedPrecondition, "a checkpoint is already in progress for sandbox '%s'", in.GetSandboxId()).Err()
 	}
 	defer sbx.EndCheckpoint()
 
@@ -3131,6 +3131,24 @@ func (s *Server) memoryRefusal(ctx context.Context, err error, ramMB int64, stop
 	}
 
 	return status.Errorf(codes.FailedPrecondition, "this node cannot map %d MiB of guest memory: its memory pool is too small or in use by running sandboxes", ramMB)
+}
+
+// checkpointInProgressStatus is the refusal of a snapshot while another
+// checkpoint of the same sandbox is in flight, with a typed detail so the API
+// tells it from a busy node on Pause and from a rejected artifact on
+// Checkpoint. The code is the one each RPC answered before the detail existed.
+func checkpointInProgressStatus(code codes.Code, format string, sandboxID string) *status.Status {
+	st := status.Newf(code, format, sandboxID)
+	withDetails, err := st.WithDetails(&orchestrator.UserError{
+		Code:       orchestrator.UserErrorCode_CHECKPOINT_IN_PROGRESS,
+		Message:    st.Message(),
+		HttpStatus: http.StatusServiceUnavailable,
+	})
+	if err != nil {
+		return st
+	}
+
+	return withDetails
 }
 
 // filesystemOnlyDisabledStatus is the flag refusal with a typed detail, so the

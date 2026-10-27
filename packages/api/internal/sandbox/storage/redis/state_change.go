@@ -207,9 +207,17 @@ func (s *Storage) createCallback(teamID uuid.UUID, sandboxID, transitionKey, res
 			resultValue = cbErr.Error()
 		}
 
+		// A restored pause's refusal class rides beside the result; the result
+		// itself stays the text a replica that predates the class reads.
+		refusalClass := ""
+		if restored, ok := errors.AsType[*sandboxtypes.RestoredTransitionError](cbErr); ok {
+			resultValue = sandboxtypes.ErrTransitionRestored.Error()
+			refusalClass = sandboxtypes.RefusalClass(restored.Refusal)
+		}
+
 		// Publish the result before waiters can observe completion; expired owners cannot delete a successor's key.
-		err := RunScript(cbCtx, s.redisClient, "finish_transition", finishTransitionScript, []string{transitionKey, resultKey},
-			transitionID, resultValue, int(transitionResultKeyTTL.Seconds())).Err()
+		err := RunScript(cbCtx, s.redisClient, "finish_transition", finishTransitionScript, []string{transitionKey, resultKey, refusalClassKey(resultKey)},
+			transitionID, resultValue, int(transitionResultKeyTTL.Seconds()), refusalClass).Err()
 		if err != nil {
 			logger.L().Warn(cbCtx, "Failed to finish state transition", logger.WithSandboxID(sandboxID), zap.String("transitionID", transitionID), zap.Error(err))
 		}
@@ -239,12 +247,16 @@ func (s *Storage) restoreToRunning(ctx context.Context, teamID uuid.UUID, sandbo
 	return err
 }
 
-func (s *Storage) RestoreRunning(ctx context.Context, transition sandboxtypes.StateTransition, retryAfter time.Duration) (sandboxtypes.Sandbox, error) {
+func (s *Storage) RestoreRunning(ctx context.Context, transition sandboxtypes.StateTransition, opts sandboxtypes.RestoreOpts) (sandboxtypes.Sandbox, error) {
 	restored, err := s.restoreRunning(ctx, transition, func(restored *sandboxtypes.Sandbox) {
-		if retryAfter > 0 {
+		if opts.RetryAfter > 0 {
 			now := time.Now()
-			restored.RefusedSince = restored.RefusalEpisodeStart(now)
-			restored.RefusedUntil = now.Add(retryAfter)
+			episodeStart := time.Time{}
+			if !opts.HoldOnly {
+				episodeStart = restored.RefusalEpisodeStart(now)
+			}
+			restored.RefusedSince = episodeStart
+			restored.RefusedUntil = now.Add(opts.RetryAfter)
 		}
 	})
 	if err != nil {
@@ -410,19 +422,29 @@ func (s *Storage) waitForTransition(
 	}
 }
 
-// checkTransitionResult checks the result key for the outcome of a completed transition.
+// refusalClassKey holds the refusal class of a restored pause beside its
+// transition result, for the result's lifetime.
+func refusalClassKey(resultKey string) string {
+	return resultKey + ":refusal"
+}
+
+// checkTransitionResult checks the result key for the outcome of a completed
+// transition, and the refusal class beside it, in one round trip.
 func (s *Storage) checkTransitionResult(ctx context.Context, resultKey string) error {
-	result, err := s.redisClient.Get(ctx, resultKey).Result()
-	if errors.Is(err, redis.Nil) {
-		// Result expired or never set - assume success (transition key was deleted)
-		return nil
-	}
+	values, err := s.redisClient.MGet(ctx, resultKey, refusalClassKey(resultKey)).Result()
 	if err != nil {
 		return fmt.Errorf("failed to check transition result: %w", err)
 	}
+	result, ok := values[0].(string)
+	if !ok {
+		// Result expired or never set - assume success (transition key was deleted)
+		return nil
+	}
 
 	if result == sandboxtypes.ErrTransitionRestored.Error() {
-		return sandboxtypes.ErrTransitionRestored
+		class, _ := values[1].(string)
+
+		return &sandboxtypes.RestoredTransitionError{Refusal: sandboxtypes.RefusalFromClass(class)}
 	}
 
 	if result != "" {
@@ -463,10 +485,10 @@ func (s *Storage) handleExistingTransition(
 			zap.String("state", string(newState)))
 
 		err := s.waitForTransition(ctx, teamID, sbx.SandboxID, transactionID)
-		if errors.Is(err, sandboxtypes.ErrTransitionRestored) {
+		if restored, ok := errors.AsType[*sandboxtypes.RestoredTransitionError](err); ok {
 			// The pause the joiner rode was refused and the sandbox is running
-			// again: the joiner gets the same retryable refusal, not a success.
-			return transition, false, nil, sandboxtypes.PauseQueueExhaustedError{}
+			// again: the joiner gets the refusal the starter got, not a success.
+			return transition, false, nil, restored.Refusal
 		}
 		if err != nil {
 			return transition, false, nil, fmt.Errorf("failed waiting for transition: %w", err)
