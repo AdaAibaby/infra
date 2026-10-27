@@ -48,7 +48,7 @@ require (
 	github.com/oapi-codegen/gin-middleware v1.1.0
 	github.com/oapi-codegen/runtime v1.8.0
 	github.com/posthog/posthog-go v0.0.0-20230801140217-d607812dee69
-	github.com/redis/go-redis/v9 v9.22.0
+	github.com/redis/go-redis/v9 v9.23.0
 	github.com/riverqueue/river v0.49.0
 	github.com/riverqueue/river/riverdriver/riverpgxv5 v0.49.0
 	github.com/riverqueue/river/rivertype v0.49.0
@@ -332,8 +332,8 @@ require (
 	github.com/puzpuzpuz/xsync/v4 v4.4.0 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
 	github.com/quic-go/quic-go v0.63.0 // indirect
-	github.com/redis/go-redis/extra/rediscmd/v9 v9.17.3 // indirect
-	github.com/redis/go-redis/extra/redisotel/v9 v9.17.3 // indirect
+	github.com/redis/go-redis/extra/rediscmd/v9 v9.23.0 // indirect
+	github.com/redis/go-redis/extra/redisotel/v9 v9.23.0 // indirect
 	github.com/riverqueue/river/riverdriver v0.49.0 // indirect
 	github.com/riverqueue/river/riverdriver/riverdatabasesql v0.49.0 // indirect
 	github.com/riverqueue/river/rivershared v0.49.0 // indirect
@@ -412,7 +412,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.11.1 // indirect
 	go.segfaultmedaddy.com/pgxephemeraltest/v2 v2.3.0 // indirect
 	go.segfaultmedaddy.com/redistest v0.2.0 // indirect
-	go.uber.org/atomic v1.11.0 // indirect
+	go.uber.org/atomic v1.12.0 // indirect
 	go.uber.org/goleak v1.3.0 // indirect
 	go.uber.org/mock v0.6.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
