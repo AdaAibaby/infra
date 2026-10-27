@@ -53,9 +53,9 @@ func (a *APIStore) PostSandboxesSandboxIDConnect(c *gin.Context, sandboxID api.S
 		return
 	}
 
-	timeout := time.Duration(body.Timeout) * time.Second
-	if timeout > time.Duration(teamInfo.Limits.MaxLengthHours)*time.Hour {
-		a.sendAPIStoreError(c, http.StatusBadRequest, fmt.Sprintf("Timeout cannot be greater than %d hours", teamInfo.Limits.MaxLengthHours))
+	timeout, apiErr := validateAndParseTimeout(&body.Timeout, teamInfo.Limits.MaxLengthHours)
+	if apiErr != nil {
+		a.sendAPIStoreError(c, apiErr.Code, apiErr.ClientMsg)
 
 		return
 	}
