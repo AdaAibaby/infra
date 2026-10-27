@@ -92,7 +92,7 @@ flowchart TB
 | Template manager | `packages/orchestrator` (role) | build nodes | Builds templates from Docker images |
 | Client proxy | `packages/client-proxy` | API nodes | Edge router: sandbox URL → correct node |
 | Envd | `packages/envd` | inside every VM | In-VM agent: process/filesystem API for SDKs |
-| Dashboard API | `packages/dashboard-api` | API nodes | Backend for the web dashboard (templates, builds, admin) |
+| Dashboard API | `packages/dashboard-api` | API nodes | Backend for the web dashboard (templates, admin) |
 
 Supporting packages: `packages/shared` (protos, telemetry, storage clients, feature flags),
 `packages/auth` (authentication library), `packages/db` (Postgres migrations + sqlc queries),
@@ -133,8 +133,8 @@ limits deliveries record `dashboard-api.management.apply_lag` and
 alert sums both services.
 
 - **Resources**: sandboxes (create/list/kill/pause/resume/connect/timeout/metrics/logs),
-  templates and builds, teams, volumes, API keys, secrets, sandbox events and webhooks,
-  admin operations.
+  templates and builds (including the web dashboard's build listings under `/unstable/builds`),
+  teams, volumes, API keys, secrets, sandbox events and webhooks, admin operations.
 - **Default templates**: `env_defaults` names the platform's default templates. Admin routes
   under `/unstable/admin/templates` add, describe and remove default templates and aliases
   without a namespace, and clear the alias cache after each alias change so name resolution
@@ -528,9 +528,9 @@ answers 408.
 ### Dashboard API (`packages/dashboard-api`)
 
 A separate REST service (port 3010, spec `spec/openapi-dashboard.yml`) consumed by the web
-dashboard, not the SDK: template tags, build listings, and admin profiles. Its admin
+dashboard, not the SDK: template tags and admin profiles. Its admin
 routes accept either a shared admin token or
-a short-lived service JWT verified against the configured admin JWKS. Team-scoped template and build read routes accept either dashboard user auth or
+a short-lived service JWT verified against the configured admin JWKS. Team-scoped template read routes accept either dashboard user auth or
 team API key auth (`X-API-Key`). Its workspace-agnostic `/v1/management` operations are defined in the
 same dashboard OpenAPI contract and registered on the existing router. Their `AdminJWTAuth`
 OpenAPI security scheme accepts only short-lived service JWTs verified against the workspace-api

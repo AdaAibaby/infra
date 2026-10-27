@@ -30,13 +30,12 @@ func normalizeTagAssignmentsPageLimit(limit *api.TagAssignmentsLimit) int32 {
 }
 
 // parseTagAssignmentsCursor decodes the {assigned_at}|{assignment_id} cursor.
-// An empty cursor is the first page; we use maxCursorTime + maxCursorID as the
+// An empty cursor is the first page; we use maxCursorTime + uuid.Max as the
 // upper-bound sentinel so DB rows inserted concurrently with the request can
 // still appear on page 1 regardless of app-vs-DB clock skew.
 func parseTagAssignmentsCursor(cursor *api.TagAssignmentsCursor) (time.Time, uuid.UUID, error) {
-	defaultID := uuid.MustParse(maxCursorID)
 	if cursor == nil || *cursor == "" {
-		return maxCursorTime, defaultID, nil
+		return maxCursorTime, uuid.Max, nil
 	}
 
 	parts := strings.SplitN(*cursor, "|", 2)

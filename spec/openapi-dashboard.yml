@@ -30,14 +30,6 @@ components:
       name: X-Team-ID
 
   parameters:
-    build_id:
-      name: build_id
-      in: path
-      required: true
-      description: Identifier of the build.
-      schema:
-        type: string
-        format: uuid
     sandboxID:
       name: sandboxID
       in: path
@@ -45,56 +37,6 @@ components:
       description: Identifier of the sandbox.
       schema:
         type: string
-    builds_limit:
-      name: limit
-      in: query
-      required: false
-      description: Maximum number of items to return per page.
-      schema:
-        type: integer
-        format: int32
-        minimum: 1
-        maximum: 100
-        default: 50
-    builds_cursor:
-      name: cursor
-      in: query
-      required: false
-      description: Cursor returned by the previous list response in `created_at|build_id` format.
-      schema:
-        type: string
-    build_id_or_template:
-      name: build_id_or_template
-      in: query
-      required: false
-      description: Optional filter by build identifier, template identifier, or template alias.
-      schema:
-        type: string
-    build_statuses:
-      name: statuses
-      in: query
-      required: false
-      description: Comma-separated list of build statuses to include.
-      style: form
-      explode: false
-      schema:
-        type: array
-        items:
-          $ref: "#/components/schemas/BuildStatus"
-    build_ids:
-      name: build_ids
-      in: query
-      required: true
-      description: Comma-separated list of build IDs to get statuses for.
-      style: form
-      explode: false
-      schema:
-        type: array
-        items:
-          type: string
-          format: uuid
-        maxItems: 100
-        uniqueItems: true
     teamID:
       name: teamID
       in: path
@@ -419,152 +361,6 @@ components:
         cluster_id:
           type: string
           format: uuid
-
-    BuildStatus:
-      type: string
-      description: Build status mapped for dashboard clients.
-      enum:
-        - building
-        - failed
-        - success
-
-    ListedBuild:
-      type: object
-      required:
-        - id
-        - template
-        - templateId
-        - status
-        - statusMessage
-        - createdAt
-        - finishedAt
-        - cpuCount
-        - memoryMB
-        - diskSizeMB
-        - envdVersion
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Identifier of the build.
-        template:
-          type: string
-          description: Template alias when present, otherwise template ID.
-        templateId:
-          type: string
-          description: Identifier of the template.
-        status:
-          $ref: "#/components/schemas/BuildStatus"
-        statusMessage:
-          type: string
-          nullable: true
-          description: Failure message when status is `failed`, otherwise `null`.
-        createdAt:
-          type: string
-          format: date-time
-          description: Build creation timestamp in RFC3339 format.
-        finishedAt:
-          type: string
-          format: date-time
-          nullable: true
-          description: Build completion timestamp in RFC3339 format, if finished.
-        cpuCount:
-          type: integer
-          format: int64
-          description: CPU cores configured for the build.
-        memoryMB:
-          type: integer
-          format: int64
-          description: Memory in MiB configured for the build.
-        diskSizeMB:
-          type: integer
-          format: int64
-          nullable: true
-          description: Disk size in MiB configured for the build, if recorded.
-        envdVersion:
-          type: string
-          nullable: true
-          description: envd version the build was created with, if recorded.
-
-    BuildsListResponse:
-      type: object
-      required:
-        - data
-        - nextCursor
-      properties:
-        data:
-          type: array
-          items:
-            $ref: "#/components/schemas/ListedBuild"
-        nextCursor:
-          type: string
-          nullable: true
-          description: Cursor to pass to the next list request, or `null` if there is no next page.
-
-    BuildStatusItem:
-      type: object
-      required:
-        - id
-        - status
-        - finishedAt
-        - statusMessage
-      properties:
-        id:
-          type: string
-          format: uuid
-          description: Identifier of the build.
-        status:
-          $ref: "#/components/schemas/BuildStatus"
-        finishedAt:
-          type: string
-          format: date-time
-          nullable: true
-          description: Build completion timestamp in RFC3339 format, if finished.
-        statusMessage:
-          type: string
-          nullable: true
-          description: Failure message when status is `failed`, otherwise `null`.
-
-    BuildsStatusesResponse:
-      type: object
-      required:
-        - buildStatuses
-      properties:
-        buildStatuses:
-          type: array
-          description: List of build statuses
-          items:
-            $ref: "#/components/schemas/BuildStatusItem"
-
-    BuildInfo:
-      type: object
-      required:
-        - createdAt
-        - finishedAt
-        - status
-        - statusMessage
-      properties:
-        names:
-          type: array
-          items:
-            type: string
-          nullable: true
-          description: Template names related to this build, if available.
-        createdAt:
-          type: string
-          format: date-time
-          description: Build creation timestamp in RFC3339 format.
-        finishedAt:
-          type: string
-          format: date-time
-          nullable: true
-          description: Build completion timestamp in RFC3339 format, if finished.
-        status:
-          $ref: "#/components/schemas/BuildStatus"
-        statusMessage:
-          type: string
-          nullable: true
-          description: Failure message when status is `failed`, otherwise `null`.
 
     CPUCount:
       type: integer
@@ -1267,7 +1063,6 @@ components:
           $ref: "#/components/schemas/ManagementDecidedAt"
 
 tags:
-  - name: builds
   - name: control-plane-management
     description: Workspace control-plane operations authenticated with service JWTs.
   - name: sandboxes
@@ -1284,88 +1079,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
-
-  /builds:
-    get:
-      summary: List team builds
-      tags: [builds]
-      security:
-        - ApiKeyAuth: []
-        - AuthProviderBearerAuth: []
-          AuthProviderTeamAuth: []
-      parameters:
-        - $ref: "#/components/parameters/build_id_or_template"
-        - $ref: "#/components/parameters/build_statuses"
-        - $ref: "#/components/parameters/builds_limit"
-        - $ref: "#/components/parameters/builds_cursor"
-      responses:
-        "200":
-          description: Successfully returned paginated builds.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BuildsListResponse"
-        "400":
-          $ref: "#/components/responses/400"
-        "401":
-          $ref: "#/components/responses/401"
-        "403":
-          $ref: "#/components/responses/403"
-        "500":
-          $ref: "#/components/responses/500"
-
-  /builds/statuses:
-    get:
-      summary: Build statuses
-      tags: [builds]
-      security:
-        - ApiKeyAuth: []
-        - AuthProviderBearerAuth: []
-          AuthProviderTeamAuth: []
-      parameters:
-        - $ref: "#/components/parameters/build_ids"
-
-      responses:
-        "200":
-          description: Successfully returned build statuses
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BuildsStatusesResponse"
-        "400":
-          $ref: "#/components/responses/400"
-        "401":
-          $ref: "#/components/responses/401"
-        "403":
-          $ref: "#/components/responses/403"
-        "500":
-          $ref: "#/components/responses/500"
-
-  /builds/{build_id}:
-    get:
-      summary: Build details
-      tags: [builds]
-      security:
-        - ApiKeyAuth: []
-        - AuthProviderBearerAuth: []
-          AuthProviderTeamAuth: []
-      parameters:
-        - $ref: "#/components/parameters/build_id"
-      responses:
-        "200":
-          description: Successfully returned build details.
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/BuildInfo"
-        "401":
-          $ref: "#/components/responses/401"
-        "403":
-          $ref: "#/components/responses/403"
-        "404":
-          $ref: "#/components/responses/404"
-        "500":
-          $ref: "#/components/responses/500"
 
   /sandboxes/{sandboxID}/record:
     get:

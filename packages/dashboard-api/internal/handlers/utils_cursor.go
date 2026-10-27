@@ -20,8 +20,16 @@ var (
 // Feature handlers errors.Is-check this to produce a 400.
 var errInvalidCursor = errors.New("invalid cursor")
 
+func parseCursorTime(value string) (time.Time, error) {
+	cursorTime, err := time.Parse(time.RFC3339Nano, value)
+	if err == nil {
+		return cursorTime, nil
+	}
+
+	return time.Parse(time.RFC3339, value)
+}
+
 // cursorTime is the *string variant returning nil when v is nil.
-// It defers to parseCursorTime (defined in builds_list.go) for the actual parse.
 func cursorTime(v *string) (*time.Time, error) {
 	if v == nil {
 		return nil, nil

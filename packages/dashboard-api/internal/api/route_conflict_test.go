@@ -73,9 +73,6 @@ func TestDashboardReadRoutesExposeApiKeyAuth(t *testing.T) {
 		method string
 		path   string
 	}{
-		{http.MethodGet, "/builds"},
-		{http.MethodGet, "/builds/statuses"},
-		{http.MethodGet, "/builds/{build_id}"},
 		{http.MethodGet, "/templates"},
 		{http.MethodGet, "/templates/defaults"},
 		{http.MethodGet, "/templates/{templateID}"},

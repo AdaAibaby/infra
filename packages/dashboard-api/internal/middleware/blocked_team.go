@@ -13,9 +13,6 @@ import (
 // have no team on the gin context so the middleware short-circuits.
 var blockedTeamAllowlist = auth.BlockedTeamAllowlist{
 	http.MethodGet: {
-		"/builds":                                      {},
-		"/builds/statuses":                             {},
-		"/builds/:build_id":                            {},
 		"/sandboxes/:sandboxID/record":                 {},
 		"/templates":                                   {},
 		"/templates/defaults":                          {},
