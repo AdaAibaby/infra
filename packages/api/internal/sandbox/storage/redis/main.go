@@ -9,6 +9,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"go.uber.org/zap"
+	"golang.org/x/sync/semaphore"
 
 	"github.com/e2b-dev/infra/packages/api/internal/sandbox/sandboxtypes"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
@@ -33,6 +34,12 @@ const (
 	// considered an orphan and killed. This prevents killing sandboxes that are
 	// still in the process of being created (store write happens before the VM starts).
 	orphanGracePeriod = time.Minute
+
+	// maxConcurrentReconciles caps the orphan-check pipelines in flight. The
+	// node sync reconciles every node at once, and unbounded those pipelines
+	// fill the client's connection pool on every shard, queueing request-path
+	// commands behind them.
+	maxConcurrentReconciles = 64
 )
 
 var _ sandboxtypes.Storage = (*Storage)(nil)
@@ -42,6 +49,8 @@ type Storage struct {
 	locker      *storageLocker
 	subManager  *subscriptionManager
 	publisher   *publisher
+
+	reconcileSlots *semaphore.Weighted
 
 	metrics expirationIndexMetrics
 }
@@ -113,11 +122,12 @@ func NewStorage(
 	}
 
 	return &Storage{
-		redisClient: redisClient,
-		locker:      newStorageLocker(redisClient, subManager, pub),
-		subManager:  subManager,
-		publisher:   pub,
-		metrics:     metrics,
+		redisClient:    redisClient,
+		locker:         newStorageLocker(redisClient, subManager, pub),
+		subManager:     subManager,
+		publisher:      pub,
+		reconcileSlots: semaphore.NewWeighted(maxConcurrentReconciles),
+		metrics:        metrics,
 	}, nil
 }
 
@@ -201,7 +211,16 @@ func (s *Storage) Reconcile(ctx context.Context, sbxs []sandboxtypes.NodeSandbox
 		}
 	}
 
+	if err := s.reconcileSlots.Acquire(ctx, 1); err != nil {
+		logger.L().Error(ctx, "Gave up waiting to run the orphan sync, skipping",
+			zap.Error(err),
+			logger.WithNodeID(nodeID),
+		)
+
+		return nil
+	}
 	_, err := pipe.Exec(ctx)
+	s.reconcileSlots.Release(1)
 	if err != nil {
 		// Pipeline error — skip entirely to avoid mass kills.
 		logger.L().Error(ctx, "Redis pipeline error during orphan sync, skipping",

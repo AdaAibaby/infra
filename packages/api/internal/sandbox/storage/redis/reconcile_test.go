@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -66,6 +67,73 @@ func (r *mgetRecorder) ProcessPipelineHook(next redis.ProcessPipelineHook) redis
 
 		return next(ctx, cmds)
 	}
+}
+
+// pipelineConcurrency is a go-redis hook that records the most MGET pipelines
+// in flight at once, holding each one so that concurrent callers overlap.
+type pipelineConcurrency struct {
+	hold     time.Duration
+	inFlight atomic.Int64
+	peak     atomic.Int64
+}
+
+func (p *pipelineConcurrency) DialHook(next redis.DialHook) redis.DialHook {
+	return next
+}
+
+func (p *pipelineConcurrency) ProcessHook(next redis.ProcessHook) redis.ProcessHook {
+	return next
+}
+
+func (p *pipelineConcurrency) ProcessPipelineHook(next redis.ProcessPipelineHook) redis.ProcessPipelineHook {
+	return func(ctx context.Context, cmds []redis.Cmder) error {
+		if len(cmds) == 0 || cmds[0].Name() != "mget" {
+			return next(ctx, cmds)
+		}
+
+		n := p.inFlight.Add(1)
+		defer p.inFlight.Add(-1)
+		for {
+			peak := p.peak.Load()
+			if n <= peak || p.peak.CompareAndSwap(peak, n) {
+				break
+			}
+		}
+		time.Sleep(p.hold)
+
+		return next(ctx, cmds)
+	}
+}
+
+// TestReconcile_CapsConcurrentPipelines pins that concurrent Reconcile calls
+// keep at most maxConcurrentReconciles pipelines in flight. The node sync
+// reconciles every node at once, and each uncapped call holds a connection on
+// every shard it reads.
+func TestReconcile_CapsConcurrentPipelines(t *testing.T) {
+	t.Parallel()
+
+	storage, client := setupTestStorage(t)
+	probe := &pipelineConcurrency{hold: 20 * time.Millisecond}
+	client.AddHook(probe)
+
+	started := time.Now().Add(-2 * orphanGracePeriod)
+
+	var wg sync.WaitGroup
+	for i := range 3 * maxConcurrentReconciles {
+		wg.Go(func() {
+			sbx := sandboxtypes.NodeSandbox{
+				SandboxID: fmt.Sprintf("sbx-%d", i),
+				TeamID:    uuid.New(),
+				StartTime: started,
+			}
+			storage.Reconcile(t.Context(), []sandboxtypes.NodeSandbox{sbx}, fmt.Sprintf("node-%d", i))
+		})
+	}
+	wg.Wait()
+
+	peak := probe.peak.Load()
+	require.LessOrEqual(t, peak, int64(maxConcurrentReconciles))
+	require.Greater(t, peak, int64(1), "the calls never overlapped, so the cap was not exercised")
 }
 
 // TestReconcile_SpansSeveralBatches pins that Reconcile classifies every node
