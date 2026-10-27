@@ -17,6 +17,7 @@ import (
 
 	"github.com/e2b-dev/infra/packages/api/internal/cfg"
 	clickhouse "github.com/e2b-dev/infra/packages/clickhouse/pkg"
+	"github.com/e2b-dev/infra/packages/db/queries"
 	"github.com/e2b-dev/infra/packages/shared/pkg/consts"
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	infogrpc "github.com/e2b-dev/infra/packages/shared/pkg/grpc/orchestrator-info"
@@ -28,6 +29,7 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/smap"
 	"github.com/e2b-dev/infra/packages/shared/pkg/synchronization"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
+	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
 )
 
 var tracer = otel.Tracer("github.com/e2b-dev/infra/packages/api/internal/clusters")
@@ -48,6 +50,10 @@ type Cluster struct {
 	instances       *smap.Map[*Instance]
 	synchronization *synchronization.Synchronize[servicediscovery.Instance, *Instance]
 	resources       ClusterResource
+
+	// connections are shared by a remote cluster's instances; nil for the
+	// local cluster, whose instances each hold their own.
+	connections *remoteConnections
 }
 
 var (
@@ -89,7 +95,12 @@ func newLocalCluster(
 	instances := smap.New[*Instance]()
 	instanceCreation := func(ctx context.Context, item servicediscovery.Instance) (*Instance, error) {
 		// For local cluster we are doing direct connection to instance IP and API port and without additional cluster auth.
-		return newInstance(ctx, tel, nil, clusterID, item, item.Address(), false, localCreds)
+		client, err := createClient(tel, item.Address(), false, localCreds)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cluster instance client: %w", err)
+		}
+
+		return newInstance(ctx, clusterID, item, client)
 	}
 
 	store := instancesSyncStore{clusterID: clusterID, instances: instances, discovery: storeDiscovery, instanceCreation: instanceCreation, onInsert: onInstanceJoined}
@@ -114,15 +125,10 @@ func remoteInstanceAuthorization(secret string, tls bool, sd servicediscovery.In
 	return &instanceAuthorization{secret: secret, tls: tls, serviceInstanceID: sd.WorkloadID}
 }
 
-func newRemoteCluster(
-	tel *telemetry.Client,
-	endpoint string,
-	endpointTLS bool,
-	secret string,
-	clusterID uuid.UUID,
-	sandboxDomain *string,
-	authOrgID string,
-) (*Cluster, error) {
+func newRemoteCluster(tel *telemetry.Client, featureFlags *featureflags.Client, cluster queries.Cluster) (*Cluster, error) {
+	clusterID, endpoint, endpointTLS, secret := cluster.ID, cluster.Endpoint, cluster.EndpointTls, cluster.Token
+	authOrgID := utils.FromPtr(cluster.AuthOrgID)
+
 	scheme := "http"
 	if endpointTLS {
 		scheme = "https"
@@ -150,10 +156,16 @@ func newRemoteCluster(
 	}
 
 	instances := smap.New[*Instance]()
+	connections := newRemoteConnections(tel, featureFlags, clusterID, endpoint, endpointTLS, insecure.NewCredentials())
 	instanceCreation := func(ctx context.Context, item servicediscovery.Instance) (*Instance, error) {
 		// A remote cluster is reached through an endpoint acting as a gRPC proxy,
 		// which handles auth and routing for us.
-		return newInstance(ctx, tel, remoteInstanceAuthorization(secret, endpointTLS, item), clusterID, item, endpoint, endpointTLS, insecure.NewCredentials())
+		client, err := connections.client(ctx, remoteInstanceAuthorization(secret, endpointTLS, item))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create cluster instance client: %w", err)
+		}
+
+		return newInstance(ctx, clusterID, item, client)
 	}
 
 	storeDiscovery := servicediscovery.NewRemote(httpClient)
@@ -161,13 +173,14 @@ func newRemoteCluster(
 
 	c := NewCluster(
 		clusterID,
-		sandboxDomain,
+		cluster.SandboxProxyDomain,
 		authOrgID,
 		instances,
 		synchronization.NewSynchronize("cluster-instances", "Cluster instances", store),
 		newRemoteClusterResourceProvider(clusterID, instances, httpClient),
 	)
 	c.edgeToken, c.endpoint, c.endpointTLS = secret, endpoint, endpointTLS
+	c.connections = connections
 
 	return c, nil
 }
@@ -212,6 +225,15 @@ func (c *Cluster) Close(ctx context.Context) error {
 
 	// Wait for all instances to be closed
 	wg.Wait()
+
+	if c.connections != nil {
+		if closeErr := c.connections.Close(); closeErr != nil {
+			logger.L().Error(ctx, "Failed to close remote cluster connections during cluster closing",
+				zap.Error(closeErr),
+				logger.WithClusterID(c.ID),
+			)
+		}
+	}
 
 	return nil
 }

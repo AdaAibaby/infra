@@ -597,6 +597,22 @@ var (
 	// future retirements.
 	EgressRetirementTimeoutMsFlag = NewIntFlag("egress-retirement-timeout-ms", 60000)
 
+	// RemoteClusterInstancesPerConnectionFlag caps how many of a remote
+	// cluster's instances the api places on one shared gRPC connection to the
+	// cluster's edge; the pool opens another connection once every connection
+	// is full. An AWS ALB serves at most 128 concurrent streams per HTTP/2
+	// connection and a sync round calls every instance at once, so the
+	// fallback keeps half of each connection's streams for sandbox calls.
+	// Evaluated against the cluster's context as each instance joins; values
+	// below one count as one.
+	RemoteClusterInstancesPerConnectionFlag = NewIntFlag("remote-cluster-instances-per-connection", 64)
+
+	// RemoteClusterMinConnectionsFlag is the fewest shared gRPC connections the
+	// api keeps to a remote cluster's edge, however few instances it has.
+	// Evaluated against the cluster's context as each instance joins; values
+	// below one count as one.
+	RemoteClusterMinConnectionsFlag = NewIntFlag("remote-cluster-min-connections", 4)
+
 	MaxSandboxesPerNode      = NewIntFlag("max-sandboxes-per-node", 200)
 	APIIdempotencyRoutes     = NewJSONFlag("api-idempotency-routes", ldvalue.Null())
 	APIIdempotencyTTLSeconds = NewIntFlag("api-idempotency-ttl-seconds", 86400)

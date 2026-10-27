@@ -52,7 +52,7 @@ func (n *Node) StatusInfo() StatusInfo {
 
 	status := n.status.Status
 	if status == api.NodeStatusReady {
-		switch n.client.Connection.GetState() {
+		switch n.client.State() {
 		case connectivity.Shutdown:
 			status = api.NodeStatusUnhealthy
 		case connectivity.TransientFailure, connectivity.Connecting:

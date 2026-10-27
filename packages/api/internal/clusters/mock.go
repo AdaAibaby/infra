@@ -2,6 +2,7 @@ package clusters
 
 import (
 	"github.com/google/uuid"
+	"google.golang.org/grpc"
 
 	"github.com/e2b-dev/infra/packages/shared/pkg/smap"
 )
@@ -26,4 +27,11 @@ func NewTestCluster(id uuid.UUID, sandboxDomain *string) *Cluster {
 		ID:            id,
 		SandboxDomain: sandboxDomain,
 	}
+}
+
+// NewTestSharedGRPCClient builds a client that issues its calls on conn the
+// way a remote cluster's instances do, for tests: closing it retires the
+// client and leaves conn open.
+func NewTestSharedGRPCClient(conn *grpc.ClientConn) *GRPCClient {
+	return newSharedGRPCClient(conn, "test", func() {})
 }
