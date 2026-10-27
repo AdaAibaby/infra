@@ -1523,6 +1523,7 @@ components:
         - maxFreeDiskSizeMb
         - apiTeamRpsList
         - apiTeamRpsDelete
+        - maxSecrets
       properties:
         maxLengthHours:
           type: integer
@@ -1568,6 +1569,10 @@ components:
           type: integer
           format: int64
           description: Requests per second the team may make to delete endpoints
+        maxSecrets:
+          type: integer
+          format: int64
+          description: Maximum number of secrets the team may store
 
     TeamLimitsResponse:
       required:
