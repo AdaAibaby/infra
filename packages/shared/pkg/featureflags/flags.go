@@ -648,7 +648,15 @@ var (
 	// one-node deployment turns a create sent right after a kill into a
 	// failure. The fallback reads CREATE_MEMORY_REFUSAL so a deployment
 	// without LaunchDarkly can turn it on.
-	CreateMemoryRefusalFlag       = NewBoolFlag("create-memory-refusal", envBoolOr("CREATE_MEMORY_REFUSAL", false))
+	CreateMemoryRefusalFlag = NewBoolFlag("create-memory-refusal", envBoolOr("CREATE_MEMORY_REFUSAL", false))
+	// CreateHugePageAdmissionFlag refuses a hugepage create or resume before
+	// it starts when the node cannot allocate the guest's memory in hugepages,
+	// less what the starts already admitted may still take. Off (default), the
+	// start goes ahead, and a guest that cannot fault in its pages fails its
+	// start or crashes a neighbour mid-run. The fallback reads
+	// CREATE_HUGEPAGE_ADMISSION so a deployment without LaunchDarkly can turn
+	// it on.
+	CreateHugePageAdmissionFlag   = NewBoolFlag("create-hugepage-admission", envBoolOr("CREATE_HUGEPAGE_ADMISSION", false))
 	MaxCacheWriterConcurrencyFlag = NewIntFlag("max-cache-writer-concurrency", 10)
 
 	// BuildCacheMaxUsagePercentage the maximum percentage of the cache disk storage

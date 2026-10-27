@@ -304,6 +304,12 @@ func (s *Server) Create(ctx context.Context, req *orchestrator.SandboxCreateRequ
 	}
 	defer s.startingSandboxes.Release(1)
 
+	releaseHugePages, err := s.admitHugePages(ctx, req.GetSandbox())
+	if err != nil {
+		return nil, err
+	}
+	defer releaseHugePages()
+
 	// Pinned: eviction Closes a template, which deletes its snapfile/metafile
 	// from disk, so a template backing a running sandbox must not be evictable.
 	// The pin is taken atomically with the lookup — taking it afterwards can

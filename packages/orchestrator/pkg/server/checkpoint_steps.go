@@ -45,6 +45,9 @@ func (r serverResumeFreshSteps) resume(ctx context.Context, template sbxtemplate
 	// the API, routing catalog, and analytics) but with a fresh LifecycleID
 	// so the old sandbox's cleanup goroutine won't
 	// accidentally evict the resumed sandbox from the map.
+	releaseHugePages := r.s.holdHugePages(ctx, sbx.Config)
+	defer releaseHugePages()
+
 	return r.s.sandboxFactory.ResumeSandbox(
 		ctx,
 		template,

@@ -745,6 +745,10 @@ const (
 	OrchestratorMemoryAllocatedGaugeName GaugeIntType = "orchestrator.sandbox.memory.allocated"
 	OrchestratorDiskAllocatedGaugeName   GaugeIntType = "orchestrator.sandbox.disk.allocated"
 
+	// OrchestratorHugePagesFreeGaugeName is the host pool ceiling less used and
+	// reserved pages, before the admission subtracts its pending starts.
+	OrchestratorHugePagesFreeGaugeName GaugeIntType = "orchestrator.hugepages.free"
+
 	// Sandbox metrics
 	SandboxRamUsedGaugeName  GaugeIntType = "e2b.sandbox.ram.used"
 	SandboxRamTotalGaugeName GaugeIntType = "e2b.sandbox.ram.total"
@@ -1037,6 +1041,7 @@ var gaugeIntDesc = map[GaugeIntType]string{
 	OrchestratorCpuAllocatedGaugeName:    "Total vCPUs allocated to running sandboxes on the orchestrator node.",
 	OrchestratorMemoryAllocatedGaugeName: "Total memory allocated to running sandboxes on the orchestrator node.",
 	OrchestratorDiskAllocatedGaugeName:   "Total disk space allocated to running sandboxes on the orchestrator node.",
+	OrchestratorHugePagesFreeGaugeName:   "Hugepages the orchestrator node can still allocate: the pool ceiling less used and reserved pages.",
 	SandboxRamUsedGaugeName:              "Amount of RAM used by the sandbox.",
 	SandboxRamTotalGaugeName:             "Amount of RAM available to the sandbox.",
 	SandboxRamCacheGaugeName:             "Amount of RAM used by the page cache in the sandbox.",
@@ -1077,6 +1082,7 @@ var gaugeIntUnits = map[GaugeIntType]string{
 	OrchestratorCpuAllocatedGaugeName:    "{count}",
 	OrchestratorMemoryAllocatedGaugeName: "{By}",
 	OrchestratorDiskAllocatedGaugeName:   "{By}",
+	OrchestratorHugePagesFreeGaugeName:   "{page}",
 	SandboxRamUsedGaugeName:              "{By}",
 	SandboxRamTotalGaugeName:             "{By}",
 	SandboxRamCacheGaugeName:             "{By}",

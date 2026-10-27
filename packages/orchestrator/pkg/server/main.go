@@ -16,6 +16,7 @@ import (
 
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/cfg"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/events"
+	"github.com/e2b-dev/infra/packages/orchestrator/pkg/metrics"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/nbd"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network"
@@ -83,6 +84,9 @@ type Server struct {
 	// disk admission sees it (pause_disk_admission.go).
 	buildDisk *buildDisk
 
+	// hugePages is nil when the node's host metrics are not wired in.
+	hugePages *hugePageAdmission
+
 	sandboxCreateDuration     metric.Int64Histogram
 	startGateWaitDuration     metric.Int64Histogram
 	sandboxExecutionDuration  metric.Int64Histogram
@@ -134,6 +138,8 @@ type ServiceConfig struct {
 	// TemplateStorage says where snapshots are uploaded; a directory on the
 	// build filesystem means an upload writes a second copy there.
 	TemplateStorage storage.Spec
+	// HostMetrics reads the node's hugepage pool for the create admission.
+	HostMetrics *metrics.HostMetrics
 }
 
 func New(ctx context.Context, cfg ServiceConfig) (*Server, error) {
@@ -166,6 +172,9 @@ func New(ctx context.Context, cfg ServiceConfig) (*Server, error) {
 		detachedCheckpoints: map[string]*detachedCheckpoint{},
 
 		buildDisk: newBuildDisk(cfg.Config.DefaultCacheDir, cfg.TemplateStorage),
+	}
+	if cfg.HostMetrics != nil {
+		server.hugePages = &hugePageAdmission{read: cfg.HostMetrics.GetMemoryMetrics}
 	}
 	server.shutdownCtx, server.shutdown = context.WithCancel(context.Background())
 	server.updateMaxSandboxesLimit(ctx)
@@ -347,6 +356,26 @@ func New(ctx context.Context, cfg ServiceConfig) (*Server, error) {
 		}, cpuAllocatedGauge, memoryAllocatedGauge, diskAllocatedGauge)
 	if err != nil {
 		return nil, fmt.Errorf("failed to register orchestrator sandbox resource gauges: %w", err)
+	}
+
+	if server.hugePages != nil {
+		hugePagesFreeGauge, err := telemetry.GetGaugeInt(meter, telemetry.OrchestratorHugePagesFreeGaugeName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create free hugepages gauge: %w", err)
+		}
+
+		_, err = meter.RegisterCallback(func(ctx context.Context, obs metric.Observer) error {
+			if memory, err := server.hugePages.read(ctx); err == nil {
+				if free, ok := freeHugePages(memory); ok {
+					obs.ObserveInt64(hugePagesFreeGauge, int64(free))
+				}
+			}
+
+			return nil
+		}, hugePagesFreeGauge)
+		if err != nil {
+			return nil, fmt.Errorf("failed to register free hugepages gauge: %w", err)
+		}
 	}
 
 	go server.refreshStartingSandboxesLimit(ctx)

@@ -1040,6 +1040,7 @@ func run(config cfg.Config, opts Options) (success bool) {
 		SbxEventsService: eventsService,
 		PeerRegistry:     peerRegistry,
 		Uploads:          uploads,
+		HostMetrics:      hostMetrics,
 	})
 	if err != nil {
 		logger.L().Fatal(ctx, "failed to create orchestrator server", zap.Error(err))

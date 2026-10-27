@@ -143,12 +143,18 @@ type harvestUpload interface {
 // orchestration itself stays agnostic of them.
 type factoryResumer struct {
 	factory *sandbox.Factory
+	// hold counts the throwaway's hugepages toward the create admission; nil holds nothing.
+	hold func(context.Context, *sandbox.Config) func()
 }
 
 func (r factoryResumer) ResumeForHarvest(ctx context.Context, t sbxtemplate.Template, config *sandbox.Config, runtime sandboxtypes.RuntimeMetadata, startedAt, endAt time.Time, envdVersion string) (harvestInstance, error) {
 	// Network-isolated, unregistered and left frozen; the set is asserted in package
 	// sandbox.
 	opts := append(sandbox.ThrowawayResumeOptions(), sandbox.WithInheritedEnvdVersion(envdVersion))
+	if r.hold != nil {
+		releaseHugePages := r.hold(ctx, config)
+		defer releaseHugePages()
+	}
 	sbx, err := r.factory.ResumeSandbox(
 		ctx,
 		t,
@@ -187,7 +193,7 @@ type prefetchHarvester struct {
 
 func (s *Server) newPrefetchHarvester() *prefetchHarvester {
 	return &prefetchHarvester{
-		resumer:   factoryResumer{factory: s.sandboxFactory},
+		resumer:   factoryResumer{factory: s.sandboxFactory, hold: s.holdHugePages},
 		templates: s.templateCache,
 		uploadMetadata: func(ctx context.Context, meta metadata.Template, objectMetadata storage.ObjectMetadata) error {
 			return metadata.UploadMetadata(ctx, s.persistence, meta, objectMetadata)
