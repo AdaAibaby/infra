@@ -12,7 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	nomadapi "github.com/hashicorp/nomad/api"
+	"github.com/jackc/pgx/v5"
 	"github.com/redis/go-redis/v9"
+	"github.com/riverqueue/river"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
@@ -25,6 +27,7 @@ import (
 	templatecache "github.com/e2b-dev/infra/packages/api/internal/cache/templates"
 	"github.com/e2b-dev/infra/packages/api/internal/cfg"
 	"github.com/e2b-dev/infra/packages/api/internal/clusters"
+	"github.com/e2b-dev/infra/packages/api/internal/management"
 	"github.com/e2b-dev/infra/packages/api/internal/orchestrator"
 	"github.com/e2b-dev/infra/packages/api/internal/outbox"
 	"github.com/e2b-dev/infra/packages/api/internal/pauselimit"
@@ -228,6 +231,8 @@ type APIStore struct {
 	templateBuildsCache       *templatecache.TemplatesBuildCache
 	snapshotCache             *snapshotcache.SnapshotCache
 	authService               sharedauth.Service
+	managementService         *management.Service
+	riverClient               *river.Client[pgx.Tx] // set by NewOutbox
 	templateSpawnCounter      *utils.TemplateSpawnCounter
 	clickhouseStore           clickhouse.Clickhouse
 	sandboxLogsReader         *sandboxlogs.Reader
@@ -448,6 +453,7 @@ func NewAPIStore(ctx context.Context, tel *telemetry.Client, redisClient redis.U
 		templateBuildsCache:   templateBuildsCache,
 		snapshotCache:         snapshotCache,
 		authService:           authService,
+		managementService:     management.NewService(authDB, sqlcDB, authService, tel.MeterProvider),
 		templateSpawnCounter:  templateSpawnCounter,
 		clickhouseStore:       clickhouseStore,
 		sandboxLogsReader:     sandboxLogsReader,
@@ -483,9 +489,10 @@ func NewAPIStore(ctx context.Context, tel *telemetry.Client, redisClient redis.U
 }
 
 // NewOutbox builds the River client that works the API's outbox jobs on the
-// store's clients. Stop it before Close.
+// store's clients. Project deletion enqueues its teardown through the same
+// client. Stop it before Close.
 func (a *APIStore) NewOutbox(l logger.Logger) (*outbox.River, error) {
-	return outbox.New(outbox.Dependencies{
+	riverOutbox, err := outbox.New(outbox.Dependencies{
 		Pool:      a.sqlcDB.Pool(),
 		Sandboxes: a.orchestrator,
 		Teams:     a.authDB,
@@ -496,6 +503,12 @@ func (a *APIStore) NewOutbox(l logger.Logger) (*outbox.River, error) {
 			BacklogInterval: a.config.OutboxBacklogInterval,
 		},
 	})
+	if err != nil {
+		return nil, err
+	}
+	a.riverClient = riverOutbox.Client()
+
+	return riverOutbox, nil
 }
 
 // Drain stops admitting sandbox work that outlives its request and waits for

@@ -118,6 +118,20 @@ Sandbox creation resolves an absent default to true and honors a saved default
 independently of rollout eligibility. New sandboxes can use an older value while
 delivery or cache refresh is pending.
 
+The API also serves the project upsert, member, limits and delete writes under
+`/unstable/management/projects/{projectID}` (`PUT`, `PUT .../members/{userID}`,
+`PUT .../limits`, `DELETE`). Like the settings route, they accept only service JWTs through
+`AdminJWTAuth`. They are copies of the dashboard-api `/v1/management` routes with the same
+operation IDs, bodies, status codes and semantics (see Dashboard API below), and both services
+serve them until callers move. The API copies differ in three ways. There is no block route. The
+project delete enqueues `teardown_team_resources` with `InsertTx` on the outbox's own River client,
+in the deletion transaction. The deleted-project middleware, which runs after authentication,
+guards every non-GET route under `/unstable/management/` that names `{projectID}`, including
+settings, and nothing under `/admin/`; the DELETE is exempt so a retry still reaches it. Accepted
+limits deliveries record `dashboard-api.management.apply_lag` and
+`dashboard-api.management.origin_unknown` under the same names as dashboard-api, so the existing
+alert sums both services.
+
 - **Resources**: sandboxes (create/list/kill/pause/resume/connect/timeout/metrics/logs),
   templates and builds, teams, volumes, API keys, secrets, sandbox events and webhooks,
   admin operations.
@@ -250,12 +264,12 @@ delivery or cache refresh is pending.
 - **Extra listeners**: internal gRPC :5009 and edge gRPC :5109 expose `ResumeSandbox` so
   client-proxy can wake paused sandboxes on incoming traffic.
 - **Outbox** (`internal/outbox`): a River client on the shared database's `river` schema
-  works jobs that other services enqueue there for work needing the orchestrator
-  connections. Its job arguments live in `packages/db/pkg/outbox`. The one kind today,
-  `teardown_team_resources`, stops a deleted team's workloads; dashboard-api enqueues it when
-  it deletes a project. A guard runs first on every
-  attempt: a team that exists and is not blocked fails the attempt, and the job retries rather
-  than kill a live team's sandboxes; a missing team row does not stop it. Then
+  works jobs that need the orchestrator connections. Its job arguments live in
+  `packages/db/pkg/outbox`. The one kind today, `teardown_team_resources`, stops a deleted
+  team's workloads; the API's own project deletion and dashboard-api's both enqueue it. A
+  guard runs first on every attempt: a team that exists and is not blocked fails the attempt,
+  and the job retries rather than kill a live team's sandboxes; a missing team row does not
+  stop it. Then
   `kill_sandboxes` kills the team's running sandboxes and succeeds only once the sandbox store
   holds none of them in any state, so a sandbox still pausing or being killed makes the job
   retry. A sandbox that is not running cannot be paused, so no new snapshot of the team

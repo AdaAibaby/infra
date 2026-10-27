@@ -231,6 +231,10 @@ func NewGinServer(ctx context.Context, config cfg.Config, tel *telemetry.Client,
 	}
 	r.Use(rateLimitMiddleware)
 
+	// A deleted project keeps its team row, so management writes naming it are
+	// refused before they reach a handler.
+	r.Use(customMiddleware.RefuseDeletedProject(apiStore.IsProjectDeleted)) //nolint:contextcheck // Gin middleware gets context from the request.
+
 	// Deny blocked teams on every mutating route unless allowlisted in
 	// EnforceBlockedTeam. Must run after auth (which populates team info on
 	// the gin context) and before the handlers.

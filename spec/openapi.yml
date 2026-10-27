@@ -3690,6 +3690,222 @@ components:
             accept traffic without a traffic access token. Omission uses the
             public default. Existing sandboxes, resumes and forks keep their settings.
 
+    ManagementProjectUpsertRequest:
+      type: object
+      description: >-
+        The properties of a project this side stores. Name, slug and email are
+        synchronized on every push. The optional cluster assignment is preserved
+        when omitted.
+
+
+        A project's tier is not among them. It is assigned once, at creation,
+        from this side's own default, and no push moves it — limits arrive
+        separately and in full through managementUpsertProjectLimits, and none is
+        resolved from the tier.
+      required: [name, slug, email]
+      properties:
+        cluster_id:
+          type: string
+          format: uuid
+          description: Cluster assignment to synchronize. Omission preserves the existing assignment.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 255
+        slug:
+          type: string
+          minLength: 1
+          maxLength: 63
+          description: >-
+            Changing it renames the project, and its template names follow:
+            each name held under an earlier slug is also given under the new
+            one, and the old names keep working. A name the new slug already
+            holds is left as it is. A slug already held on this control plane
+            is a 409, on a rename as much as on a create.
+        email:
+          type: string
+          minLength: 1
+          maxLength: 255
+          description: Contact address recorded on the project.
+
+    ManagementProject:
+      allOf:
+        - $ref: "#/components/schemas/ManagementProjectUpsertRequest"
+        - type: object
+          required: [id]
+          properties:
+            id:
+              type: string
+              format: uuid
+
+    ManagementProjectMemberIdentity:
+      type: object
+      required: [issuer, subject]
+      properties:
+        issuer:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        subject:
+          type: string
+          minLength: 1
+          maxLength: 2048
+
+    ManagementProjectMemberApplyRequest:
+      type: object
+      required: [revision, present]
+      properties:
+        revision:
+          type: integer
+          format: int64
+          minimum: 1
+        present:
+          type: boolean
+        is_default:
+          type: boolean
+          default: false
+          description: Whether this membership is the user's default team. Omitted requests from older sources remain non-default.
+        identities:
+          type: array
+          maxItems: 16
+          items:
+            $ref: "#/components/schemas/ManagementProjectMemberIdentity"
+
+    ManagementDecidedAt:
+      type: string
+      format: date-time
+      description: >-
+        When the caller decided this revision, in RFC 3339. Stored with the
+        revision and used to measure how long the decision took to apply here.
+        Omit it when the caller does not know; the delivery is then counted as
+        origin unknown rather than as zero lag.
+
+    ManagementProjectLimits:
+      type: object
+      description: >-
+        A project's effective limits, already resolved by the caller. Every
+        field is absolute: this side stores what it is given and performs no
+        arithmetic of its own.
+
+
+        The minimums below are the contract for what a limit may be, at least
+        as strict as the CHECK constraints on default_limits. project_limits
+        stores the same values under looser constraints on purpose — it is a
+        push target, and a floor that only rejects the impossible keeps a
+        future decision about what is allowed a change to this schema rather
+        than a migration.
+
+
+        `max_disk_size_mb` and `max_free_disk_size_mb` are one ceiling under two
+        names, and either name alone carries it. A caller that sends both must
+        send them equal; a caller that sends neither is refused. Sending both is
+        what a caller does while receivers older than the second name are still
+        running.
+      required:
+        - revision
+        - concurrent_sandboxes
+        - max_sandbox_length_hours
+        - max_vcpu
+        - max_ram_mb
+        - disk_mb
+        - concurrent_template_builds
+        - events_ttl_days
+        - default_free_disk_size_mb
+        - api_team_rps_list
+        - api_team_rps_delete
+        - max_secrets
+      anyOf:
+        - required: [max_free_disk_size_mb]
+        - required: [max_disk_size_mb]
+      properties:
+        revision:
+          type: integer
+          format: int64
+          minimum: 1
+          description: >-
+            The caller's version of this answer, raised whenever the limits it
+            resolved for the project change. Delivery is over a network, so two
+            pushes can be in flight at once and arrive in either order: this
+            side stores the revision it accepted and drops a delivery at or
+            below it, which is what keeps a delayed retry from putting the
+            project back on limits it has already left.
+
+
+            Comparable only against earlier revisions for the same project.
+        concurrent_sandboxes:
+          type: integer
+          format: int32
+          minimum: 1
+        max_sandbox_length_hours:
+          type: integer
+          format: int32
+          minimum: 1
+        max_vcpu:
+          type: integer
+          format: int32
+          minimum: 1
+        max_ram_mb:
+          type: integer
+          format: int64
+          minimum: 1
+        disk_mb:
+          type: integer
+          format: int64
+          minimum: 1
+        concurrent_template_builds:
+          type: integer
+          format: int32
+          minimum: 1
+        events_ttl_days:
+          type: integer
+          format: int32
+          minimum: 1
+        default_free_disk_size_mb:
+          type: integer
+          format: int64
+          minimum: 0
+          description: >-
+            The default free-space growth target when a template build request
+            omits one. May sit anywhere at or below the maximum free-space
+            growth target, and usually sits well below it; a delivery whose
+            default exceeds the maximum is rejected.
+        max_free_disk_size_mb:
+          type: integer
+          format: int64
+          minimum: 1
+          description: >-
+            The most a template build may request as its free-space growth
+            target.
+        max_disk_size_mb:
+          type: integer
+          format: int64
+          minimum: 1
+          description: >-
+            The same ceiling as max_free_disk_size_mb, under the name it was
+            first published with. Kept until every deployed sender and receiver
+            speaks the other name.
+        api_team_rps_list:
+          type: integer
+          format: int64
+          minimum: 0
+          description: >-
+            Requests per second a project may make to each list endpoint. Zero
+            disables the limit.
+        api_team_rps_delete:
+          type: integer
+          format: int64
+          minimum: 0
+          description: >-
+            Requests per second a project may make to each delete endpoint. Zero
+            disables the limit.
+        max_secrets:
+          type: integer
+          format: int32
+          minimum: 1
+          description: Live secrets the project may hold.
+        decided_at:
+          $ref: "#/components/schemas/ManagementDecidedAt"
+
 tags:
   - name: templates
   - name: sandboxes
@@ -6117,6 +6333,154 @@ paths:
           $ref: "#/components/responses/404"
         "429":
           $ref: "#/components/responses/429"
+        "500":
+          $ref: "#/components/responses/500"
+
+  /unstable/management/projects/{projectID}:
+    parameters:
+      - name: projectID
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: managementUpsertProject
+      summary: Create or reconcile a project.
+      tags: [admin]
+      security:
+        - AdminJWTAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManagementProjectUpsertRequest"
+      responses:
+        "200":
+          description: Existing project reconciled.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagementProject"
+        "201":
+          description: Project created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagementProject"
+        "400":
+          $ref: "#/components/responses/400"
+        "401":
+          $ref: "#/components/responses/401"
+        "404":
+          $ref: "#/components/responses/404"
+        "409":
+          $ref: "#/components/responses/409"
+        "500":
+          $ref: "#/components/responses/500"
+    delete:
+      operationId: managementDeleteProject
+      summary: Soft-delete a project.
+      description: >-
+        Marks the project deleted and blocked, releases its cluster assignment,
+        scrubs its name and email to DELETED and its slug to
+        deleted-<project ID>, which releases the old slug for reuse, deletes
+        its memberships and API keys, soft-deletes its templates and
+        snapshots, and enqueues the teardown of its running sandboxes, all in
+        one transaction. The project row remains. Afterwards the project
+        answers 404 to other management writes. Repeating the call answers
+        204 and repeats every step except the deletion time: it re-blocks and
+        re-scrubs the project, clears a cluster assignment written since,
+        deletes any memberships, keys, templates or snapshots created since,
+        and enqueues the teardown again.
+      tags: [admin]
+      security:
+        - AdminJWTAuth: []
+      responses:
+        "204":
+          description: Project is deleted and its teardown is enqueued.
+        "400":
+          $ref: "#/components/responses/400"
+        "401":
+          $ref: "#/components/responses/401"
+        "404":
+          $ref: "#/components/responses/404"
+        "500":
+          $ref: "#/components/responses/500"
+
+  /unstable/management/projects/{projectID}/members/{userID}:
+    parameters:
+      - name: projectID
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: userID
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: managementApplyProjectMember
+      summary: Apply one versioned project member projection.
+      description: >-
+        Applies the newest desired presence for one project member. An older
+        or duplicate revision is accepted without changing target state.
+      tags: [admin]
+      security:
+        - AdminJWTAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManagementProjectMemberApplyRequest"
+      responses:
+        "204":
+          description: Membership projection is applied or already superseded.
+        "400":
+          $ref: "#/components/responses/400"
+        "401":
+          $ref: "#/components/responses/401"
+        "404":
+          $ref: "#/components/responses/404"
+        "409":
+          $ref: "#/components/responses/409"
+        "500":
+          $ref: "#/components/responses/500"
+
+  /unstable/management/projects/{projectID}/limits:
+    parameters:
+      - name: projectID
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+    put:
+      operationId: managementUpsertProjectLimits
+      summary: Reconcile effective limits for a project.
+      tags: [admin]
+      security:
+        - AdminJWTAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ManagementProjectLimits"
+      responses:
+        "204":
+          description: Effective limits are synchronized.
+        "400":
+          $ref: "#/components/responses/400"
+        "401":
+          $ref: "#/components/responses/401"
+        "404":
+          $ref: "#/components/responses/404"
         "500":
           $ref: "#/components/responses/500"
 

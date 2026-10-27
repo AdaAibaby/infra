@@ -93,6 +93,12 @@ func New(deps Dependencies) (*River, error) {
 	return &River{client: client, backlog: backlog}, nil
 }
 
+// Client enqueues jobs in a caller's transaction, so they run only if it
+// commits.
+func (r *River) Client() *river.Client[pgx.Tx] {
+	return r.client
+}
+
 func (r *River) Start(ctx context.Context) error {
 	if err := r.client.Start(ctx); err != nil {
 		return err
