@@ -52,7 +52,13 @@ WHERE
   e.team_id = $1
   AND e.source = 'template'
 ORDER BY e.created_at ASC
+LIMIT $2::int
 `
+
+type GetTeamTemplatesParams struct {
+	TeamID       uuid.UUID
+	LimitPlusOne int32
+}
 
 type GetTeamTemplatesRow struct {
 	ActiveEnv               ActiveEnv
@@ -68,8 +74,8 @@ type GetTeamTemplatesRow struct {
 	Names                   []string
 }
 
-func (q *Queries) GetTeamTemplates(ctx context.Context, teamID uuid.UUID) ([]GetTeamTemplatesRow, error) {
-	rows, err := q.db.Query(ctx, getTeamTemplates, teamID)
+func (q *Queries) GetTeamTemplates(ctx context.Context, arg GetTeamTemplatesParams) ([]GetTeamTemplatesRow, error) {
+	rows, err := q.db.Query(ctx, getTeamTemplates, arg.TeamID, arg.LimitPlusOne)
 	if err != nil {
 		return nil, err
 	}

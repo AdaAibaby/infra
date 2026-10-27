@@ -1,13 +1,19 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 
 	"github.com/e2b-dev/infra/packages/api/internal/api"
+	"github.com/e2b-dev/infra/packages/db/queries"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
 )
+
+// templatesUnboundedMaxCount caps GET /templates, which returns every template
+// in one response; larger teams must page through GET /v2/templates.
+const templatesUnboundedMaxCount = 5000
 
 // GetTemplates serves to list templates (e.g. in CLI)
 func (a *APIStore) GetTemplates(c *gin.Context, params api.GetTemplatesParams) {
@@ -34,10 +40,20 @@ func (a *APIStore) GetTemplates(c *gin.Context, params api.GetTemplatesParams) {
 		telemetry.WithTeamID(team.ID.String()),
 	)
 
-	envs, err := a.sqlcDB.GetTeamTemplates(ctx, team.ID)
+	envs, err := a.sqlcDB.GetTeamTemplates(ctx, queries.GetTeamTemplatesParams{
+		TeamID:       team.ID,
+		LimitPlusOne: templatesUnboundedMaxCount + 1,
+	})
 	if err != nil {
 		a.sendAPIStoreError(c, http.StatusInternalServerError, "Error when getting templates")
 		telemetry.ReportCriticalError(ctx, "error when getting templates", err)
+
+		return
+	}
+
+	if len(envs) > templatesUnboundedMaxCount {
+		a.sendAPIStoreError(c, http.StatusBadRequest, fmt.Sprintf("Team has more than %d templates; update to the latest E2B SDK or list them with GET /v2/templates", templatesUnboundedMaxCount))
+		telemetry.ReportEvent(ctx, "template list exceeds the unbounded limit")
 
 		return
 	}

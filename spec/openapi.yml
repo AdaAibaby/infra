@@ -5008,7 +5008,7 @@ paths:
     get:
       summary: List templates
       x-api-group: list
-      description: List all templates
+      description: List all templates. Returns 400 when the team has more than 5000 templates; use /v2/templates to page through them.
       deprecated: true
       tags: [templates]
       security:
@@ -5035,6 +5035,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/Template"
+        "400":
+          $ref: "#/components/responses/400"
         "401":
           $ref: "#/components/responses/401"
         "429":

@@ -1,12 +1,14 @@
 package handlers
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	analyticscollector "github.com/e2b-dev/infra/packages/api/internal/analytics_collector"
@@ -59,6 +61,49 @@ func TestTemplateListsAcceptPublicProjectID(t *testing.T) {
 
 					require.Equal(t, tc.wantCode, recorder.Code, recorder.Body.String())
 				})
+			}
+		})
+	}
+}
+
+func TestGetTemplatesRejectsTeamsAboveTheCap(t *testing.T) {
+	t.Parallel()
+
+	for _, tc := range []struct {
+		name      string
+		templates int
+		wantCode  int
+	}{
+		{name: "at the cap", templates: templatesUnboundedMaxCount, wantCode: http.StatusOK},
+		{name: "above the cap", templates: templatesUnboundedMaxCount + 1, wantCode: http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			db := testutils.SetupDatabase(t)
+			teamID := testutils.CreateTestTeam(t, db)
+			require.NoError(t, db.SqlcClient.TestsRawSQL(t.Context(),
+				`INSERT INTO public.envs (id, team_id, public, updated_at, source)
+				SELECT 'template-' || g, $1, false, NOW(), 'template' FROM generate_series(1, $2::int) AS g`,
+				teamID, tc.templates,
+			))
+
+			posthogClient, err := analyticscollector.NewPosthogClient(t.Context(), "")
+			require.NoError(t, err)
+			store := &APIStore{sqlcDB: db.SqlcClient, posthog: posthogClient}
+
+			recorder := httptest.NewRecorder()
+			c, _ := gin.CreateTestContext(recorder)
+			c.Request = httptest.NewRequestWithContext(t.Context(), http.MethodGet, "/templates", nil)
+			auth.SetTeamInfoForTest(t, c, &types.Team{Team: &authqueries.Team{ID: teamID}})
+
+			store.GetTemplates(c, api.GetTemplatesParams{})
+
+			require.Equal(t, tc.wantCode, recorder.Code, recorder.Body.String())
+			if tc.wantCode == http.StatusOK {
+				var templates []api.Template
+				require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &templates))
+				assert.Len(t, templates, tc.templates)
 			}
 		})
 	}

@@ -3917,7 +3917,7 @@ type ClientInterface interface {
 
 	// GetTemplates List templates
 	//
-	// List all templates.
+	// List all templates. Returns 400 when the team has more than 5000 templates; use /v2/templates to page through them.
 	//
 	// Corresponds with GET /templates (the `GetTemplates` operationId).
 	//
@@ -5680,7 +5680,7 @@ func (c *Client) GetTeamsTeamIDMetricsMax(ctx context.Context, teamID TeamID, pa
 
 // GetTemplates List templates
 //
-// List all templates.
+// List all templates. Returns 400 when the team has more than 5000 templates; use /v2/templates to page through them.
 //
 // Corresponds with GET /templates (the `GetTemplates` operationId).
 // Deprecated: this operation has been marked as deprecated upstream, but no `x-deprecated-reason` was set
@@ -12529,7 +12529,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetTemplatesWithResponse List templates
 	//
-	// List all templates.
+	// List all templates. Returns 400 when the team has more than 5000 templates; use /v2/templates to page through them.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -17351,6 +17351,8 @@ type GetTemplatesResponse struct {
 	HTTPResponse *http.Response
 	// JSON200 the response for an HTTP 200 `application/json` response
 	JSON200 *[]Template
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
 	// JSON401 the response for an HTTP 401 `application/json` response
 	JSON401 *N401
 	// JSON429 the response for an HTTP 429 `application/json` response
@@ -17364,6 +17366,11 @@ type GetTemplatesResponse struct {
 // GetJSON200 returns the response for an HTTP 200 `application/json` response
 func (r GetTemplatesResponse) GetJSON200() *[]Template {
 	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r GetTemplatesResponse) GetJSON400() *N400 {
+	return r.JSON400
 }
 
 // GetJSON401 returns the response for an HTTP 401 `application/json` response
@@ -21964,7 +21971,7 @@ func (c *ClientWithResponses) GetTeamsTeamIDMetricsMaxWithResponse(ctx context.C
 
 // GetTemplatesWithResponse List templates
 //
-// List all templates.
+// List all templates. Returns 400 when the team has more than 5000 templates; use /v2/templates to page through them.
 //
 // Returns a wrapper object for the known response body format(s).
 //
@@ -26650,6 +26657,13 @@ func ParseGetTemplatesResponse(rsp *http.Response) (*GetTemplatesResponse, error
 			return nil, err
 		}
 		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
 		var dest N401
