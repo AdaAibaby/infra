@@ -321,6 +321,12 @@ func (o *Orchestrator) CreateSandbox(
 				Err:       fmt.Errorf("team '%s' has reached the maximum number of instances (%d)", team.ID, totalConcurrentInstances),
 				Retryable: apierrors.CanRetry,
 			}
+		case errors.Is(err, sandbox.ErrSandboxKilled):
+			return sandbox.Sandbox{}, &api.APIError{
+				Code:      http.StatusNotFound,
+				ClientMsg: fmt.Sprintf("Sandbox '%s' was deleted", sandboxID),
+				Err:       fmt.Errorf("resume of '%s' refused: %w", sandboxID, err),
+			}
 		default:
 			logger.L().Error(ctx, "failed to reserve sandbox for team", logger.WithSandboxID(sandboxID), zap.Error(err))
 

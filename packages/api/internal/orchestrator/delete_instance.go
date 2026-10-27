@@ -15,6 +15,7 @@ import (
 
 	"github.com/e2b-dev/infra/packages/api/internal/orchestrator/nodemanager"
 	"github.com/e2b-dev/infra/packages/api/internal/sandbox"
+	redisreservations "github.com/e2b-dev/infra/packages/api/internal/sandbox/reservations/redis"
 	"github.com/e2b-dev/infra/packages/db/pkg/dberrors"
 	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/orchestrator"
@@ -28,6 +29,54 @@ import (
 const refusalRetryAfter = 10 * time.Second
 
 const pauseTimeout = 80 * time.Second
+
+// killClaimAttempts bounds how many resumes a kill waits out before giving up.
+const killClaimAttempts = 3
+
+// SnapshotDeleteTimeout keeps a snapshot delete inside the kill claim that
+// holds resumes back while it runs.
+const SnapshotDeleteTimeout = redisreservations.KillClaimTTL - 5*time.Second
+
+// ErrSandboxStillResuming means resumes kept winning against a kill.
+var ErrSandboxStillResuming = errors.New("sandbox is still resuming")
+
+// KillAndClaim kills the running sandbox, if any, and claims its ID so that no
+// resume can start while the caller deletes the snapshot. A resume already in
+// flight is waited for, and the sandbox it started is killed too.
+func (o *Orchestrator) KillAndClaim(ctx context.Context, teamID uuid.UUID, sandboxID string, opts sandbox.RemoveOpts) (claimID string, killed bool, err error) {
+	for attempt := 1; ; attempt++ {
+		err := o.RemoveSandbox(ctx, teamID, sandboxID, opts)
+		switch {
+		case err == nil:
+			killed = true
+		case errors.Is(err, ErrSandboxNotFound):
+		default:
+			return "", killed, err
+		}
+
+		claimID, claimed, err := o.sandboxStore.ClaimKill(ctx, teamID, sandboxID)
+		if err != nil {
+			return "", killed, fmt.Errorf("failed to claim sandbox for kill: %w", err)
+		}
+		if claimed {
+			return claimID, killed, nil
+		}
+		if attempt == killClaimAttempts {
+			return "", killed, ErrSandboxStillResuming
+		}
+
+		if err := o.sandboxStore.WaitForStart(ctx, teamID, sandboxID); err != nil {
+			return "", killed, fmt.Errorf("%w: %w", ErrSandboxStillResuming, err)
+		}
+	}
+}
+
+// ReleaseKillClaim is best-effort; the claim also expires on its own.
+func (o *Orchestrator) ReleaseKillClaim(ctx context.Context, teamID uuid.UUID, sandboxID, claimID string) {
+	if err := o.sandboxStore.ReleaseKillClaim(ctx, teamID, sandboxID, claimID); err != nil {
+		logger.L().Error(ctx, "failed to release paused-kill claim", zap.Error(err), logger.WithSandboxID(sandboxID))
+	}
+}
 
 func (o *Orchestrator) RemoveSandbox(ctx context.Context, teamID uuid.UUID, sandboxID string, opts sandbox.RemoveOpts) error {
 	ctx, span := tracer.Start(ctx, "remove-sandbox")

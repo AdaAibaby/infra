@@ -71,6 +71,9 @@ func (PauseQueueExhaustedError) Error() string {
 // RestoreRunning.
 var ErrExecutionMismatch = errors.New("sandbox execution no longer matches")
 
+// ErrSandboxKilled reports that a delete claimed the sandbox ID first.
+var ErrSandboxKilled = errors.New("sandbox was concurrently killed")
+
 // ErrRestoreConflict reports that the record was rewritten between the
 // restore's read and its compare-and-set; nothing was written.
 var ErrRestoreConflict = errors.New("sandbox changed during restoration")

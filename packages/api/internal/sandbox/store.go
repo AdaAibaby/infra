@@ -174,3 +174,15 @@ func (s *Store) Reserve(ctx context.Context, teamID uuid.UUID, sandboxID string,
 
 	return finishStart, waitForStart, nil
 }
+
+func (s *Store) ClaimKill(ctx context.Context, teamID uuid.UUID, sandboxID string) (string, bool, error) {
+	return s.reservations.ClaimKill(ctx, teamID, sandboxID)
+}
+
+func (s *Store) ReleaseKillClaim(ctx context.Context, teamID uuid.UUID, sandboxID, claimID string) error {
+	return s.reservations.ReleaseKillClaim(ctx, teamID, sandboxID, claimID)
+}
+
+func (s *Store) WaitForStart(ctx context.Context, teamID uuid.UUID, sandboxID string) error {
+	return s.reservations.WaitForStart(ctx, teamID, sandboxID)
+}

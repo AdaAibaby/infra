@@ -108,6 +108,18 @@ func (n *NoOpReservationStorage) Release(_ context.Context, _ uuid.UUID, _ strin
 	return nil
 }
 
+func (n *NoOpReservationStorage) ClaimKill(_ context.Context, _ uuid.UUID, _ string) (string, bool, error) {
+	return "", true, nil
+}
+
+func (n *NoOpReservationStorage) ReleaseKillClaim(_ context.Context, _ uuid.UUID, _, _ string) error {
+	return nil
+}
+
+func (n *NoOpReservationStorage) WaitForStart(_ context.Context, _ uuid.UUID, _ string) error {
+	return nil
+}
+
 // MockStorage wraps real storage and can inject errors
 type MockStorage struct {
 	Storage
