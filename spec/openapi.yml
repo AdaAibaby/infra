@@ -3906,7 +3906,7 @@ paths:
     get:
       summary: List running sandboxes
       x-api-group: list
-      description: List all running sandboxes. Use GET /v2/sandboxes instead.
+      description: List all running sandboxes. Returns 400 when more than 5000 running sandboxes match; use GET /v2/sandboxes to page through them.
       deprecated: true
       tags: [sandboxes]
       security:

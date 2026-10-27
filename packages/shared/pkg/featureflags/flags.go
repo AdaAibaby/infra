@@ -462,6 +462,11 @@ var (
 	// team above it gets a 400 pointing at GET /v2/templates. Evaluated per team.
 	UnpaginatedTemplateListCapFlag = NewBoolFlag("unpaginated-template-list-cap", true)
 
+	// UnpaginatedSandboxListCapFlag caps GET /sandboxes at 5000 running
+	// sandboxes; a team above it gets a 400 pointing at GET /v2/sandboxes.
+	// Evaluated per team.
+	UnpaginatedSandboxListCapFlag = NewBoolFlag("unpaginated-sandbox-list-cap", true)
+
 	NetworkTransformRulesFlag = NewBoolFlag("network-transform-rules", env.IsDevelopment())
 	MaxNetworkRuleDomains     = NewIntFlag("max-network-rule-domains", 10)
 

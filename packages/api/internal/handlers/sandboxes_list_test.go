@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -325,6 +326,50 @@ func TestInstanceInfoToPaginatedSandboxes_PaginationTimestampPrecision(t *testin
 		"pagination key must be microsecond-aligned")
 	assert.Zero(t, sandboxes[0].PaginationTimestamp.Nanosecond()%1000,
 		"pagination key should have no sub-microsecond bits")
+}
+
+// GET /sandboxes refuses a list above the cap, counting the sandboxes the
+// metadata filter leaves, since those are what the response would carry.
+func TestGetRunningSandboxes_Cap(t *testing.T) {
+	t.Parallel()
+
+	runningSandboxes := func(n int) []sandbox.Sandbox {
+		sandboxes := make([]sandbox.Sandbox, n)
+		for i := range sandboxes {
+			sandboxes[i] = sandbox.Sandbox{SandboxID: fmt.Sprintf("sbx-%d", i), State: sandbox.StateRunning}
+		}
+		sandboxes[0].Metadata = map[string]string{"app": "one"}
+
+		return sandboxes
+	}
+
+	for _, tc := range []struct {
+		name      string
+		capped    bool
+		sandboxes int
+		metadata  *map[string]string
+		wantCount int
+		wantErr   bool
+	}{
+		{name: "at the cap", capped: true, sandboxes: sandboxesUnboundedMaxCount, wantCount: sandboxesUnboundedMaxCount},
+		{name: "above the cap", capped: true, sandboxes: sandboxesUnboundedMaxCount + 1, wantErr: true},
+		{name: "above the cap before the metadata filter", capped: true, sandboxes: sandboxesUnboundedMaxCount + 1, metadata: &map[string]string{"app": "one"}, wantCount: 1},
+		{name: "cap off", sandboxes: sandboxesUnboundedMaxCount + 1, wantCount: sandboxesUnboundedMaxCount + 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			listed, err := getRunningSandboxes(runningSandboxes(tc.sandboxes), tc.metadata, tc.capped)
+			if tc.wantErr {
+				require.ErrorIs(t, err, errTooManyRunningSandboxes)
+
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Len(t, listed, tc.wantCount)
+		})
+	}
 }
 
 // TestGetPausedSandboxes_ReadsFromTheReadClient checks that the paused page is read

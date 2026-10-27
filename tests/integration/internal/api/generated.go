@@ -3612,7 +3612,7 @@ type ClientInterface interface {
 
 	// GetSandboxes List running sandboxes
 	//
-	// List all running sandboxes. Use GET /v2/sandboxes instead.
+	// List all running sandboxes. Returns 400 when more than 5000 running sandboxes match; use GET /v2/sandboxes to page through them.
 	//
 	// Corresponds with GET /sandboxes (the `GetSandboxes` operationId).
 	//
@@ -5033,7 +5033,7 @@ func (c *Client) PostNodesNodeID(ctx context.Context, nodeID NodeID, body PostNo
 
 // GetSandboxes List running sandboxes
 //
-// List all running sandboxes. Use GET /v2/sandboxes instead.
+// List all running sandboxes. Returns 400 when more than 5000 running sandboxes match; use GET /v2/sandboxes to page through them.
 //
 // Corresponds with GET /sandboxes (the `GetSandboxes` operationId).
 // Deprecated: this operation has been marked as deprecated upstream, but no `x-deprecated-reason` was set
@@ -12198,7 +12198,7 @@ type ClientWithResponsesInterface interface {
 
 	// GetSandboxesWithResponse List running sandboxes
 	//
-	// List all running sandboxes. Use GET /v2/sandboxes instead.
+	// List all running sandboxes. Returns 400 when more than 5000 running sandboxes match; use GET /v2/sandboxes to page through them.
 	//
 	// Returns a wrapper object for the known response body format(s).
 	//
@@ -21440,7 +21440,7 @@ func (c *ClientWithResponses) PostNodesNodeIDWithResponse(ctx context.Context, n
 
 // GetSandboxesWithResponse List running sandboxes
 //
-// List all running sandboxes. Use GET /v2/sandboxes instead.
+// List all running sandboxes. Returns 400 when more than 5000 running sandboxes match; use GET /v2/sandboxes to page through them.
 //
 // Returns a wrapper object for the known response body format(s).
 //

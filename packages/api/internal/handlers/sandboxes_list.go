@@ -23,6 +23,7 @@ import (
 	dbtypes "github.com/e2b-dev/infra/packages/db/pkg/types"
 	"github.com/e2b-dev/infra/packages/db/queries"
 	"github.com/e2b-dev/infra/packages/shared/pkg/consts"
+	"github.com/e2b-dev/infra/packages/shared/pkg/featureflags"
 	"github.com/e2b-dev/infra/packages/shared/pkg/id"
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 	"github.com/e2b-dev/infra/packages/shared/pkg/telemetry"
@@ -32,6 +33,10 @@ import (
 const (
 	sandboxesDefaultLimit = int32(100)
 	sandboxesMaxLimit     = int32(100)
+
+	// sandboxesUnboundedMaxCount caps GET /sandboxes, which returns every running
+	// sandbox in one response; larger teams must page through GET /v2/sandboxes.
+	sandboxesUnboundedMaxCount = 5000
 
 	// headerTotalRunning is documented as present only when running sandboxes were
 	// requested, so every write of it stays behind that check.
@@ -195,14 +200,20 @@ func (a *APIStore) getPausedSandboxes(
 	return sandboxes, nil
 }
 
-func getRunningSandboxes(runningSandboxes []sandbox.Sandbox, metadataFilter *map[string]string) []utils.PaginatedSandbox {
+var errTooManyRunningSandboxes = fmt.Errorf("more than %d running sandboxes match", sandboxesUnboundedMaxCount)
+
+func getRunningSandboxes(runningSandboxes []sandbox.Sandbox, metadataFilter *map[string]string, capped bool) ([]utils.PaginatedSandbox, error) {
 	// Running Sandbox IDs
 	runningSandboxList := instanceInfoToPaginatedSandboxes(runningSandboxes)
 
 	// Filter sandboxes based on metadata
 	runningSandboxList = utils.FilterSandboxesOnMetadata(runningSandboxList, metadataFilter)
 
-	return runningSandboxList
+	if capped && len(runningSandboxList) > sandboxesUnboundedMaxCount {
+		return nil, errTooManyRunningSandboxes
+	}
+
+	return runningSandboxList, nil
 }
 
 func (a *APIStore) GetSandboxes(c *gin.Context, params api.GetSandboxesParams) {
@@ -232,7 +243,14 @@ func (a *APIStore) GetSandboxes(c *gin.Context, params api.GetSandboxesParams) {
 		return
 	}
 
-	runningSandboxes := getRunningSandboxes(sandboxes, metadataFilter)
+	capped := a.featureFlags.BoolFlag(ctx, featureflags.UnpaginatedSandboxListCapFlag, featureflags.TeamContext(team.ID.String()))
+	runningSandboxes, err := getRunningSandboxes(sandboxes, metadataFilter, capped)
+	if err != nil {
+		a.sendAPIStoreError(c, http.StatusBadRequest, fmt.Sprintf("Team has more than %d running sandboxes; update to the latest E2B SDK or list them with GET /v2/sandboxes", sandboxesUnboundedMaxCount))
+		telemetry.ReportEvent(ctx, "sandbox list exceeds the unbounded limit")
+
+		return
+	}
 
 	// Sort sandboxes by start time descending
 	utils.SortPaginatedSandboxesDesc(runningSandboxes)
