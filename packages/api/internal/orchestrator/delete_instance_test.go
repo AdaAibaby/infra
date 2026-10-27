@@ -492,6 +492,49 @@ func TestRemoveSandbox_CheckpointInProgressRestoresWithFlagOff(t *testing.T) {
 	assert.Zero(t, f.recorder.stoppedCount(), "a restored sandbox must not emit stopped analytics")
 }
 
+// envdUnresponsivePauseErr is the node refusing a memory pause because the
+// guest agent did not answer its probe: the busy-node code with the
+// ENVD_UNRESPONSIVE detail.
+func envdUnresponsivePauseErr(t *testing.T) error {
+	t.Helper()
+
+	refusal, err := status.New(codes.ResourceExhausted, "sandbox 'x' guest agent is not responding, please retry").WithDetails(
+		&orchestrator.UserError{Code: orchestrator.UserErrorCode_ENVD_UNRESPONSIVE, HttpStatus: 503},
+	)
+	require.NoError(t, err)
+
+	return refusal.Err()
+}
+
+// A pause refused for an unresponsive guest agent restores the record with
+// the restore flag off: the node left the VM running and untouched, so
+// neither the record nor the VM goes.
+func TestRemoveSandbox_EnvdUnresponsiveRestoresWithFlagOff(t *testing.T) {
+	t.Parallel()
+
+	f := newRefusalFixture(t, false, consts.LocalClusterID, envdUnresponsivePauseErr(t))
+	node, ok := f.o.nodes.Get(f.o.scopedNodeID(consts.LocalClusterID, "node-1"))
+	require.True(t, ok)
+	stub := &pauseStubClient{err: envdUnresponsivePauseErr(t)}
+	node.SetSandboxClient(stub)
+
+	err := f.removePause(t)
+	require.ErrorIs(t, err, PauseRefusedEnvdUnresponsiveError{})
+	require.ErrorIs(t, err, PauseQueueExhaustedError{})
+	require.NotErrorIs(t, err, PauseRefusedCheckpointInProgressError{})
+
+	stored, err := f.o.sandboxStore.Get(t.Context(), f.sbx.TeamID, f.sbx.SandboxID)
+	require.NoError(t, err, "the record must survive the refusal with the flag off")
+	assert.Equal(t, sandbox.StateRunning, stored.State)
+	assert.Zero(t, stub.deleteCount(), "the sandbox stays on its node, running")
+	assert.True(t, stored.RefusedSince.IsZero(), "a guest-agent refusal holds the sweep without opening an overstay episode")
+	assert.WithinDuration(t, time.Now().Add(refusalRetryAfter), stored.RefusedUntil, time.Second, "the sweep is still held for the retry window")
+	assert.Equal(t, map[string]int64{"restored/request": 1}, f.restoreOutcomes(t))
+
+	time.Sleep(300 * time.Millisecond)
+	assert.Zero(t, f.recorder.stoppedCount(), "a restored sandbox must not emit stopped analytics")
+}
+
 // A successful pause removes and emits exactly as before, flag on or not.
 func TestRemoveSandbox_SuccessRemovesAndEmits(t *testing.T) {
 	t.Parallel()

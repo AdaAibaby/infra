@@ -20,6 +20,7 @@ func TestStartRemoving_JoinerIsAnsweredWithTheRestoredRefusalsClass(t *testing.T
 	storage, _ := setupTestStorage(t)
 	for name, refusal := range map[string]error{
 		"checkpoint": sandboxtypes.PauseRefusedCheckpointInProgressError{},
+		"envd":       sandboxtypes.PauseRefusedEnvdUnresponsiveError{},
 		"busy":       sandboxtypes.PauseQueueExhaustedError{},
 	} {
 		t.Run(name, func(t *testing.T) {
@@ -50,8 +51,11 @@ func TestStartRemoving_JoinerIsAnsweredWithTheRestoredRefusalsClass(t *testing.T
 			case err := <-joiner:
 				require.ErrorIs(t, err, refusal, "the joiner must get the starter's refusal")
 				require.ErrorIs(t, err, sandboxtypes.PauseQueueExhaustedError{})
-				if name == "busy" {
+				if name != "checkpoint" {
 					require.NotErrorIs(t, err, sandboxtypes.PauseRefusedCheckpointInProgressError{})
+				}
+				if name != "envd" {
+					require.NotErrorIs(t, err, sandboxtypes.PauseRefusedEnvdUnresponsiveError{})
 				}
 			case <-time.After(5 * time.Second):
 				t.Fatal("the joiner never returned")

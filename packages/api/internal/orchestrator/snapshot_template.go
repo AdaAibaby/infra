@@ -418,6 +418,12 @@ func isCheckpointInProgress(err error) bool {
 	return hasUserErrorCode(err, orchestrator.UserErrorCode_CHECKPOINT_IN_PROGRESS)
 }
 
+// isEnvdUnresponsive reports a node's refusal of a memory pause because the
+// sandbox's guest agent did not answer its health probe, by its typed detail.
+func isEnvdUnresponsive(err error) bool {
+	return hasUserErrorCode(err, orchestrator.UserErrorCode_ENVD_UNRESPONSIVE)
+}
+
 func hasUserErrorCode(err error, code orchestrator.UserErrorCode) bool {
 	st, ok := grpcstatus.FromError(err)
 	if !ok {

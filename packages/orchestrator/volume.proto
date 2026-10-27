@@ -49,6 +49,10 @@ enum UserErrorCode {
   // that checkpoint ends. The API tells it apart from a busy node (Pause) and
   // from a rejected artifact (Checkpoint) by this detail, not by the message.
   CHECKPOINT_IN_PROGRESS = 10;
+  // A memory pause refused because the sandbox's guest agent (envd) did not
+  // answer its health probe; a snapshot taken now would record a hung agent
+  // and never resume. The sandbox keeps running and the pause can be retried.
+  ENVD_UNRESPONSIVE = 11;
 }
 
 message UserError {

@@ -352,7 +352,7 @@ func (f *Factory) RebootSandbox(
 			return nil, errors.Join(err, closeErr)
 		}
 
-		go sbx.Checks.Start(context.WithoutCancel(ctx))
+		go sbx.Checks().Start(context.WithoutCancel(ctx))
 	}
 
 	return sbx, nil

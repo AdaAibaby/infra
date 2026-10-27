@@ -87,7 +87,7 @@ func observableSandbox(t *testing.T) *sandbox.Sandbox {
 		},
 		Resources: &sandbox.Resources{Slot: slot},
 	}
-	sbx.Checks = sandbox.NewChecks(sbx)
+	sbx.SetChecks(sandbox.NewChecks(sbx))
 
 	return sbx
 }

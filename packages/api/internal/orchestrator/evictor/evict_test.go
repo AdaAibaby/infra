@@ -246,6 +246,7 @@ func TestPauseSkipReason(t *testing.T) {
 	}{
 		"node refused":       {err: fmt.Errorf("failed to auto pause sandbox: %w", sandbox.PauseQueueExhaustedError{}), want: pause.SkipReasonAdmissionRefused, skip: true},
 		"checkpoint running": {err: fmt.Errorf("failed to auto pause sandbox: %w", sandbox.PauseRefusedCheckpointInProgressError{}), want: pause.SkipReasonCheckpointInProgress, skip: true},
+		"envd unresponsive":  {err: fmt.Errorf("failed to auto pause sandbox: %w", sandbox.PauseRefusedEnvdUnresponsiveError{}), want: pause.SkipReasonEnvdUnresponsive, skip: true},
 		"replica draining":   {err: fmt.Errorf("remove: %w", sandbox.ErrDraining), want: pause.SkipReasonDraining, skip: true},
 		"eviction in flight": {err: sandbox.ErrEvictionInProgress, want: pause.SkipReasonNotEvictable, skip: true},
 		"sandbox gone":       {err: sandbox.ErrNotFound, want: pause.SkipReasonNotFound, skip: true},
@@ -362,6 +363,16 @@ func TestEvictSandbox_DegradeDecision(t *testing.T) {
 
 		held := fmt.Errorf("failed to auto pause sandbox: %w", sandbox.PauseRefusedCheckpointInProgressError{})
 		requests, degraded := run(t, sweep{budgetMs: ms(0), memoryErr: held})
+
+		assert.Equal(t, []bool{false}, requests, "the next sweep retries the same memory pause")
+		assert.Empty(t, degraded)
+	})
+
+	t.Run("zero budget: an unresponsive guest never degrades", func(t *testing.T) {
+		t.Parallel()
+
+		hung := fmt.Errorf("failed to auto pause sandbox: %w", sandbox.PauseRefusedEnvdUnresponsiveError{})
+		requests, degraded := run(t, sweep{budgetMs: ms(0), memoryErr: hung})
 
 		assert.Equal(t, []bool{false}, requests, "the next sweep retries the same memory pause")
 		assert.Empty(t, degraded)

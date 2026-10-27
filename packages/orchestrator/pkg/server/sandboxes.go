@@ -854,7 +854,7 @@ func (s *Server) Delete(ctxConn context.Context, in *orchestrator.SandboxDeleteR
 	sbx.SetStopReason(sandbox.StopReasonKilled)
 
 	// Check health metrics before stopping the sandbox
-	sbx.Checks.Healthcheck(ctx, true)
+	sbx.Checks().Healthcheck(ctx, true)
 
 	// Start the cleanup in a goroutine—the initial kill request should be send as the first thing in stop, and at this point you cannot route to the sandbox anymore.
 	// We don't wait for the whole cleanup to finish here.
@@ -1110,8 +1110,8 @@ func isCleanFirecrackerExit(cause fc.CrashCause, waitErr error) bool {
 }
 
 // recordPauseAdmission records one admission decision. The wait histogram
-// samples only the outcomes that actually waited; an empty outcome (the
-// caller's context ended mid-wait) records nothing — no decision was made.
+// samples only the outcomes that actually waited or probed; an empty outcome
+// (the caller's context ended mid-wait) records nothing — no decision was made.
 func (s *Server) recordPauseAdmission(ctx context.Context, teamID, rpc string, outcome sandbox.SnapshotAdmissionOutcome, waited time.Duration) {
 	if outcome == "" {
 		return
@@ -1123,7 +1123,8 @@ func (s *Server) recordPauseAdmission(ctx context.Context, teamID, rpc string, o
 		telemetry.WithTeamID(teamID),
 	))
 
-	if outcome == sandbox.SnapshotAdmissionReadyAfterWait || outcome == sandbox.SnapshotAdmissionRefused {
+	if outcome == sandbox.SnapshotAdmissionReadyAfterWait || outcome == sandbox.SnapshotAdmissionRefused ||
+		outcome == sandbox.SnapshotAdmissionEnvdHealthy || outcome == sandbox.SnapshotAdmissionEnvdUnhealthy {
 		s.pauseAdmissionWaitDuration.Record(ctx, waited.Milliseconds(),
 			metric.WithAttributes(
 				attribute.String("outcome", string(outcome)),
@@ -1216,8 +1217,41 @@ func (s *Server) Pause(ctx context.Context, in *orchestrator.SandboxPauseRequest
 	// be persisted again is not refused but killed below, which a refusal would
 	// only defer. The estimate stays reserved until the capture is on disk and
 	// its upload has ended, or until this call fails before that.
+	persistable := latchedErr == nil && sbx.EnsurePausable() == nil
+
+	// Flag-gated envd pre-flight, memory snapshots only and only after the
+	// latched checks: a memory snapshot restores envd mid-execution, so one
+	// taken of a hung agent never resumes. Retryable, never the kill path.
+	// It runs before the disk reservation so a probe that waits holds no
+	// headroom against the node's other pauses.
+	if healthMs := s.featureFlags.IntFlag(ctx, featureflags.PauseEnvdHealthTimeoutMs); persistable && healthMs > 0 && !in.GetFilesystemOnly() {
+		outcome, waited, admitErr := sbx.AwaitEnvdAdmission(ctx, time.Duration(healthMs)*time.Millisecond)
+		s.recordPauseAdmission(ctx, sbx.Runtime.TeamID, "pause", outcome, waited)
+		switch {
+		case errors.Is(admitErr, sandbox.ErrSnapshotAdmissionEnvdUnhealthy):
+			// The entry can be gone by now: a checkpoint that claimed the
+			// sandbox while the probe waited (and froze the guest) is the
+			// retryable answer the top of this RPC gives; a VM that exited is
+			// not hung, and the retryable refusal would keep a dead record.
+			if _, live := s.sandboxFactory.Sandboxes.Get(in.GetSandboxId()); !live {
+				if s.heldByCheckpoint(in.GetSandboxId()) {
+					return nil, checkpointInProgressStatus(codes.ResourceExhausted, "sandbox '%s' is being checkpointed, please retry", in.GetSandboxId()).Err()
+				}
+
+				return nil, status.Error(codes.NotFound, "sandbox not found")
+			}
+			sbxlogger.E(sbx).Warn(ctx, "Refusing pause: envd is not answering health checks", zap.Duration("probe", waited))
+
+			return nil, envdUnresponsiveStatus(in.GetSandboxId()).Err()
+		case admitErr != nil:
+			// The caller's context ended mid-probe; nothing was decided and
+			// the sandbox is untouched.
+			return nil, status.FromContextError(admitErr).Err()
+		}
+	}
+
 	var diskReservation *pauseDiskReservation
-	if latchedErr == nil && sbx.EnsurePausable() == nil {
+	if persistable {
 		reservation, refuseErr := s.admitPauseDisk(ctx, sbx, in.GetFilesystemOnly())
 		if refuseErr != nil {
 			return nil, refuseErr
@@ -2407,7 +2441,7 @@ func (s *Server) markSandboxLive(ctx context.Context, sbx *sandbox.Sandbox, rese
 		return err
 	}
 
-	go sbx.Checks.Start(context.WithoutCancel(ctx))
+	go sbx.Checks().Start(context.WithoutCancel(ctx))
 
 	return nil
 }
@@ -3141,6 +3175,23 @@ func checkpointInProgressStatus(code codes.Code, format string, sandboxID string
 	st := status.Newf(code, format, sandboxID)
 	withDetails, err := st.WithDetails(&orchestrator.UserError{
 		Code:       orchestrator.UserErrorCode_CHECKPOINT_IN_PROGRESS,
+		Message:    st.Message(),
+		HttpStatus: http.StatusServiceUnavailable,
+	})
+	if err != nil {
+		return st
+	}
+
+	return withDetails
+}
+
+// envdUnresponsiveStatus is the refusal of a memory pause whose guest agent
+// did not answer the health probe, with a typed detail so the API tells it
+// from a busy node and restores the sandbox regardless of its restore flag.
+func envdUnresponsiveStatus(sandboxID string) *status.Status {
+	st := status.Newf(codes.ResourceExhausted, "sandbox '%s' guest agent is not responding, please retry", sandboxID)
+	withDetails, err := st.WithDetails(&orchestrator.UserError{
+		Code:       orchestrator.UserErrorCode_ENVD_UNRESPONSIVE,
 		Message:    st.Message(),
 		HttpStatus: http.StatusServiceUnavailable,
 	})

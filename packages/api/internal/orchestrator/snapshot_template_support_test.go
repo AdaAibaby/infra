@@ -38,6 +38,24 @@ func TestCheckSnapshotSupport(t *testing.T) {
 	}
 }
 
+// An unresponsive-envd refusal is read by its typed detail, never by its
+// message, and is one refusal, not the checkpoint one.
+func TestIsEnvdUnresponsive(t *testing.T) {
+	t.Parallel()
+
+	plain := status.New(codes.ResourceExhausted, "sandbox 'x' guest agent is not responding, please retry")
+	assert.False(t, isEnvdUnresponsive(plain.Err()), "a bare message is not the refusal")
+
+	withDetail, err := status.New(codes.ResourceExhausted, "sandbox 'x' guest agent is not responding, please retry").WithDetails(
+		&orchestrator.UserError{Code: orchestrator.UserErrorCode_ENVD_UNRESPONSIVE, HttpStatus: 503},
+	)
+	require.NoError(t, err)
+	assert.True(t, isEnvdUnresponsive(withDetail.Err()))
+	assert.False(t, isCheckpointInProgress(withDetail.Err()), "one detail, one refusal")
+	assert.False(t, isFilesystemOnlyDisabled(withDetail.Err()))
+}
+
+// The orchestrator's own flag refusal is told apart from every other
 // A checkpoint-in-progress refusal is read by its typed detail on either
 // code the node answers it with, never by its message.
 func TestIsCheckpointInProgress(t *testing.T) {

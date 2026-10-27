@@ -197,9 +197,11 @@ func (e *Evictor) evictSandbox(ctx context.Context, sbx sandbox.Sandbox) {
 
 	err := e.removeSandbox(context.WithoutCancel(ctx), sbx.TeamID, sbx.SandboxID, opts)
 	// A checkpoint in flight says nothing about the node's memory and ends on
-	// its own, so it never degrades the pause: the next sweep retries it as is.
+	// its own, and a filesystem-only capture needs the guest agent as much as
+	// a memory one, so neither refusal degrades the pause: the next sweep
+	// retries it as is.
 	if action == sandbox.StateActionPause && !opts.FilesystemOnly && errors.Is(err, sandbox.PauseQueueExhaustedError{}) &&
-		!errors.Is(err, sandbox.PauseRefusedCheckpointInProgressError{}) {
+		!errors.Is(err, sandbox.PauseRefusedCheckpointInProgressError{}) && !errors.Is(err, sandbox.PauseRefusedEnvdUnresponsiveError{}) {
 		degradeCause = e.degradeCause(ctx, sbx, time.Now())
 	}
 	if degradeCause != "" {
@@ -264,6 +266,8 @@ func pauseSkipReason(err error, state sandbox.State) (pause.SkipReason, bool) {
 	switch {
 	case errors.Is(err, sandbox.PauseRefusedCheckpointInProgressError{}):
 		return pause.SkipReasonCheckpointInProgress, true
+	case errors.Is(err, sandbox.PauseRefusedEnvdUnresponsiveError{}):
+		return pause.SkipReasonEnvdUnresponsive, true
 	case errors.Is(err, sandbox.PauseQueueExhaustedError{}):
 		return pause.SkipReasonAdmissionRefused, true
 	case errors.Is(err, sandbox.ErrDraining):

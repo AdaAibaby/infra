@@ -26,7 +26,10 @@ import (
 // import cycle.
 type PauseQueueExhaustedError = sandbox.PauseQueueExhaustedError
 
-type PauseRefusedCheckpointInProgressError = sandbox.PauseRefusedCheckpointInProgressError
+type (
+	PauseRefusedCheckpointInProgressError = sandbox.PauseRefusedCheckpointInProgressError
+	PauseRefusedEnvdUnresponsiveError     = sandbox.PauseRefusedEnvdUnresponsiveError
+)
 
 func (o *Orchestrator) pauseSandbox(ctx context.Context, node *nodemanager.Node, sbx sandbox.Sandbox, filesystemOnly bool) error {
 	ctx, span := tracer.Start(ctx, "pause-sandbox")
@@ -114,6 +117,9 @@ func snapshotInstance(ctx context.Context, node *nodemanager.Node, sbx sandbox.S
 
 		if isCheckpointInProgress(err) {
 			return PauseRefusedCheckpointInProgressError{}
+		}
+		if isEnvdUnresponsive(err) {
+			return PauseRefusedEnvdUnresponsiveError{}
 		}
 
 		return PauseQueueExhaustedError{}

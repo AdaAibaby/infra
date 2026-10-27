@@ -28,6 +28,7 @@ type (
 	PauseRefusedCheckpointInProgressError = sandboxtypes.PauseRefusedCheckpointInProgressError
 	RestoredTransitionError               = sandboxtypes.RestoredTransitionError
 	RestoreOpts                           = sandboxtypes.RestoreOpts
+	PauseRefusedEnvdUnresponsiveError     = sandboxtypes.PauseRefusedEnvdUnresponsiveError
 )
 
 // State constants.

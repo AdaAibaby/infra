@@ -135,6 +135,28 @@ func TestPauseSandbox_FailsBuildWhenCheckpointInProgress(t *testing.T) {
 	assert.True(t, hasFinishedAt, "a terminal build must record finished_at")
 }
 
+// A pause the node refuses because the guest agent did not answer its probe
+// keeps its own type under the retryable refusal, and closes the build out
+// like any refusal.
+func TestPauseSandbox_FailsBuildWhenEnvdUnresponsive(t *testing.T) {
+	t.Parallel()
+
+	refusal, err := status.New(codes.ResourceExhausted, "sandbox 'x' guest agent is not responding, please retry").WithDetails(
+		&orchestrator.UserError{Code: orchestrator.UserErrorCode_ENVD_UNRESPONSIVE, HttpStatus: 503},
+	)
+	require.NoError(t, err)
+	o, db, node, sbx := newPauseFixture(t, refusal.Err())
+
+	err = o.pauseSandbox(t.Context(), node, sbx, false)
+	require.ErrorIs(t, err, PauseRefusedEnvdUnresponsiveError{})
+	require.ErrorIs(t, err, PauseQueueExhaustedError{}, "an unresponsive guest agent is one of the retryable refusals")
+	require.NotErrorIs(t, err, PauseRefusedCheckpointInProgressError{})
+
+	buildStatus, hasFinishedAt := snapshotBuildStatus(t, db, sbx.SandboxID)
+	assert.Equal(t, string(types.BuildStatusFailed), buildStatus)
+	assert.True(t, hasFinishedAt, "a terminal build must record finished_at")
+}
+
 // A full pause queue returns a distinct error, and closes the build out too.
 func TestPauseSandbox_FailsBuildWhenPauseQueueExhausted(t *testing.T) {
 	t.Parallel()

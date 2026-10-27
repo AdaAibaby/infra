@@ -625,6 +625,16 @@ var (
 	// 0 probes the parent header's readiness without waiting; a positive value
 	// waits up to that long before refusing retryably.
 	PauseAdmissionGraceMs = NewIntFlag("pause-admission-grace-milliseconds", -1)
+	// PauseEnvdHealthTimeoutMs gates the envd health probe a memory pause runs
+	// before anything destructive, in milliseconds. 0 or less (default -1)
+	// disables the probe: an HTTP request cannot complete inside a zero
+	// deadline, so unlike PauseAdmissionGraceMs zero is not an instant probe.
+	// A positive value probes envd's /health with that timeout, capped at the
+	// sandbox HTTP client's 10s limit, and refuses the pause retryably with an
+	// ENVD_UNRESPONSIVE detail when it does not answer. A memory snapshot
+	// restores envd mid-execution, so one taken of a hung agent replays hung
+	// on every resume and nothing ever marks it bad.
+	PauseEnvdHealthTimeoutMs = NewIntFlag("pause-envd-health-timeout-milliseconds", -1)
 	// PauseAdmissionDiskHeadroomMiB makes a node refuse a pause, retryably and
 	// before anything destructive, when the filesystem holding its build
 	// directory cannot take the snapshot's capture (guest memory plus the

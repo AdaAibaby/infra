@@ -115,6 +115,7 @@ var refusalClasses = []struct {
 	refusal error
 }{
 	{"checkpoint_in_progress", PauseRefusedCheckpointInProgressError{}},
+	{"envd_unresponsive", PauseRefusedEnvdUnresponsiveError{}},
 }
 
 // RefusalClass is the token naming a refusal for a restored pause's waiters;
@@ -139,6 +140,24 @@ func RefusalFromClass(token string) error {
 	}
 
 	return PauseQueueExhaustedError{}
+}
+
+// PauseRefusedEnvdUnresponsiveError is a node's retryable refusal of a memory
+// pause because the sandbox's guest agent did not answer its health probe; a
+// snapshot taken now would never resume. The sandbox keeps running and its VM
+// is untouched. It matches PauseQueueExhaustedError for every caller that does
+// not tell the two apart, so the refusal flows through the same restore and
+// retry paths.
+type PauseRefusedEnvdUnresponsiveError struct{}
+
+func (PauseRefusedEnvdUnresponsiveError) Error() string {
+	return "The sandbox guest agent is not responding"
+}
+
+func (PauseRefusedEnvdUnresponsiveError) Is(target error) bool {
+	_, ok := target.(PauseQueueExhaustedError)
+
+	return ok
 }
 
 // ErrExecutionMismatch reports that the stored sandbox is a different

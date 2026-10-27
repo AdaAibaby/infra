@@ -29,6 +29,10 @@ const (
 	// SkipReasonCheckpointInProgress is the node refusing a pause while another
 	// checkpoint of the sandbox is in flight; the next attempt after it ends succeeds.
 	SkipReasonCheckpointInProgress SkipReason = "checkpoint_in_progress"
+	// SkipReasonEnvdUnresponsive is the node refusing a memory pause because
+	// the sandbox's guest agent did not answer its health probe; the sandbox
+	// keeps running and a later attempt is retried as is.
+	SkipReasonEnvdUnresponsive SkipReason = "envd_unresponsive"
 	// SkipReasonDraining: this replica is shutting down and stopped admitting
 	// pauses, so the sandbox is left running for a retry elsewhere.
 	SkipReasonDraining SkipReason = "draining"

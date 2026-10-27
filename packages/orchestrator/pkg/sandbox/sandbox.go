@@ -530,7 +530,9 @@ type Sandbox struct {
 	// correct — which matters, because both paths reach the live-upgrade gate.
 	envdWorkdirWithheld bool
 
-	Checks *Checks
+	// checks is the live health checker; guarded by rwmu because an in-place
+	// snapshot replaces it while a pause probe may be reading it.
+	checks *Checks
 
 	// Kept here, not on Checks, so it survives checkpoints.
 	OOMKills OOMWatermark
@@ -674,6 +676,22 @@ func (s *Sandbox) LoggerMetadata() sbxlogger.SandboxMetadata {
 // log returns the internal orchestrator logger tagged with this sandbox's
 // identity. Not to be confused with LoggerMetadata, which feeds the separate,
 // customer-visible sandbox log stream.
+// Checks returns the sandbox's current health checker.
+func (s *Sandbox) Checks() *Checks {
+	s.rwmu.RLock()
+	defer s.rwmu.RUnlock()
+
+	return s.checks
+}
+
+// SetChecks installs a new health checker; the caller starts it.
+func (s *Sandbox) SetChecks(checks *Checks) {
+	s.rwmu.Lock()
+	defer s.rwmu.Unlock()
+
+	s.checks = checks
+}
+
 func (s *Sandbox) log() logger.Logger {
 	return s.Runtime.Logger()
 }
@@ -1351,7 +1369,7 @@ func (f *Factory) CreateSandbox(
 	}
 	telemetry.ReportEvent(ctx, "created fc process")
 
-	sbx.Checks = NewChecks(sbx)
+	sbx.SetChecks(NewChecks(sbx))
 
 	// Stop the sandbox first if it is still running, otherwise do nothing
 	cleanup.AddPriority(ctx, sbx.Stop)
@@ -1973,7 +1991,7 @@ func (f *Factory) ResumeSandbox(
 
 	// Part of the sandbox as we need to stop Checks before pausing the sandbox
 	// This is to prevent race condition of reporting unhealthy sandbox
-	sbx.Checks = NewChecks(sbx)
+	sbx.SetChecks(NewChecks(sbx))
 
 	// Register the sandbox IP before Resume so it is findable by source address
 	// during the resume (e.g. for TCP firewall lookups). On failure the deferred cleanup
@@ -2100,7 +2118,7 @@ func (f *Factory) ResumeSandbox(
 	telemetry.ReportEvent(execCtx, "envd initialized")
 
 	if !ropts.skipLiveRegistration && !ropts.deferMarkRunning {
-		go sbx.Checks.Start(execCtx)
+		go sbx.Checks().Start(execCtx)
 	}
 
 	go func() {
@@ -2213,7 +2231,7 @@ func (s *Sandbox) doStop(ctx context.Context) error {
 
 	// Stop the health checks before stopping the sandbox
 	s.stopping.Store(true)
-	s.Checks.Stop()
+	s.Checks().Stop()
 
 	fcStopErr := s.process.Stop(ctx)
 	if fcStopErr != nil {
@@ -2249,7 +2267,7 @@ func (s *Sandbox) Shutdown(ctx context.Context) error {
 
 	// Stop the health check before pausing the VM; the barrier lets a hinting
 	// run in flight stop its cycle first, as in Pause.
-	s.Checks.Stop()
+	s.Checks().Stop()
 	_, hintBarrier := tracer.Start(ctx, "wait for hinting run")
 	s.fphMu.Lock()
 	s.fphMu.Unlock() //nolint:staticcheck // barrier: acquire-release is the point
@@ -2427,7 +2445,7 @@ func (s *Sandbox) Pause(
 	}
 
 	// Stop the health check before pausing the VM
-	s.Checks.Stop()
+	s.Checks().Stop()
 	// Restart it on any failed exit that leaves the sandbox live. Registered
 	// before the resume in place below, so it runs after it (the chain runs in
 	// reverse), and ahead of the filesystem quiesce, whose error return would
@@ -2440,8 +2458,9 @@ func (s *Sandbox) Pause(
 		if !restartChecksOnError || s.GetStopReason() == StopReasonKilled {
 			return nil
 		}
-		s.Checks = NewChecks(s)
-		go s.Checks.Start(context.WithoutCancel(ctx))
+		checks := NewChecks(s)
+		s.SetChecks(checks)
+		go checks.Start(context.WithoutCancel(ctx))
 
 		return nil
 	})
@@ -2792,8 +2811,9 @@ func (s *Sandbox) Pause(
 
 		s.startEnvdReinit(ctx)
 
-		s.Checks = NewChecks(s)
-		go s.Checks.Start(context.WithoutCancel(ctx))
+		checks := NewChecks(s)
+		s.SetChecks(checks)
+		go checks.Start(context.WithoutCancel(ctx))
 	}
 
 	// Seal the rootfs diff in the background: for the destroy path the cache is
@@ -4133,6 +4153,13 @@ const (
 	// SnapshotAdmissionRefusedDisk: the build filesystem cannot hold the
 	// capture; refused retryably before anything destructive.
 	SnapshotAdmissionRefusedDisk SnapshotAdmissionOutcome = "refused_disk"
+	// SnapshotAdmissionEnvdHealthy: envd answered /health inside the probe
+	// timeout. Distinct from SnapshotAdmissionReady so the probe's refusal
+	// rate can be read without mixing in the durable-header check.
+	SnapshotAdmissionEnvdHealthy SnapshotAdmissionOutcome = "envd_healthy"
+	// SnapshotAdmissionEnvdUnhealthy: envd did not answer /health, so a memory
+	// snapshot taken now would capture an unresponsive agent and never resume.
+	SnapshotAdmissionEnvdUnhealthy SnapshotAdmissionOutcome = "envd_unhealthy"
 )
 
 // rootfsCacheSizer is the optional capability of a rootfs provider to report
@@ -4156,6 +4183,11 @@ func (s *Sandbox) RootfsCacheSize(ctx context.Context) (int64, error) {
 // ErrSnapshotAdmissionPending marks a retryable admission refusal: the parent
 // memfile header was still deduplicating when the grace elapsed.
 var ErrSnapshotAdmissionPending = errors.New("parent memfile header is still deduplicating")
+
+// ErrSnapshotAdmissionEnvdUnhealthy marks a retryable admission refusal: envd
+// did not answer its health probe. Retryable, never latched: an unanswered
+// probe predicts an unresumable snapshot, it does not prove one.
+var ErrSnapshotAdmissionEnvdUnhealthy = errors.New("envd is not responding to health checks")
 
 // AwaitSnapshotAdmission is the pre-destructive snapshot-admission pre-flight:
 // "can this sandbox produce a valid snapshot right now?". It folds the

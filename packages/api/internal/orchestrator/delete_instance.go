@@ -203,9 +203,10 @@ func (o *Orchestrator) RemoveSandbox(ctx context.Context, teamID uuid.UUID, sand
 		if errors.Is(err, PauseQueueExhaustedError{}) {
 			refusal := refusalOf(err)
 			// A checkpoint in flight is the node's word that the sandbox is
-			// alive and the refusal ends with it, so the record is restored
+			// alive and the refusal ends with it; an unanswered envd probe
+			// left the VM untouched and running. Both restore the record
 			// whatever the flag says for a busy node.
-			if restoreOnRefusal || errors.Is(err, PauseRefusedCheckpointInProgressError{}) {
+			if restoreOnRefusal || errors.Is(err, PauseRefusedCheckpointInProgressError{}) || errors.Is(err, PauseRefusedEnvdUnresponsiveError{}) {
 				outcome := o.restoreRefusedPause(context.WithoutCancel(ctx), transition, refusal)
 				o.recordRefusalRestore(ctx, sbx.TeamID.String(), outcome, opts.Eviction)
 				switch outcome {
@@ -296,9 +297,10 @@ func (o *Orchestrator) restoreRefusedPause(ctx context.Context, transition sandb
 	sbx := transition.Sandbox
 	_, err := o.sandboxStore.RestoreRunning(ctx, transition, sandbox.RestoreOpts{
 		RetryAfter: refusalRetryAfter,
-		// A checkpoint holding the sandbox says nothing about the node's
-		// overstay, so the sweep is held without charging the budget.
-		HoldOnly: errors.Is(refusal, PauseRefusedCheckpointInProgressError{}),
+		// A checkpoint holding the sandbox or a guest agent that does not
+		// answer says nothing about the node, so the sweep is held without
+		// charging the overstay budget a busy node is measured against.
+		HoldOnly: errors.Is(refusal, PauseRefusedCheckpointInProgressError{}) || errors.Is(refusal, PauseRefusedEnvdUnresponsiveError{}),
 	})
 	if err != nil {
 		if errors.Is(err, sandbox.ErrExecutionMismatch) || errors.Is(err, sandbox.ErrRestoreConflict) {
@@ -328,14 +330,18 @@ func (o *Orchestrator) restoreRefusedPause(ctx context.Context, transition sandb
 	return restoreOutcomeRestored
 }
 
-// refusalOf narrows a retryable pause refusal to its own type, unwrapped,
-// so the callers above tell a checkpoint in flight from a busy node.
+// refusalOf narrows a retryable pause refusal to its own type, unwrapped, so
+// the callers above tell a checkpoint in flight or an unresponsive guest
+// agent from a busy node.
 func refusalOf(err error) error {
-	if errors.Is(err, PauseRefusedCheckpointInProgressError{}) {
+	switch {
+	case errors.Is(err, PauseRefusedCheckpointInProgressError{}):
 		return PauseRefusedCheckpointInProgressError{}
+	case errors.Is(err, PauseRefusedEnvdUnresponsiveError{}):
+		return PauseRefusedEnvdUnresponsiveError{}
+	default:
+		return PauseQueueExhaustedError{}
 	}
-
-	return PauseQueueExhaustedError{}
 }
 
 func (o *Orchestrator) removeSandboxFromNode(
