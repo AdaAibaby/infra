@@ -60,7 +60,16 @@ snapshot as (
         allow_internet_access = COALESCE(excluded.allow_internet_access, snapshots.allow_internet_access),
         origin_node_id = excluded.origin_node_id,
         auto_pause = excluded.auto_pause,
-        config = excluded.config
+        config = excluded.config,
+        -- An inserted row points at the env created above, which is live, so
+        -- env_deleted_at stays NULL. An existing row keeps its env, and a soft
+        -- delete of that env stamped it; this only fills a row the backfill
+        -- has not reached. COALESCE keeps a stamp committed after this
+        -- statement's snapshot was taken, which the subquery cannot see.
+        env_deleted_at = COALESCE(
+            snapshots.env_deleted_at,
+            (SELECT e.deleted_at FROM "public"."envs" e WHERE e.id = snapshots.env_id)
+        )
     RETURNING env_id as template_id
 ),
 

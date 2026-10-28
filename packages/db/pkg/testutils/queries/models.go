@@ -237,6 +237,7 @@ type Snapshot struct {
 	AutoPause           bool
 	TeamID              uuid.UUID
 	Config              []byte
+	EnvDeletedAt        *time.Time
 }
 
 type SnapshotTemplate struct {

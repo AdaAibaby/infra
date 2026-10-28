@@ -95,6 +95,7 @@ type Snapshot struct {
 	AutoPause           bool
 	TeamID              uuid.UUID
 	Config              *types.PausedSandboxConfig
+	EnvDeletedAt        *time.Time
 }
 
 type Volume struct {

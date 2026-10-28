@@ -16,7 +16,7 @@ import (
 
 const getSnapshotsByTemplateWithCursor = `-- name: GetSnapshotsByTemplateWithCursor :many
 SELECT COALESCE(ea.aliases, ARRAY[]::text[])::text[] AS aliases, COALESCE(ea.names, ARRAY[]::text[])::text[] AS names,
-    s.created_at, s.env_id, s.sandbox_id, s.id, s.metadata, s.base_env_id, s.sandbox_started_at, s.env_secure, s.origin_node_id, s.allow_internet_access, s.auto_pause, s.team_id, s.config,
+    s.created_at, s.env_id, s.sandbox_id, s.id, s.metadata, s.base_env_id, s.sandbox_started_at, s.env_secure, s.origin_node_id, s.allow_internet_access, s.auto_pause, s.team_id, s.config, s.env_deleted_at,
     eb.id AS build_id,
     eb.vcpu AS build_vcpu,
     eb.ram_mb AS build_ram_mb,
@@ -112,6 +112,7 @@ func (q *Queries) GetSnapshotsByTemplateWithCursor(ctx context.Context, arg GetS
 			&i.Snapshot.AutoPause,
 			&i.Snapshot.TeamID,
 			&i.Snapshot.Config,
+			&i.Snapshot.EnvDeletedAt,
 			&i.BuildID,
 			&i.BuildVcpu,
 			&i.BuildRamMb,
@@ -131,7 +132,7 @@ func (q *Queries) GetSnapshotsByTemplateWithCursor(ctx context.Context, arg GetS
 
 const getSnapshotsByTemplateWithCursorAsc = `-- name: GetSnapshotsByTemplateWithCursorAsc :many
 SELECT COALESCE(ea.aliases, ARRAY[]::text[])::text[] AS aliases, COALESCE(ea.names, ARRAY[]::text[])::text[] AS names,
-    s.created_at, s.env_id, s.sandbox_id, s.id, s.metadata, s.base_env_id, s.sandbox_started_at, s.env_secure, s.origin_node_id, s.allow_internet_access, s.auto_pause, s.team_id, s.config,
+    s.created_at, s.env_id, s.sandbox_id, s.id, s.metadata, s.base_env_id, s.sandbox_started_at, s.env_secure, s.origin_node_id, s.allow_internet_access, s.auto_pause, s.team_id, s.config, s.env_deleted_at,
     eb.id AS build_id,
     eb.vcpu AS build_vcpu,
     eb.ram_mb AS build_ram_mb,
@@ -230,6 +231,7 @@ func (q *Queries) GetSnapshotsByTemplateWithCursorAsc(ctx context.Context, arg G
 			&i.Snapshot.AutoPause,
 			&i.Snapshot.TeamID,
 			&i.Snapshot.Config,
+			&i.Snapshot.EnvDeletedAt,
 			&i.BuildID,
 			&i.BuildVcpu,
 			&i.BuildRamMb,
@@ -249,7 +251,7 @@ func (q *Queries) GetSnapshotsByTemplateWithCursorAsc(ctx context.Context, arg G
 
 const getSnapshotsWithCursor = `-- name: GetSnapshotsWithCursor :many
 SELECT COALESCE(ea.aliases, ARRAY[]::text[])::text[] AS aliases, COALESCE(ea.names, ARRAY[]::text[])::text[] AS names,
-    s.created_at, s.env_id, s.sandbox_id, s.id, s.metadata, s.base_env_id, s.sandbox_started_at, s.env_secure, s.origin_node_id, s.allow_internet_access, s.auto_pause, s.team_id, s.config,
+    s.created_at, s.env_id, s.sandbox_id, s.id, s.metadata, s.base_env_id, s.sandbox_started_at, s.env_secure, s.origin_node_id, s.allow_internet_access, s.auto_pause, s.team_id, s.config, s.env_deleted_at,
     eb.id AS build_id,
     eb.vcpu AS build_vcpu,
     eb.ram_mb AS build_ram_mb,
@@ -344,6 +346,7 @@ func (q *Queries) GetSnapshotsWithCursor(ctx context.Context, arg GetSnapshotsWi
 			&i.Snapshot.AutoPause,
 			&i.Snapshot.TeamID,
 			&i.Snapshot.Config,
+			&i.Snapshot.EnvDeletedAt,
 			&i.BuildID,
 			&i.BuildVcpu,
 			&i.BuildRamMb,
@@ -363,7 +366,7 @@ func (q *Queries) GetSnapshotsWithCursor(ctx context.Context, arg GetSnapshotsWi
 
 const getSnapshotsWithCursorAsc = `-- name: GetSnapshotsWithCursorAsc :many
 SELECT COALESCE(ea.aliases, ARRAY[]::text[])::text[] AS aliases, COALESCE(ea.names, ARRAY[]::text[])::text[] AS names,
-    s.created_at, s.env_id, s.sandbox_id, s.id, s.metadata, s.base_env_id, s.sandbox_started_at, s.env_secure, s.origin_node_id, s.allow_internet_access, s.auto_pause, s.team_id, s.config,
+    s.created_at, s.env_id, s.sandbox_id, s.id, s.metadata, s.base_env_id, s.sandbox_started_at, s.env_secure, s.origin_node_id, s.allow_internet_access, s.auto_pause, s.team_id, s.config, s.env_deleted_at,
     eb.id AS build_id,
     eb.vcpu AS build_vcpu,
     eb.ram_mb AS build_ram_mb,
@@ -462,6 +465,7 @@ func (q *Queries) GetSnapshotsWithCursorAsc(ctx context.Context, arg GetSnapshot
 			&i.Snapshot.AutoPause,
 			&i.Snapshot.TeamID,
 			&i.Snapshot.Config,
+			&i.Snapshot.EnvDeletedAt,
 			&i.BuildID,
 			&i.BuildVcpu,
 			&i.BuildRamMb,
