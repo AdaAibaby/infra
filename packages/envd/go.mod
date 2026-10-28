@@ -12,7 +12,7 @@ require (
 	connectrpc.com/cors v0.1.0
 	github.com/awnumar/memguard v0.23.0
 	github.com/creack/pty v1.1.24
-	github.com/e2b-dev/fsnotify v0.0.1
+	github.com/e2b-dev/fsnotify v0.0.2
 	github.com/e2b-dev/infra/packages/shared v0.0.0
 	github.com/getkin/kin-openapi v0.152.0
 	github.com/go-chi/chi/v5 v5.5.0
