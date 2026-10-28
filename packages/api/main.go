@@ -208,6 +208,8 @@ func NewGinServer(ctx context.Context, config cfg.Config, tel *telemetry.Client,
 		limits.RequestSizeLimiter(maxUploadLimit),
 		middleware.OapiRequestValidatorWithOptions(swagger,
 			&middleware.Options{
+				// Nothing reads the decoded body; don't hold it for the whole request.
+				DiscardValidatedValue: true,
 				ErrorHandler: func(c *gin.Context, message string, fallbackStatusCode int) {
 					// Override the status code provided by the oapi-codegen/gin-middleware as that is always set to 400 or 404.
 					statusCode := max(c.Writer.Status(), fallbackStatusCode)

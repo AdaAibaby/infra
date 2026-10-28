@@ -23,7 +23,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.114.3
 	github.com/bsm/redislock v0.9.4
 	github.com/dchest/uniuri v1.2.0
-	github.com/getkin/kin-openapi v0.149.0
+	github.com/getkin/kin-openapi v0.152.0
 	github.com/gin-gonic/gin v1.12.0
 	github.com/go-openapi/errors v0.22.9
 	github.com/go-openapi/runtime v0.33.2

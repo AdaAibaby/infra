@@ -403,6 +403,8 @@ func newHTTPServer(
 	r.Use(
 		middleware.OapiRequestValidatorWithOptions(swagger,
 			&middleware.Options{
+				// Nothing reads the decoded body; don't hold it for the whole request.
+				DiscardValidatedValue: true,
 				ErrorHandler: func(c *gin.Context, message string, statusCode int) {
 					statusCode = max(c.Writer.Status(), statusCode)
 					c.AbortWithStatusJSON(statusCode, gin.H{
