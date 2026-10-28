@@ -20,8 +20,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	middleware "github.com/oapi-codegen/gin-middleware"
-	"github.com/riverqueue/river"
-	"github.com/riverqueue/river/riverdriver/riverpgxv5"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -33,7 +31,6 @@ import (
 	"github.com/e2b-dev/infra/packages/dashboard-api/internal/handlers"
 	"github.com/e2b-dev/infra/packages/dashboard-api/internal/identity"
 	dashboardmiddleware "github.com/e2b-dev/infra/packages/dashboard-api/internal/middleware"
-	dbmodule "github.com/e2b-dev/infra/packages/db"
 	sqlcdb "github.com/e2b-dev/infra/packages/db/client"
 	authdb "github.com/e2b-dev/infra/packages/db/pkg/auth"
 	"github.com/e2b-dev/infra/packages/db/pkg/pool"
@@ -147,14 +144,6 @@ func run() int {
 	}
 	defer db.Close()
 
-	// Insert-only: the api works the jobs dashboard-api enqueues.
-	riverClient, err := river.NewClient(riverpgxv5.New(db.Pool()), &river.Config{Schema: dbmodule.RiverSchema})
-	if err != nil {
-		l.Error(ctx, "Initializing the River client", zap.Error(err))
-
-		return 1
-	}
-
 	authDB, err := authdb.NewClient(
 		ctx,
 		config.AuthDBConnectionString,
@@ -238,7 +227,7 @@ func run() int {
 		return 1
 	}
 
-	apiStore := handlers.NewAPIStore(config, db, authDB, clickhouseClient, authService, identityService, tel.MeterProvider, riverClient)
+	apiStore := handlers.NewAPIStore(config, db, clickhouseClient, authService, identityService, tel.MeterProvider)
 
 	swagger, err := api.GetSwagger()
 	if err != nil {

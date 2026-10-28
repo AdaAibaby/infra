@@ -12,17 +12,14 @@ import (
 
 	sharedauth "github.com/e2b-dev/infra/packages/auth/pkg/auth"
 	sqlcdb "github.com/e2b-dev/infra/packages/db/client"
-	authdb "github.com/e2b-dev/infra/packages/db/pkg/auth"
 )
 
-// Auth and project state use separately configured pools; transactions cannot span them.
 type Service struct {
-	db        *authdb.Client
-	projectDB *sqlcdb.Client
-	cache     sharedauth.Service
-	applyLag  applyLag
+	db       *sqlcdb.Client
+	cache    sharedauth.Service
+	applyLag applyLag
 }
 
-func NewService(db *authdb.Client, projectDB *sqlcdb.Client, cache sharedauth.Service, meterProvider metric.MeterProvider) *Service {
-	return &Service{db: db, projectDB: projectDB, cache: cache, applyLag: newApplyLag(meterProvider)}
+func NewService(db *sqlcdb.Client, cache sharedauth.Service, meterProvider metric.MeterProvider) *Service {
+	return &Service{db: db, cache: cache, applyLag: newApplyLag(meterProvider)}
 }

@@ -131,7 +131,6 @@ func TestNoTeamIsNewlyAssignedToAClusterBeingDeleted(t *testing.T) {
 
 	db := testutils.SetupDatabase(t)
 	store := &APIStore{db: db.SqlcClient, authService: &recordingCacheAuthService{}}
-	upserts, _ := newUpsertStore(db)
 	ctx := t.Context()
 	clusterID := uuid.New()
 	require.Equal(t, http.StatusNoContent, callManagementRegisterCluster(t, store, clusterID, managementClusterRegistration()).Code)
@@ -143,9 +142,6 @@ func TestNoTeamIsNewlyAssignedToAClusterBeingDeleted(t *testing.T) {
 	require.Equal(t, http.StatusConflict, refused.Code)
 	require.Contains(t, refused.Body.String(), string(api.ClusterAssignmentClusterDeleting))
 	require.Equal(t, http.StatusNoContent, callManagementAssignProjectCluster(t, store, assigned, clusterID).Code, "an existing assignment is not a new one")
-	upserted := callUpsertProject(t, upserts, uuid.New(), api.ManagementProjectUpsertRequest{Name: "Late", Slug: "late-" + uuid.NewString()[:8], Email: "late@example.test", ClusterId: &clusterID})
-	require.Equal(t, http.StatusConflict, upserted.Code)
-	require.Contains(t, upserted.Body.String(), "Cluster is being deleted")
 
 	conn, err := pgx.Connect(ctx, db.ConnStr())
 	require.NoError(t, err)

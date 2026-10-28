@@ -74,7 +74,7 @@ func newBlockStore(db *testutils.Database) (*APIStore, *recordingCacheAuthServic
 	return &APIStore{
 		db:                db.SqlcClient,
 		authService:       auth,
-		managementService: management.NewService(db.AuthDB, db.SqlcClient, auth, noop.NewMeterProvider()),
+		managementService: management.NewService(db.SqlcClient, auth, noop.NewMeterProvider()),
 	}, auth
 }
 

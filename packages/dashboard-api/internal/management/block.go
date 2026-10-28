@@ -14,7 +14,10 @@ import (
 	"github.com/e2b-dev/infra/packages/db/queries"
 )
 
-var ErrInvalidProjectBlock = errors.New("invalid project block state")
+var (
+	ErrProjectNotFound     = errors.New("project not found")
+	ErrInvalidProjectBlock = errors.New("invalid project block state")
+)
 
 type ProjectBlockProjection struct {
 	ProjectID uuid.UUID
@@ -47,7 +50,7 @@ func (s *Service) ApplyProjectBlock(ctx context.Context, projection ProjectBlock
 }
 
 func (s *Service) applyProjectBlock(ctx context.Context, projection ProjectBlockProjection) (bool, error) {
-	txDB, tx, err := s.projectDB.WithTx(ctx)
+	txDB, tx, err := s.db.WithTx(ctx)
 	if err != nil {
 		return false, fmt.Errorf("start project block transaction: %w", err)
 	}

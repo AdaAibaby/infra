@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -18,59 +17,28 @@ const sentDecidedAtJSON = `"2026-09-29T08:00:00.123456789Z"`
 
 var sentDecidedAt = time.Date(2026, 9, 29, 8, 0, 0, 123456000, time.UTC)
 
-func TestManagementDeliveriesRecordWhenTheirRevisionWasDecided(t *testing.T) {
-	t.Parallel()
-
-	for name, deliver := range map[string]struct {
-		ledger string
-		call   func(t *testing.T, store *APIStore, teamID uuid.UUID, body string) int
-		body   string
-	}{
-		"limits": {
-			ledger: "project_limits",
-			call: func(t *testing.T, store *APIStore, teamID uuid.UUID, body string) int {
-				t.Helper()
-
-				return callUpsertProjectLimits(t, store, teamID, body).Code
-			},
-			body: strings.Replace(validLimitsBody, `"revision": 2,`, `"revision": 2, "decided_at": `+sentDecidedAtJSON+`,`, 1),
-		},
-		"block": {
-			ledger: "project_blocks",
-			call: func(t *testing.T, store *APIStore, teamID uuid.UUID, body string) int {
-				t.Helper()
-
-				return callApplyProjectBlock(t, store, teamID, body).Code
-			},
-			body: `{"revision": 2, "blocked": true, "decided_at": ` + sentDecidedAtJSON + `}`,
-		},
-	} {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-
-			db := testutils.SetupDatabase(t)
-			teamID := testutils.CreateTestTeam(t, db)
-			store, _ := newLimitsStore(db)
-
-			require.Equal(t, http.StatusNoContent, deliver.call(t, store, teamID, deliver.body))
-			require.Equal(t, sentDecidedAt, *readLedgerDecidedAt(t, db, deliver.ledger, teamID),
-				"stored to the microsecond Postgres keeps")
-		})
-	}
-}
-
-func TestManagementDeliveriesWithoutDecidedAtStillApply(t *testing.T) {
+func TestABlockDeliveryRecordsWhenItsRevisionWasDecided(t *testing.T) {
 	t.Parallel()
 
 	db := testutils.SetupDatabase(t)
 	teamID := testutils.CreateTestTeam(t, db)
-	store, _ := newLimitsStore(db)
+	store, _ := newBlockStore(db)
 
-	require.Equal(t, http.StatusNoContent, callUpsertProjectLimits(t, store, teamID, validLimitsBody).Code)
+	body := `{"revision": 2, "blocked": true, "decided_at": ` + sentDecidedAtJSON + `}`
+	require.Equal(t, http.StatusNoContent, callApplyProjectBlock(t, store, teamID, body).Code)
+	require.Equal(t, sentDecidedAt, *readLedgerDecidedAt(t, db, teamID),
+		"stored to the microsecond Postgres keeps")
+}
+
+func TestABlockDeliveryWithoutDecidedAtStillApplies(t *testing.T) {
+	t.Parallel()
+
+	db := testutils.SetupDatabase(t)
+	teamID := testutils.CreateTestTeam(t, db)
+	store, _ := newBlockStore(db)
+
 	require.Equal(t, http.StatusNoContent, callApplyProjectBlock(t, store, teamID, `{"revision": 1, "blocked": true}`).Code)
-
-	require.Nil(t, readLedgerDecidedAt(t, db, "project_limits", teamID))
-	require.Nil(t, readLedgerDecidedAt(t, db, "project_blocks", teamID))
+	require.Nil(t, readLedgerDecidedAt(t, db, teamID))
 }
 
 func TestManagementContractAdmitsDecidedAt(t *testing.T) {
@@ -78,23 +46,21 @@ func TestManagementContractAdmitsDecidedAt(t *testing.T) {
 
 	swagger, err := api.GetSwagger()
 	require.NoError(t, err)
-	for _, schema := range []string{"ManagementProjectLimits", "ManagementProjectBlockRequest"} {
-		property := swagger.Components.Schemas[schema].Value.Properties["decided_at"]
-		require.NotNil(t, property, "%s has no decided_at", schema)
-		require.Equal(t, "date-time", property.Value.Format, schema)
-		require.NotContains(t, swagger.Components.Schemas[schema].Value.Required, "decided_at",
-			"%s must keep admitting callers that do not send it", schema)
-	}
+	schema := swagger.Components.Schemas["ManagementProjectBlockRequest"].Value
+	property := schema.Properties["decided_at"]
+	require.NotNil(t, property)
+	require.Equal(t, "date-time", property.Value.Format)
+	require.NotContains(t, schema.Required, "decided_at", "callers that do not send it must stay admitted")
 }
 
-func readLedgerDecidedAt(t *testing.T, db *testutils.Database, ledger string, teamID uuid.UUID) *time.Time {
+func readLedgerDecidedAt(t *testing.T, db *testutils.Database, teamID uuid.UUID) *time.Time {
 	t.Helper()
 
 	var decidedAt *time.Time
 	require.NoError(t, db.SqlcClient.TestsRawSQLQuery(t.Context(),
-		"SELECT decided_at FROM projection."+ledger+" WHERE project_id = $1",
+		"SELECT decided_at FROM projection.project_blocks WHERE project_id = $1",
 		func(rows pgx.Rows) error {
-			require.True(t, rows.Next(), "no %s ledger row", ledger)
+			require.True(t, rows.Next(), "no ledger row")
 
 			return rows.Scan(&decidedAt)
 		}, teamID))

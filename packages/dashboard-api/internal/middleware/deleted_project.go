@@ -17,14 +17,6 @@ import (
 // its ID: the management surface (projectID) and the admin routes (teamID).
 var deletedProjectPrefixes = []string{"/v1/management/", "/admin/"}
 
-// deletedProjectExempt lists writes that must still reach their handler for a
-// deleted project. A retried deletion repeats its cleanup.
-var deletedProjectExempt = map[string]map[string]struct{}{
-	http.MethodDelete: {
-		"/v1/management/projects/:projectID": {},
-	},
-}
-
 // RefuseDeletedProject answers 404 to a write addressed to a deleted project.
 // A deleted project keeps its team row, so without this the handlers would
 // still find it and apply the write.
@@ -65,13 +57,9 @@ func RefuseDeletedProject(queries *dashboardqueries.Queries) gin.HandlerFunc {
 }
 
 // guardsDeletedProject reports whether RefuseDeletedProject checks a route:
-// a write under the management or admin tree that names a project ID and is
-// not exempt.
+// a write under the management or admin tree that names a project ID.
 func guardsDeletedProject(method, route string) bool {
 	if method == http.MethodGet {
-		return false
-	}
-	if _, exempt := deletedProjectExempt[method][route]; exempt {
 		return false
 	}
 	if !strings.Contains(route, "/:projectID") && !strings.Contains(route, "/:teamID") {

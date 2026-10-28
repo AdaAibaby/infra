@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"time"
@@ -46,4 +47,20 @@ func (s *APIStore) ManagementApplyProjectBlock(c *gin.Context, projectID api.Pro
 	}
 
 	c.Status(http.StatusNoContent)
+}
+
+func (s *APIStore) sendProjectBlockError(c *gin.Context, err error, attrs ...attribute.KeyValue) {
+	ctx := c.Request.Context()
+
+	switch {
+	case errors.Is(err, management.ErrProjectNotFound):
+		telemetry.ReportErrorByCode(ctx, http.StatusNotFound, "apply project block failed", err, attrs...)
+		s.sendAPIStoreError(c, http.StatusNotFound, "Project not found")
+	case errors.Is(err, management.ErrInvalidProjectBlock):
+		telemetry.ReportErrorByCode(ctx, http.StatusBadRequest, "apply project block failed", err, attrs...)
+		s.sendAPIStoreError(c, http.StatusBadRequest, "Invalid project block state")
+	default:
+		telemetry.ReportCriticalError(ctx, "apply project block failed", err, attrs...)
+		s.sendAPIStoreError(c, http.StatusInternalServerError, "Error applying project block")
+	}
 }

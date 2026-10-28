@@ -103,35 +103,6 @@ Supporting packages: `packages/shared` (protos, telemetry, storage clients, feat
 
 The control-plane entry point (Gin, OpenAPI-generated from `spec/openapi.yml`, port 80).
 
-`PUT /unstable/management/projects/{projectID}/settings` applies a revisioned settings
-projection from the owning management service. This endpoint belongs to the API
-and accepts only service JWTs through `AdminJWTAuth`. It locks the team and checks
-that it has not been deleted before applying the projection. The shared `ProjectSettings` type
-contains `SandboxSettings`, with the optional ingress default under
-`sandboxSettings.defaultAllowPublicTraffic`. Storage uses `projection.project_settings`,
-with `revision` and nullable `sandbox_default_allow_public_traffic` in the same row.
-The receiver applies both in one guarded upsert. Equal or older revisions cannot
-overwrite it. Clearing stores NULL at a newer revision, retaining the ordering fence.
-Cache invalidation follows commit and is retried on duplicate
-delivery after a cache failure. There is no rollout flag check on accepted delivery.
-Sandbox creation resolves an absent default to true and honors a saved default
-independently of rollout eligibility. New sandboxes can use an older value while
-delivery or cache refresh is pending.
-
-The API also serves the project upsert, member, limits and delete writes under
-`/unstable/management/projects/{projectID}` (`PUT`, `PUT .../members/{userID}`,
-`PUT .../limits`, `DELETE`). Like the settings route, they accept only service JWTs through
-`AdminJWTAuth`. They are copies of the dashboard-api `/v1/management` routes with the same
-operation IDs, bodies, status codes and semantics (see Dashboard API below), and both services
-serve them until callers move. The API copies differ in three ways. There is no block route. The
-project delete enqueues `teardown_team_resources` with `InsertTx` on the outbox's own River client,
-in the deletion transaction. The deleted-project middleware, which runs after authentication,
-guards every non-GET route under `/unstable/management/` that names `{projectID}`, including
-settings, and nothing under `/admin/`; the DELETE is exempt so a retry still reaches it. Accepted
-limits deliveries record `dashboard-api.management.apply_lag` and
-`dashboard-api.management.origin_unknown` under the same names as dashboard-api, so the existing
-alert sums both services.
-
 - **Resources**: sandboxes (create/list/kill/pause/resume/connect/timeout/metrics/logs),
   templates and builds (including the web dashboard's build listings under `/unstable/builds`),
   teams, volumes, API keys, secrets, sandbox events and webhooks, admin operations.
@@ -266,7 +237,7 @@ alert sums both services.
 - **Outbox** (`internal/outbox`): a River client on the shared database's `river` schema
   works jobs that need the orchestrator connections. Its job arguments live in
   `packages/db/pkg/outbox`. The one kind today, `teardown_team_resources`, stops a deleted
-  team's workloads; the API's own project deletion and dashboard-api's both enqueue it. A
+  team's workloads; the API's own project deletion enqueues it. A
   guard runs first on every attempt: a team that exists and is not blocked fails the attempt,
   and the job retries rather than kill a live team's sandboxes; a missing team row does not
   stop it. Then
@@ -290,6 +261,92 @@ alert sums both services.
   the value the flag falls back to when LaunchDarkly has none (no LaunchDarkly, or the flag not
   defined there); a LaunchDarkly value wins. LaunchDarkly feature flags also gate placement
   parameters, rate limits, and rollouts.
+
+#### Project management writes (`/unstable/management`)
+
+`PUT /unstable/management/projects/{projectID}/settings` applies a revisioned settings
+projection from the owning management service. This endpoint belongs to the API
+and accepts only service JWTs through `AdminJWTAuth`. It locks the team and checks
+that it has not been deleted before applying the projection. The shared `ProjectSettings` type
+contains `SandboxSettings`, with the optional ingress default under
+`sandboxSettings.defaultAllowPublicTraffic`. Storage uses `projection.project_settings`,
+with `revision` and nullable `sandbox_default_allow_public_traffic` in the same row.
+The receiver applies both in one guarded upsert. Equal or older revisions cannot
+overwrite it. Clearing stores NULL at a newer revision, retaining the ordering fence.
+Cache invalidation follows commit and is retried on duplicate
+delivery after a cache failure. There is no rollout flag check on accepted delivery.
+Sandbox creation resolves an absent default to true and honors a saved default
+independently of rollout eligibility. New sandboxes can use an older value while
+delivery or cache refresh is pending.
+
+The owning management service also drives the project writes under
+`/unstable/management/projects/{projectID}`. Like the settings route, each accepts only service
+JWTs through `AdminJWTAuth`, and each is idempotent, because the caller is level-triggered and
+retries.
+
+- `PUT /unstable/management/projects/{projectID}` creates or reconciles a project and answers 201
+  or 200 to say which. A project is a `public.teams` row created from a caller-supplied UUID. The
+  tier is assigned once at creation from a local default, and no push moves it. An optional
+  cluster ID is stored on the project; omitting it preserves the current assignment. A changed
+  slug renames the project and, in the same transaction, gives each of its namespaced template
+  aliases under the new slug as well, keeping the old ones and leaving an alias the new slug
+  already holds as it is. It answers 409 when another project already holds the slug, when the
+  request assigns a cluster whose deletion is recorded, or when a concurrent request created the
+  same project first.
+- `PUT .../members/{userID}` applies the desired presence for one user, gated by a monotonic
+  per-project/user revision in `projection.project_members`; a duplicate or older revision
+  succeeds without changing target state. A present projection carries the user's OIDC
+  issuer/subject identities. Every projected user has at least one, and an identity already owned
+  by a different user returns 409. A revocation removes only that user's `users_teams` row;
+  projected users and identities are retained. Auth caches member authorization, so each accepted
+  command evicts that user's authorization for the project after commit.
+- `PUT .../limits` syncs the project's effective limits into `project_limits`, which the team
+  lookups read in preference to `default_limits`. It is gated by a monotonic per-project revision
+  in `projection.project_limits`: the caller raises it whenever the limits it resolved change, and
+  a delivery at or below the recorded revision is dropped and still answers 204. The ledger and the
+  values advance in one transaction, so a revision is never recorded without the values it
+  admitted.
+- `DELETE /unstable/management/projects/{projectID}` soft-deletes the project, described below.
+
+Both revision fences are the target's for the same reason: the caller can only fence what it
+sends, so two deliveries in flight arrive in whichever order the network gives them, and the older
+one has to be refused where it lands. The project, membership and limits writes live in
+`internal/management` with their post-commit cache evictions rather than in the handlers.
+
+A limits delivery may carry `decided_at`, when the caller decided that revision; the ledger row
+stores it beside the revision. Each delivery the ledger accepts records the seconds since then in
+`dashboard-api.management.apply_lag` with `projection` `project_limits`; one without `decided_at`
+counts in `dashboard-api.management.origin_unknown` instead, never as zero lag. Dropped, refused
+and failed deliveries record nothing. The names keep the dashboard-api prefix because dashboard-api
+records its block deliveries under the same two metrics, so one alert and one dashboard read both.
+
+Project deletion soft-deletes any project, including a member's default project; whether a project
+may be deleted is the caller's decision. `envs`, `snapshots` and `volumes` reference `teams` with
+`ON DELETE NO ACTION`, so the team row stays. One transaction:
+
+- locks the row (404 if it is missing) and sets `teams.deleted_at`;
+- blocks the team (a CHECK keeps every deleted team blocked) and clears its cluster assignment;
+- scrubs its name and email to `DELETED` and its slug to `deleted-<project ID>`, releasing the
+  old slug for reuse;
+- deletes its memberships and API keys;
+- soft-deletes its templates, snapshot templates and paused-sandbox snapshots the way a template
+  deletion does, releasing their aliases and build tracking;
+- enqueues `teardown_team_resources` with `InsertTx` on the outbox's own River client, so the
+  teardown runs exactly when the deletion commits.
+
+After commit it evicts the deleted keys' auth cache entries best-effort; the team's other cached
+entries refresh or expire on their own. Repeating the call answers 204 and runs every step again,
+keeping only the first deletion's time. That undoes a block reason, rename or cluster assignment
+written by a delivery that passed its deleted-project check just before the first call committed;
+deletes memberships, keys and envs created since (a sandbox that paused before the teardown killed
+it leaves a snapshot); and enqueues the teardown again, which is a no-op while one is still open.
+
+Afterwards the API's deleted-project middleware, running after authentication, answers 404 to every
+non-GET route under `/unstable/management/` that names `{projectID}`: the upsert, member, limits
+and settings writes. The DELETE is exempt so a retry still reaches it. dashboard-api guards its own
+management and admin writes the same way. Shared auth refuses a membership or API key still left
+for the project with 403, and the API leaves the project out of a user's team list. Volumes, builds
+and stored artifacts are not reclaimed.
 
 ### Orchestrator (`packages/orchestrator`)
 
@@ -545,29 +602,8 @@ An issuer may omit `audiences` only with no `audienceMatchPolicy`; this delibera
 audience matching while issuer, signature, and temporal-claim verification remain required.
 
 The `/v1/management` operations are the cluster's half of a contract the workspace residency owns:
-project upsert (a project is a `public.teams` row created from a caller-supplied UUID; the tier is
-assigned once at creation from a local default and no push moves it; an optional cluster ID is
-stored on the project, with omission preserving its current assignment; a changed slug renames the project and, in the same transaction, gives each of its namespaced
-template aliases under the new slug as well, keeping the old ones and leaving an alias the new
-slug already holds as it is), per-member projection,
-and limit sync (into `project_limits`, which the team lookups read in preference to `default_limits`). All are
-idempotent, because the caller is level-triggered and retries. `PUT
-/v1/management/projects/{projectID}/members/{userID}` applies the desired presence for one user,
-gated by a monotonic per-project/user revision stored in `projection.project_members`; duplicate or
-older revisions succeed without changing target state. `PUT
-/v1/management/projects/{projectID}/limits` is gated the same way, by a monotonic per-project
-revision in `projection.project_limits`: the caller raises it whenever the limits it resolved for a
-project change, and a delivery at or below the recorded revision is dropped and still answers 204.
-The ledger and the values in `public.project_limits` advance in one transaction, so a revision is
-never recorded without the values it admitted. Both fences are the target's, and both exist for the
-same reason — the caller can only fence what it sends, so two deliveries in flight arrive in
-whichever order the network gives them and the older one has to be refused where it lands. A present projection includes that User's
-OIDC issuer/subject identities. Every projected user has at least one identity, and an identity
-already owned by a different user returns 409. A revocation removes only that User's
-`users_teams` row; projected Users and identities are retained. Membership writes live in
-`internal/management` with their post-commit cache eviction rather than in the handlers: auth
-caches member authorization, so each accepted command invalidates that User's authorization for
-the Project after commit.
+project block state and the cluster lifecycle below. Project upsert, membership, limits and
+deletion are served by the API under `/unstable/management/projects/{projectID}` (see API above).
 
 `PUT /v1/management/projects/{projectID}/block` applies a revision-fenced block
 state. The `projection.project_blocks` revision and `public.teams.is_blocked` /
@@ -577,10 +613,10 @@ failures return an error so retries can finish invalidation after commit. The AP
 uses this state when admitting billable work. It is the only route that writes the
 team's block state.
 
-Limit and block deliveries may carry `decided_at`, when the caller decided that
+Block deliveries may carry `decided_at`, when the caller decided that
 revision. The ledger row stores it beside the revision. Each delivery the ledger
 accepts records the seconds since then in `dashboard-api.management.apply_lag`, by
-`projection` (`project_limits`, `project_blocks`); one without `decided_at` counts
+`projection` (`project_blocks`); one without `decided_at` counts
 in `dashboard-api.management.origin_unknown` instead, never as zero lag. Dropped,
 refused and failed deliveries record nothing.
 
@@ -604,7 +640,7 @@ locks the cluster row, returns a conflict while deletion protection is on, and s
 `clusters.deletion_requested_at`; it succeeds for an absent cluster and on repeat. From then on a
 check constraint keeps deletion protection off, and a trigger on `teams` refuses to newly assign a
 team to the cluster (`cluster_assignment_cluster_deleting` from the assignment route, a conflict
-from an upsert carrying the cluster ID). The trigger takes a key-share lock on the cluster row
+from the API's project upsert carrying the cluster ID). The trigger takes a key-share lock on the cluster row
 before it checks, so an assignment either commits before the deletion is recorded, where the
 caller's next listing finds it, or is refused. Deleting each project clears its team's cluster,
 the cluster delete clears it from any team deleted earlier, and then succeeds.
@@ -613,31 +649,10 @@ The shared error response supports an optional `error_code`, defined by the dash
 may omit it. Callers use that stable code rather than the human-readable message, and treat
 uncoded or unknown reasons as generic errors.
 
-`DELETE /v1/management/projects/{projectID}` soft-deletes any project, including a member's
-default project; whether a project may be deleted is the caller's decision. `envs`,
-`snapshots` and `volumes` reference `teams` with `ON DELETE NO ACTION`, so the team row
-stays. One transaction locks the row (404 if it is missing), sets `teams.deleted_at`,
-blocks the team (a CHECK keeps every deleted team blocked), clears its
-cluster assignment, scrubs its name and email to `DELETED` and its slug to
-`deleted-<project ID>` (releasing the old slug for reuse), deletes its memberships and API
-keys, soft-deletes its templates, snapshot templates and paused-sandbox snapshots the way a
-template deletion does (releasing their aliases and build tracking), and enqueues the API's
-`teardown_team_resources` outbox job with River's `InsertTx`, so the teardown runs exactly
-when the deletion commits. dashboard-api holds an insert-only River client for this; it works
-no jobs. After commit it evicts the deleted keys' auth cache entries best-effort; the team's
-other cached entries refresh or expire on their own. Repeating the call answers 204 and runs
-every step again, keeping only the first deletion's time: it re-blocks and re-scrubs the team
-and clears its cluster, undoing a block reason, rename or cluster assignment (from the cluster
-route or an upsert carrying a cluster ID) written by a delivery that passed its
-deleted-project check just before the first call committed; it deletes memberships, keys and
-envs created since (a sandbox that paused before the teardown killed it leaves a snapshot);
-and it enqueues the teardown again, which is a no-op while one is still open. Afterwards a
-dashboard-api middleware, running after authentication, answers 404 to every write under
-`/v1/management/` or `/admin/` that names the project by `projectID` or `teamID` (project
-upsert, member, limits and block deliveries, cluster assignment and detachment, admin ban);
-the project DELETE is exempt so a retry still reaches it. Shared auth refuses a
-membership or API key still left for the project with 403, and the API leaves it out of a
-user's team list. Volumes, builds and stored artifacts are not reclaimed.
+A project deletion keeps the team row, so dashboard-api middleware, running after
+authentication, answers 404 to every write under `/v1/management/` or `/admin/` that names a
+deleted project by `projectID` or `teamID` (block deliveries, cluster assignment and
+detachment, admin ban).
 
 ## Data stores
 

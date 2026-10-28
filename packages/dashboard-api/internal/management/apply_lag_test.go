@@ -14,33 +14,6 @@ import (
 	"github.com/e2b-dev/infra/packages/db/pkg/testutils"
 )
 
-func TestApplyProjectLimitsMeasuresHowLongTheDecisionTookToApply(t *testing.T) {
-	t.Parallel()
-
-	db := testutils.SetupDatabase(t)
-	service, reader := newMeasuredService(db)
-	teamID := testutils.CreateTestTeam(t, db)
-	decidedAt := time.Now().Add(-90 * time.Second).UTC().Truncate(time.Microsecond)
-
-	projection := projectLimits(teamID, 1)
-	projection.DecidedAt = decidedAt
-	require.NoError(t, service.ApplyProjectLimits(t.Context(), projection))
-
-	seen := collectApplyLag(t, reader)
-	require.EqualValues(t, 1, seen.lag[projectionProjectLimits].Count)
-	require.InDelta(t, 105, seen.lag[projectionProjectLimits].Sum, 15, "one point, 90s old when sent")
-	require.Empty(t, seen.unknown)
-	require.Equal(t, decidedAt, *ledgerDecidedAt(t, db, "project_limits", teamID))
-
-	duplicate := projectLimits(teamID, 1)
-	duplicate.DecidedAt = time.Now()
-	require.NoError(t, service.ApplyProjectLimits(t.Context(), duplicate))
-
-	seen = collectApplyLag(t, reader)
-	require.EqualValues(t, 1, seen.lag[projectionProjectLimits].Count, "a dropped duplicate applied nothing")
-	require.Equal(t, decidedAt, *ledgerDecidedAt(t, db, "project_limits", teamID))
-}
-
 func TestApplyProjectBlockMeasuresHowLongTheDecisionTookToApply(t *testing.T) {
 	t.Parallel()
 
@@ -57,7 +30,7 @@ func TestApplyProjectBlockMeasuresHowLongTheDecisionTookToApply(t *testing.T) {
 	require.EqualValues(t, 1, seen.lag[projectionProjectBlocks].Count)
 	require.InDelta(t, 105, seen.lag[projectionProjectBlocks].Sum, 15, "one point, 90s old when sent")
 	require.Empty(t, seen.unknown)
-	require.Equal(t, decidedAt, *ledgerDecidedAt(t, db, "project_blocks", teamID))
+	require.Equal(t, decidedAt, *ledgerDecidedAt(t, db, teamID))
 
 	require.NoError(t, service.ApplyProjectBlock(t.Context(), ProjectBlockProjection{
 		ProjectID: teamID, Revision: 1, Blocked: false, DecidedAt: time.Now(),
@@ -65,7 +38,7 @@ func TestApplyProjectBlockMeasuresHowLongTheDecisionTookToApply(t *testing.T) {
 
 	seen = collectApplyLag(t, reader)
 	require.EqualValues(t, 1, seen.lag[projectionProjectBlocks].Count, "an overtaken delivery applied nothing")
-	require.Equal(t, decidedAt, *ledgerDecidedAt(t, db, "project_blocks", teamID))
+	require.Equal(t, decidedAt, *ledgerDecidedAt(t, db, teamID))
 }
 
 func TestAStoredRevisionWithoutDecidedAtIsCountedAsOriginUnknown(t *testing.T) {
@@ -75,16 +48,14 @@ func TestAStoredRevisionWithoutDecidedAtIsCountedAsOriginUnknown(t *testing.T) {
 	service, reader := newMeasuredService(db)
 	teamID := testutils.CreateTestTeam(t, db)
 
-	require.NoError(t, service.ApplyProjectLimits(t.Context(), projectLimits(teamID, 1)))
 	require.NoError(t, service.ApplyProjectBlock(t.Context(), ProjectBlockProjection{
 		ProjectID: teamID, Revision: 1, Blocked: true,
 	}))
 
 	seen := collectApplyLag(t, reader)
 	require.Empty(t, seen.lag, "a missing decision time is not zero lag")
-	require.Equal(t, map[projectionKind]int64{projectionProjectLimits: 1, projectionProjectBlocks: 1}, seen.unknown)
-	require.Nil(t, ledgerDecidedAt(t, db, "project_limits", teamID))
-	require.Nil(t, ledgerDecidedAt(t, db, "project_blocks", teamID))
+	require.Equal(t, map[projectionKind]int64{projectionProjectBlocks: 1}, seen.unknown)
+	require.Nil(t, ledgerDecidedAt(t, db, teamID))
 }
 
 func TestADeliveryThatFailsRecordsNoApplyLag(t *testing.T) {
@@ -95,18 +66,12 @@ func TestADeliveryThatFailsRecordsNoApplyLag(t *testing.T) {
 	teamID := testutils.CreateTestTeam(t, db)
 	decidedAt := time.Now().Add(-time.Minute)
 
-	unknownProject := projectLimits(uuid.New(), 1)
-	unknownProject.DecidedAt = decidedAt
-	require.ErrorIs(t, service.ApplyProjectLimits(t.Context(), unknownProject), ErrProjectNotFound)
-
-	rejected := projectLimits(teamID, 1)
-	rejected.DecidedAt = decidedAt
-	rejected.DefaultFreeDiskSizeMB = rejected.MaxFreeDiskSizeMB + 1
-	require.ErrorIs(t, service.ApplyProjectLimits(t.Context(), rejected), ErrInvalidProjectLimits)
-
 	require.ErrorIs(t, service.ApplyProjectBlock(t.Context(), ProjectBlockProjection{
 		ProjectID: uuid.New(), Revision: 1, Blocked: true, DecidedAt: decidedAt,
 	}), ErrProjectNotFound)
+	require.ErrorIs(t, service.ApplyProjectBlock(t.Context(), ProjectBlockProjection{
+		ProjectID: teamID, Revision: 0, Blocked: true, DecidedAt: decidedAt,
+	}), ErrInvalidProjectBlock)
 
 	seen := collectApplyLag(t, reader)
 	require.Empty(t, seen.lag)
@@ -122,24 +87,18 @@ func TestAWriteThatRollsBackAfterTheFenceRecordsNoApplyLag(t *testing.T) {
 	require.NoError(t, db.SqlcClient.TestsRawSQL(t.Context(), `
 		CREATE FUNCTION public.refuse_write() RETURNS trigger LANGUAGE plpgsql AS $$
 		BEGIN RAISE EXCEPTION 'refused'; END $$;
-		CREATE TRIGGER refuse_limits BEFORE INSERT ON public.project_limits
-			FOR EACH ROW EXECUTE FUNCTION public.refuse_write();
 		CREATE TRIGGER refuse_block BEFORE UPDATE OF is_blocked ON public.teams
 			FOR EACH ROW EXECUTE FUNCTION public.refuse_write();
 	`))
 	decidedAt := time.Now().Add(-time.Minute)
 
-	limits := projectLimits(teamID, 1)
-	limits.DecidedAt = decidedAt
-	require.Error(t, service.ApplyProjectLimits(t.Context(), limits))
 	require.Error(t, service.ApplyProjectBlock(t.Context(), ProjectBlockProjection{
 		ProjectID: teamID, Revision: 1, Blocked: true, DecidedAt: decidedAt,
 	}))
 
 	seen := collectApplyLag(t, reader)
-	require.Empty(t, seen.lag, "the fence accepted both, but neither committed")
+	require.Empty(t, seen.lag, "the fence accepted it, but it did not commit")
 	require.Empty(t, seen.unknown)
-	require.Nil(t, ledgerRevision(t, db, teamID))
 	require.Nil(t, blockLedgerRevision(t, db, teamID))
 }
 
@@ -149,17 +108,17 @@ func TestApplyLagFloorsADecisionAheadOfThisClockAtZero(t *testing.T) {
 	reader := sdkmetric.NewManualReader()
 	lag := newApplyLag(sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader)))
 
-	lag.stored(t.Context(), projectionProjectLimits, time.Now().Add(time.Hour))
+	lag.stored(t.Context(), projectionProjectBlocks, time.Now().Add(time.Hour))
 
 	seen := collectApplyLag(t, reader)
-	require.EqualValues(t, 1, seen.lag[projectionProjectLimits].Count)
-	require.Zero(t, seen.lag[projectionProjectLimits].Sum)
+	require.EqualValues(t, 1, seen.lag[projectionProjectBlocks].Count)
+	require.Zero(t, seen.lag[projectionProjectBlocks].Sum)
 }
 
 func newMeasuredService(db *testutils.Database) (*Service, *sdkmetric.ManualReader) {
 	reader := sdkmetric.NewManualReader()
 
-	return NewService(db.AuthDB, db.SqlcClient, &recordingCache{}, sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))), reader
+	return NewService(db.SqlcClient, &recordingCache{}, sdkmetric.NewMeterProvider(sdkmetric.WithReader(reader))), reader
 }
 
 type applyLagPoints struct {
@@ -205,14 +164,14 @@ func projectionOf(attributes attribute.Set) projectionKind {
 	return projectionKind(value.AsString())
 }
 
-func ledgerDecidedAt(t *testing.T, db *testutils.Database, ledger string, teamID uuid.UUID) *time.Time {
+func ledgerDecidedAt(t *testing.T, db *testutils.Database, teamID uuid.UUID) *time.Time {
 	t.Helper()
 
 	var decidedAt *time.Time
 	require.NoError(t, db.SqlcClient.TestsRawSQLQuery(t.Context(),
-		"SELECT decided_at FROM projection."+ledger+" WHERE project_id = $1",
+		"SELECT decided_at FROM projection.project_blocks WHERE project_id = $1",
 		func(rows pgx.Rows) error {
-			require.True(t, rows.Next(), "no %s ledger row", ledger)
+			require.True(t, rows.Next(), "no ledger row")
 
 			return rows.Scan(&decidedAt)
 		}, teamID))

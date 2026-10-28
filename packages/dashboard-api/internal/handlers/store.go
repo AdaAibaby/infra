@@ -7,8 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
-	"github.com/riverqueue/river"
 	"go.opentelemetry.io/otel/metric"
 
 	sharedauth "github.com/e2b-dev/infra/packages/auth/pkg/auth"
@@ -19,7 +17,6 @@ import (
 	"github.com/e2b-dev/infra/packages/dashboard-api/internal/identity"
 	"github.com/e2b-dev/infra/packages/dashboard-api/internal/management"
 	sqlcdb "github.com/e2b-dev/infra/packages/db/client"
-	authdb "github.com/e2b-dev/infra/packages/db/pkg/auth"
 	"github.com/e2b-dev/infra/packages/shared/pkg/apierrors"
 )
 
@@ -28,33 +25,27 @@ var _ api.ServerInterface = (*APIStore)(nil)
 type APIStore struct {
 	config            cfg.Config
 	db                *sqlcdb.Client
-	authDB            *authdb.Client
 	clickhouse        clickhouse.Clickhouse
 	authService       sharedauth.Service
 	identityService   identity.Service
 	managementService *management.Service
-	riverClient       *river.Client[pgx.Tx]
 }
 
 func NewAPIStore(
 	config cfg.Config,
 	db *sqlcdb.Client,
-	authDB *authdb.Client,
 	ch clickhouse.Clickhouse,
 	authService sharedauth.Service,
 	identityService identity.Service,
 	meterProvider metric.MeterProvider,
-	riverClient *river.Client[pgx.Tx],
 ) *APIStore {
 	return &APIStore{
 		config:            config,
 		db:                db,
-		authDB:            authDB,
 		clickhouse:        ch,
 		authService:       authService,
 		identityService:   identityService,
-		managementService: management.NewService(authDB, db, authService, meterProvider),
-		riverClient:       riverClient,
+		managementService: management.NewService(db, authService, meterProvider),
 	}
 }
 

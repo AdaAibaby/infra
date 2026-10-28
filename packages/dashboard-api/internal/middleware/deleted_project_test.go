@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"net/http"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -26,15 +25,10 @@ func TestRefuseDeletedProjectGuardsExactlyTheProjectWrites(t *testing.T) {
 	}
 
 	require.Equal(t, map[string]struct{}{
-		"PUT /v1/management/projects/:projectID":                       {},
-		"PUT /v1/management/projects/:projectID/members/:userID":       {},
-		"PUT /v1/management/projects/:projectID/limits":                {},
 		"PUT /v1/management/projects/:projectID/block":                 {},
 		"PUT /v1/management/projects/:projectID/cluster/:clusterID":    {},
 		"DELETE /v1/management/projects/:projectID/cluster/:clusterID": {},
 		"PUT /admin/teams/:teamID/ban":                                 {},
 		"DELETE /admin/teams/:teamID/ban":                              {},
 	}, guarded)
-	require.False(t, guardsDeletedProject(http.MethodDelete, "/v1/management/projects/:projectID"),
-		"a retried deletion must reach its handler")
 }

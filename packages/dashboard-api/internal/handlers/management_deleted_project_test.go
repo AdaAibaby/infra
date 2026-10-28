@@ -10,10 +10,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 	"github.com/stretchr/testify/require"
-	"go.opentelemetry.io/otel/metric/noop"
 
 	"github.com/e2b-dev/infra/packages/dashboard-api/internal/api"
-	"github.com/e2b-dev/infra/packages/dashboard-api/internal/management"
 	dashboardmiddleware "github.com/e2b-dev/infra/packages/dashboard-api/internal/middleware"
 	dashboardqueries "github.com/e2b-dev/infra/packages/db/pkg/dashboard/queries"
 	"github.com/e2b-dev/infra/packages/db/pkg/testutils"
@@ -36,9 +34,6 @@ func TestWritesToADeletedProjectAnswerNotFoundAndChangeNothing(t *testing.T) {
 		path   string
 		body   string
 	}{
-		"project upsert":     {http.MethodPut, "/v1/management/projects/%s", `{"name":"restored","slug":"restored","email":"restored@example.test"}`},
-		"member delivery":    {http.MethodPut, "/v1/management/projects/%s/members/" + uuid.NewString(), `{"revision":1,"present":true,"identities":[{"issuer":"https://issuer.test","subject":"member"}]}`},
-		"limits delivery":    {http.MethodPut, "/v1/management/projects/%s/limits", validLimitsBody},
 		"block delivery":     {http.MethodPut, "/v1/management/projects/%s/block", `{"revision":1,"blocked":false}`},
 		"cluster assignment": {http.MethodPut, "/v1/management/projects/%s/cluster/" + clusterID.String(), ""},
 		"cluster detachment": {http.MethodDelete, "/v1/management/projects/%s/cluster/" + clusterID.String(), ""},
@@ -70,27 +65,10 @@ func TestALiveProjectPassesTheDeletedProjectCheck(t *testing.T) {
 	router, _ := newDeletedProjectRouter(t, db)
 	projectID := testutils.CreateTestTeam(t, db)
 
-	response := serveProjectRequest(t, router, http.MethodPut, "/v1/management/projects/"+projectID.String(),
-		`{"name":"renamed","slug":"renamed-`+projectID.String()[:8]+`","email":"renamed@example.test"}`)
+	response := serveProjectRequest(t, router, http.MethodPut, "/v1/management/projects/"+projectID.String()+"/block",
+		`{"revision":1,"blocked":false}`)
 
-	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
-}
-
-// The deletion itself is exempt, so a retried deletion still repeats its
-// cleanup.
-func TestADeletedProjectCanStillBeDeletedAgain(t *testing.T) {
-	t.Parallel()
-
-	db := testutils.SetupDatabase(t)
-	router, _ := newDeletedProjectRouter(t, db)
-	projectID := testutils.CreateTestTeam(t, db)
-	path := "/v1/management/projects/" + projectID.String()
-
-	first := serveProjectRequest(t, router, http.MethodDelete, path, "")
-	retry := serveProjectRequest(t, router, http.MethodDelete, path, "")
-
-	require.Equal(t, http.StatusNoContent, first.Code, first.Body.String())
-	require.Equal(t, http.StatusNoContent, retry.Code, retry.Body.String())
+	require.Equal(t, http.StatusNoContent, response.Code, response.Body.String())
 }
 
 // newDeletedProjectRouter serves the handlers behind the deleted-project
@@ -98,10 +76,7 @@ func TestADeletedProjectCanStillBeDeletedAgain(t *testing.T) {
 func newDeletedProjectRouter(t *testing.T, db *testutils.Database) (*gin.Engine, *recordingCacheAuthService) {
 	t.Helper()
 
-	auth := &recordingCacheAuthService{}
-	store := newDeleteStore(t, db)
-	store.authService = auth
-	store.managementService = management.NewService(db.AuthDB, db.SqlcClient, auth, noop.NewMeterProvider())
+	store, auth := newBlockStore(db)
 	router := gin.New()
 	router.Use(dashboardmiddleware.RefuseDeletedProject(db.SqlcClient.Dashboard))
 	api.RegisterHandlers(router, store)
@@ -130,16 +105,14 @@ func markProjectDeleted(t *testing.T, db *testutils.Database, projectID uuid.UUI
 		projectID))
 }
 
-// readDeletedProjectState reads everything a write to the project could
-// change: the team row, its memberships and its limits.
+// readDeletedProjectState reads the team row, which every guarded write
+// changes.
 func readDeletedProjectState(t *testing.T, db *testutils.Database, projectID uuid.UUID) string {
 	t.Helper()
 
 	var state string
-	require.NoError(t, db.SqlcClient.TestsRawSQLQuery(t.Context(), `SELECT jsonb_build_object(
-		'team', (SELECT to_jsonb(t) FROM public.teams t WHERE t.id = $1),
-		'members', (SELECT count(*) FROM public.users_teams WHERE team_id = $1),
-		'limits', (SELECT count(*) FROM public.project_limits WHERE team_id = $1))::text`,
+	require.NoError(t, db.SqlcClient.TestsRawSQLQuery(t.Context(),
+		`SELECT to_jsonb(t)::text FROM public.teams t WHERE t.id = $1`,
 		func(rows pgx.Rows) error {
 			require.True(t, rows.Next())
 
