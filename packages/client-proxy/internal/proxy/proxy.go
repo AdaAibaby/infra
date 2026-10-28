@@ -58,6 +58,9 @@ func routeHost(route *catalog.SandboxInfo, orchestratorProxyPort uint16) (string
 		switch placement.NetworkMode {
 		case catalog.NetworkModeEgressRouter:
 		case catalog.NetworkModeFullRouter:
+			if route.ExecutionID == "" {
+				return "", fmt.Errorf("%w: full-router placement without its execution", ErrNodeRouteUnavailable)
+			}
 			if placement.IngressAddress == "" || placement.IngressPort == 0 || placement.IngressPort > math.MaxUint16 {
 				return "", fmt.Errorf("%w: full-router placement without its Router's ingress", ErrNodeRouteUnavailable)
 			}
@@ -180,7 +183,7 @@ func handlePausedSandbox(
 
 // NewClientProxy returns the proxy and, when resumes are enabled, the closer
 // that stops the resume flights still running after the proxy has shut down.
-func NewClientProxy(meterProvider metric.MeterProvider, serviceName string, port, orchestratorProxyPort uint16, catalog catalog.SandboxesCatalog, sandboxResumer SandboxResumer, featureFlagsClient *featureflags.Client) (*reverseproxy.Proxy, ResumeCloser, error) {
+func NewClientProxy(meterProvider metric.MeterProvider, serviceName string, port, orchestratorProxyPort uint16, sandboxes catalog.SandboxesCatalog, sandboxResumer SandboxResumer, featureFlagsClient *featureflags.Client) (*reverseproxy.Proxy, ResumeCloser, error) {
 	meter := meterProvider.Meter(serviceName)
 
 	var resumer SandboxResumer
@@ -213,7 +216,7 @@ func NewClientProxy(meterProvider metric.MeterProvider, serviceName string, port
 			trafficAccessToken := r.Header.Get(proxygrpc.MetadataTrafficAccessToken)
 			envdAccessToken := r.Header.Get(proxygrpc.MetadataEnvdHTTPAccessToken)
 			var host string
-			route, err := catalogResolution(ctx, sandboxId, port, trafficAccessToken, envdAccessToken, catalog, resumer)
+			route, err := catalogResolution(ctx, sandboxId, port, trafficAccessToken, envdAccessToken, sandboxes, resumer)
 			if err == nil {
 				host, err = routeHost(route, orchestratorProxyPort)
 			}
@@ -274,12 +277,18 @@ func NewClientProxy(meterProvider metric.MeterProvider, serviceName string, port
 				zap.String("target_port", url.Port()),
 			)
 
+			var expectedExecutionID string
+			if placement := route.NetworkPlacement; placement != nil && placement.NetworkMode == catalog.NetworkModeFullRouter {
+				expectedExecutionID = route.ExecutionID
+			}
+
 			return &pool.Destination{
-				SandboxId:     sandboxId,
-				RequestLogger: l,
-				SandboxPort:   port,
-				ConnectionKey: pool.ClientProxyConnectionKey,
-				Url:           url,
+				ExpectedExecutionID: expectedExecutionID,
+				SandboxId:           sandboxId,
+				RequestLogger:       l,
+				SandboxPort:         port,
+				ConnectionKey:       pool.ClientProxyConnectionKey,
+				Url:                 url,
 				MaskRequestHost: clientProxyMaskRequestHost(
 					ctx,
 					featureFlagsClient,

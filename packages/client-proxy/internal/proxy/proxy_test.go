@@ -16,7 +16,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/launchdarkly/go-server-sdk/v7/testhelpers/ldtestdata"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	noopmetric "go.opentelemetry.io/otel/metric/noop"
 	"google.golang.org/genproto/googleapis/rpc/errdetails"
@@ -29,6 +31,7 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/grpc/orchestrator"
 	proxygrpc "github.com/e2b-dev/infra/packages/shared/pkg/grpc/proxy"
 	reverseproxy "github.com/e2b-dev/infra/packages/shared/pkg/proxy"
+	"github.com/e2b-dev/infra/packages/shared/pkg/proxy/pool"
 	redis_utils "github.com/e2b-dev/infra/packages/shared/pkg/redis"
 	catalog "github.com/e2b-dev/infra/packages/shared/pkg/sandbox-catalog"
 )
@@ -529,7 +532,7 @@ func (c fixedCatalog) GetSandbox(context.Context, string) (*catalog.SandboxInfo,
 // countingServer is a real TCP HTTP server that answers body to the
 // expected request, with the customer's Host and access token, and counts
 // the connections it accepted.
-func countingServer(t *testing.T, body string) (*net.TCPAddr, *atomic.Int32) {
+func countingServer(t *testing.T, body, executionID string) (*net.TCPAddr, *atomic.Int32) {
 	t.Helper()
 
 	var accepted atomic.Int32
@@ -539,6 +542,11 @@ func countingServer(t *testing.T, body string) (*net.TCPAddr, *atomic.Int32) {
 
 			return
 		}
+		var expected []string
+		if executionID != "" {
+			expected = []string{executionID}
+		}
+		assert.Equal(t, expected, r.Header.Values(pool.ExpectedExecutionIDHeader))
 		_, _ = w.Write([]byte(body))
 	}))
 	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
@@ -605,6 +613,17 @@ func TestNewClientProxy_RoutesByNetworkMode(t *testing.T) {
 			dialed:     "router",
 		},
 		{
+			name: "full-router without its execution",
+			route: func(_, router *net.TCPAddr) *catalog.SandboxInfo {
+				route := fullRouterRoute(router)
+				route.ExecutionID = ""
+
+				return route
+			},
+			wantStatus: http.StatusBadGateway,
+			wantBody:   `"message":"The sandbox was not found"`,
+		},
+		{
 			name: "full-router without its Router's ingress address",
 			route: func(_, router *net.TCPAddr) *catalog.SandboxInfo {
 				route := fullRouterRoute(router)
@@ -660,8 +679,8 @@ func TestNewClientProxy_RoutesByNetworkMode(t *testing.T) {
 			t.Run(tt.name+" from "+source, func(t *testing.T) {
 				t.Parallel()
 
-				node, nodeDials := countingServer(t, "selected-orchestrator")
-				router, routerDials := countingServer(t, "router")
+				node, nodeDials := countingServer(t, "selected-orchestrator", "")
+				router, routerDials := countingServer(t, "router", "execution")
 				route := tt.route(node, router)
 				var c catalog.SandboxesCatalog = fixedCatalog{route: route}
 				var resumer SandboxResumer
@@ -672,20 +691,55 @@ func TestNewClientProxy_RoutesByNetworkMode(t *testing.T) {
 				require.NoError(t, err)
 				t.Cleanup(func() { require.NoError(t, p.Close()) })
 
-				req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://49983-sbx.e2b.app/commands", nil)
-				req.Header.Set("X-Access-Token", "sandbox-token")
-				rr := httptest.NewRecorder()
-				p.Handler.ServeHTTP(rr, req)
+				for _, connection := range []string{"", pool.ExpectedExecutionIDHeader} {
+					req := httptest.NewRequestWithContext(t.Context(), http.MethodGet, "http://49983-sbx.e2b.app/commands", nil)
+					req.Header.Set("X-Access-Token", "sandbox-token")
+					req.Header.Add(pool.ExpectedExecutionIDHeader, "forged-first")
+					req.Header.Add(pool.ExpectedExecutionIDHeader, "forged-second")
+					req.Header.Set("Connection", connection)
+					rr := httptest.NewRecorder()
+					p.Handler.ServeHTTP(rr, req)
 
-				require.Equal(t, tt.wantStatus, rr.Code)
-				require.Contains(t, rr.Body.String(), tt.wantBody)
-				require.Empty(t, rr.Header().Get("Retry-After"))
-				require.Equal(t, tt.dialed == "node", nodeDials.Load() == 1, "the orchestrator is dialed only for its own ingress")
-				require.Equal(t, tt.dialed == "router", routerDials.Load() == 1, "the Router is dialed only for full-router")
-				require.LessOrEqual(t, nodeDials.Load()+routerDials.Load(), int32(1))
+					require.Equal(t, tt.wantStatus, rr.Code)
+					require.Contains(t, rr.Body.String(), tt.wantBody)
+					require.Empty(t, rr.Header().Get("Retry-After"))
+					require.Equal(t, tt.dialed == "node", nodeDials.Load() == 1, "the orchestrator is dialed only for its own ingress")
+					require.Equal(t, tt.dialed == "router", routerDials.Load() == 1, "the Router is dialed only for full-router")
+					require.LessOrEqual(t, nodeDials.Load()+routerDials.Load(), int32(1))
+				}
 			})
 		}
 	}
+}
+
+func TestNewClientProxy_ExecutionChangesOnReusedConnection(t *testing.T) {
+	t.Parallel()
+
+	var connections atomic.Int32
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, r.Header.Get(pool.ExpectedExecutionIDHeader))
+	}))
+	server.Config.ConnState = func(_ net.Conn, state http.ConnState) {
+		if state == http.StateNew {
+			connections.Add(1)
+		}
+	}
+	server.Start()
+	t.Cleanup(server.Close)
+	route := fullRouterRoute(server.Listener.Addr().(*net.TCPAddr))
+	p, _, err := NewClientProxy(noopmetric.NewMeterProvider(), "execution-routing", 0, 5008, fixedCatalog{route: route}, nil, newFF(t))
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, p.Close()) })
+	for _, execution := range []string{"before-resume", "after-resume"} {
+		route.ExecutionID = execution
+		r := httptest.NewRequestWithContext(t.Context(), http.MethodPost, "http://8000-sbx.e2b.app/", nil)
+		r.Header.Set(pool.ExpectedExecutionIDHeader, "forged")
+		w := httptest.NewRecorder()
+		p.Handler.ServeHTTP(w, r)
+		require.Equal(t, http.StatusOK, w.Code)
+		require.Equal(t, execution, w.Body.String())
+	}
+	require.Equal(t, int32(1), connections.Load(), "the execution is resolved per request, not per connection")
 }
 
 // upgradingRouter is a Router's ingress listener that switches every
@@ -731,7 +785,7 @@ func TestNewClientProxy_FullRouterFollowsANewEndpoint(t *testing.T) {
 	ctx := t.Context()
 	records := catalog.NewRedisSandboxCatalog(redis_utils.SetupInstance(t))
 	old, oldDials := upgradingRouter(t)
-	moved, movedDials := countingServer(t, "moved")
+	moved, movedDials := countingServer(t, "moved", "execution")
 	require.NoError(t, records.StoreSandbox(ctx, "sbx", fullRouterRoute(old), time.Minute))
 	p, _, err := NewClientProxy(noopmetric.NewMeterProvider(), "new-endpoint", 0, 1, records, nil, newFF(t))
 	require.NoError(t, err)
@@ -1107,7 +1161,7 @@ func TestClientProxyForRouterIngress(t *testing.T) { //nolint:paralleltest // se
 			_ = conn.Close()
 		}
 	}()
-	route := &catalog.SandboxInfo{OrchestratorIP: serve.Addr().String(), ExecutionID: "execution", NetworkPlacement: &catalog.NetworkPlacement{
+	route := &catalog.SandboxInfo{OrchestratorIP: serve.Addr().String(), ExecutionID: uuid.NewSHA1(uuid.NameSpaceOID, []byte("exec-s")).String(), NetworkPlacement: &catalog.NetworkPlacement{
 		NetworkMode: catalog.NetworkModeFullRouter, RouterID: "router", IngressAddress: router.Addr().String(), IngressPort: uint32(router.Port()),
 	}}
 	orchestratorPort := uint16(orchestratorProxy.Addr().(*net.TCPAddr).Port)
