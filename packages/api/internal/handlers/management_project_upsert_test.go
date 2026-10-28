@@ -128,13 +128,13 @@ func TestUpsertProjectPreservesBlockedStateAndTier(t *testing.T) {
 	require.Equal(t, http.StatusOK, renamed.Code, renamed.Body.String())
 
 	require.Equal(t, "true", teamColumn(t, db, project.id, "is_blocked::text"))
-	// The tier is this side's to assign, once, at creation. No push moves it.
+	// A push never writes the tier, so a project that has one keeps it.
 	require.Equal(t, "pro_v1", teamColumn(t, db, project.id, "tier"))
 }
 
-// Assigned once, at creation, and never moved by a push. The caller names no
-// tier at all, so there is nothing here that could move it.
-func TestUpsertProjectCreatesOnTheDefaultTier(t *testing.T) {
+// The team lookups read limits from project_limits or default_limits, so a
+// project created without a tier still resolves.
+func TestUpsertProjectCreatesWithoutATier(t *testing.T) {
 	t.Parallel()
 
 	db := testutils.SetupDatabase(t)
@@ -143,7 +143,9 @@ func TestUpsertProjectCreatesOnTheDefaultTier(t *testing.T) {
 
 	require.Equal(t, http.StatusCreated, callUpsertProject(t, store, project.id, project.request()).Code)
 
-	require.Equal(t, "base_v1", teamColumn(t, db, project.id, "tier"))
+	team, err := db.AuthDB.GetTeamByTeamID(t.Context(), project.id)
+	require.NoError(t, err)
+	require.Nil(t, team.Team.Tier)
 }
 
 // Every property in the contract is synchronized by the caller and sent on

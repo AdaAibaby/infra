@@ -285,12 +285,11 @@ JWTs through `AdminJWTAuth`, and each is idempotent, because the caller is level
 retries.
 
 - `PUT /unstable/management/projects/{projectID}` creates or reconciles a project and answers 201
-  or 200 to say which. A project is a `public.teams` row created from a caller-supplied UUID. The
-  tier is assigned once at creation from a local default, and no push moves it. An optional
-  cluster ID is stored on the project; omitting it preserves the current assignment. A changed
-  slug renames the project and, in the same transaction, gives each of its namespaced template
-  aliases under the new slug as well, keeping the old ones and leaving an alias the new slug
-  already holds as it is. It answers 409 when another project already holds the slug, when the
+  or 200 to say which. A project is a `public.teams` row created from a caller-supplied UUID, with
+  no tier. An optional cluster ID is stored on the project; omitting it preserves the current
+  assignment. A changed slug renames the project and, in the same transaction, gives each of its
+  namespaced template aliases under the new slug as well, keeping the old ones and leaving an
+  alias the new slug already holds as it is. It answers 409 when another project already holds the slug, when the
   request assigns a cluster whose deletion is recorded, or when a concurrent request created the
   same project first.
 - `PUT .../members/{userID}` applies the desired presence for one user, gated by a monotonic

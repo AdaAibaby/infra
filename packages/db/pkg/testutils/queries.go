@@ -16,7 +16,6 @@ import (
 )
 
 // CreateTestTeam creates a test team in the database.
-// Uses the default tier 'base_v1' that is created in migrations.
 func CreateTestTeam(t *testing.T, db *Database) uuid.UUID {
 	t.Helper()
 	teamID := uuid.New()
@@ -26,7 +25,6 @@ func CreateTestTeam(t *testing.T, db *Database) uuid.UUID {
 	err := db.TestQueries.InsertTestTeam(t.Context(), testqueries.InsertTestTeamParams{
 		ID:    teamID,
 		Name:  "Test Team " + teamID.String(),
-		Tier:  "base_v1",
 		Email: "test-" + teamID.String() + "@example.com",
 		Slug:  slug,
 	})

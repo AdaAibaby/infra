@@ -15,7 +15,7 @@ type Team struct {
 	CreatedAt               time.Time
 	IsBlocked               bool
 	Name                    string
-	Tier                    string
+	Tier                    *string
 	Email                   string
 	IsBanned                bool
 	BlockedReason           *string

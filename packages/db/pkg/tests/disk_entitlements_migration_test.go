@@ -104,10 +104,11 @@ func TestDiskEntitlementsMigration(t *testing.T) {
 	err = db.TestQueries.InsertTestTeam(ctx, testqueries.InsertTestTeamParams{
 		ID:    teamID,
 		Name:  "EN-1038 migration test",
-		Tier:  "en-1038-test",
 		Email: "en-1038-migration@example.com",
 		Slug:  "en-1038-migration",
 	})
+	require.NoError(t, err)
+	_, err = sqlDB.ExecContext(ctx, `UPDATE public.teams SET tier = 'en-1038-test' WHERE id = $1`, teamID)
 	require.NoError(t, err)
 
 	_, err = sqlDB.ExecContext(ctx, `

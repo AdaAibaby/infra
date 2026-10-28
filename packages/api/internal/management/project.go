@@ -13,12 +13,6 @@ import (
 	"github.com/e2b-dev/infra/packages/shared/pkg/logger"
 )
 
-// defaultProjectTier is the only tier this side ever assigns, and it assigns it
-// once. The contract names none: the caller's plan vocabulary is its own, and
-// the limits it actually wants arrive absolute through the limits route. The
-// team lookups do not read the tier.
-const defaultProjectTier = "base_v1"
-
 const teamSlugUniqueConstraint = "teams_slug_unique"
 
 var (
@@ -73,9 +67,9 @@ func (s *Service) UpsertProject(ctx context.Context, project Project) (stored Pr
 	return stored, created, nil
 }
 
-// writeProject branches on whether the project exists, because the two cases
-// differ in what they may set: a create assigns the tier, a reconcile writes
-// only what the caller synchronizes and leaves the tier alone.
+// writeProject branches on whether the project exists: a create inserts the
+// row, a reconcile writes only what the caller synchronizes and follows a slug
+// change with the template aliases.
 func (s *Service) writeProject(ctx context.Context, project Project) (stored Project, created bool, err error) {
 	txDB, tx, err := s.db.WithTx(ctx)
 	if err != nil {
@@ -114,7 +108,6 @@ func createProject(ctx context.Context, txDB *authqueries.Queries, project Proje
 		ID:        project.ID,
 		Name:      project.Name,
 		Slug:      project.Slug,
-		Tier:      defaultProjectTier,
 		Email:     project.Email,
 	})
 

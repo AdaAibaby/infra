@@ -252,7 +252,7 @@ type Team struct {
 	CreatedAt               time.Time
 	IsBlocked               bool
 	Name                    string
-	Tier                    string
+	Tier                    pgtype.Text
 	Email                   string
 	IsBanned                bool
 	BlockedReason           pgtype.Text

@@ -3703,10 +3703,8 @@ components:
         when omitted.
 
 
-        A project's tier is not among them. It is assigned once, at creation,
-        from this side's own default, and no push moves it — limits arrive
-        separately and in full through managementUpsertProjectLimits, and none is
-        resolved from the tier.
+        A project's tier is not among them, and this side assigns none. Limits
+        arrive separately and in full through managementUpsertProjectLimits.
       required: [name, slug, email]
       properties:
         cluster_id:

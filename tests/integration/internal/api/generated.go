@@ -1181,7 +1181,7 @@ type ManagementProjectSettingsRequest struct {
 
 // ManagementProjectUpsertRequest The properties of a project this side stores. Name, slug and email are synchronized on every push. The optional cluster assignment is preserved when omitted.
 //
-// A project's tier is not among them. It is assigned once, at creation, from this side's own default, and no push moves it — limits arrive separately and in full through managementUpsertProjectLimits, and none is resolved from the tier.
+// A project's tier is not among them, and this side assigns none. Limits arrive separately and in full through managementUpsertProjectLimits.
 type ManagementProjectUpsertRequest struct {
 	// ClusterId Cluster assignment to synchronize. Omission preserves the existing assignment.
 	ClusterId *openapi_types.UUID `json:"cluster_id,omitempty"`

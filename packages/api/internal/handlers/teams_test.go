@@ -52,7 +52,7 @@ func TestGetTeamsDefaultProject(t *testing.T) {
 				}
 				teamID := uuid.MustParse(fmt.Sprintf("00000000-0000-0000-0000-%012d", idSuffix))
 				require.NoError(t, db.TestQueries.InsertTestTeam(t.Context(), testqueries.InsertTestTeamParams{
-					ID: teamID, Name: fmt.Sprintf("Project %d", i), Tier: "base_v1",
+					ID: teamID, Name: fmt.Sprintf("Project %d", i),
 					Email: "user@example.com", Slug: fmt.Sprintf("project-%d", i),
 				}))
 				createdAt := time.Unix(int64(i), 0)
