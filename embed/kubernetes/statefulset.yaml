@@ -89,7 +89,7 @@ spec:
           image: clickhouse/clickhouse-server:25.8.30.16
           restartPolicy: Always
           env:
-            - { name: CLICKHOUSE_DB, value: default }
+            # No CLICKHOUSE_DB: see the compose service.
             - { name: CLICKHOUSE_USER, value: clickhouse }
             - { name: CLICKHOUSE_PASSWORD, value: clickhouse }
             - { name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT, value: "1" }

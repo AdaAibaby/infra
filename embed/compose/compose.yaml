@@ -74,7 +74,9 @@ services:
     image: clickhouse/clickhouse-server:25.8.30.16
     restart: unless-stopped
     environment:
-      CLICKHOUSE_DB: default
+      # No CLICKHOUSE_DB: for it the image first runs a loopback-only server to
+      # create the database, which a probe cannot tell from the real server,
+      # and the server creates `default` itself.
       CLICKHOUSE_USER: clickhouse
       CLICKHOUSE_PASSWORD: clickhouse
       CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
