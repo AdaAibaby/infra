@@ -92,7 +92,7 @@ flowchart TB
 | Template manager | `packages/orchestrator` (role) | build nodes | Builds templates from Docker images |
 | Client proxy | `packages/client-proxy` | API nodes | Edge router: sandbox URL → correct node |
 | Envd | `packages/envd` | inside every VM | In-VM agent: process/filesystem API for SDKs |
-| Dashboard API | `packages/dashboard-api` | API nodes | Backend for the web dashboard (templates, admin) |
+| Dashboard API | `packages/dashboard-api` | API nodes | Backend for the web dashboard and workspace control plane (sandbox records, admin, `/v1/management`) |
 
 Supporting packages: `packages/shared` (protos, telemetry, storage clients, feature flags),
 `packages/auth` (authentication library), `packages/db` (Postgres migrations + sqlc queries),
@@ -585,10 +585,11 @@ answers 408.
 ### Dashboard API (`packages/dashboard-api`)
 
 A separate REST service (port 3010, spec `spec/openapi-dashboard.yml`) consumed by the web
-dashboard, not the SDK: template tags and admin profiles. Its admin
-routes accept either a shared admin token or
-a short-lived service JWT verified against the configured admin JWKS. Team-scoped template read routes accept either dashboard user auth or
-team API key auth (`X-API-Key`). Its workspace-agnostic `/v1/management` operations are defined in the
+dashboard and the workspace control plane, not the SDK: the killed-sandbox record, admin routes
+(clusters, team ban and cluster assignment, user-profile resolution) and the `/v1/management`
+operations. Template reads are served by the API, not here. Its admin routes accept either a
+shared admin token or a short-lived service JWT verified against the configured admin JWKS. The
+sandbox record route accepts dashboard user auth only. Its workspace-agnostic `/v1/management` operations are defined in the
 same dashboard OpenAPI contract and registered on the existing router. Their `AdminJWTAuth`
 OpenAPI security scheme accepts only short-lived service JWTs verified against the workspace-api
 `/.well-known/jwks.json` endpoint, with accepted signing methods derived from each JWK's required

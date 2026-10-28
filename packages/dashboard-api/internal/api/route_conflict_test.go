@@ -56,42 +56,6 @@ func TestStaticAndParamSiblingsCoexist(t *testing.T) {
 	}
 }
 
-func TestDashboardReadRoutesExposeApiKeyAuth(t *testing.T) {
-	t.Parallel()
-
-	swagger, err := GetSwagger()
-	require.NoError(t, err)
-	require.Contains(t, swagger.Components.SecuritySchemes, "ApiKeyAuth")
-
-	apiKeyScheme := swagger.Components.SecuritySchemes["ApiKeyAuth"].Value
-	require.NotNil(t, apiKeyScheme)
-	assert.Equal(t, "apiKey", apiKeyScheme.Type)
-	assert.Equal(t, "header", apiKeyScheme.In)
-	assert.Equal(t, "X-API-Key", apiKeyScheme.Name)
-
-	apiKeyRoutes := []struct {
-		method string
-		path   string
-	}{
-		{http.MethodGet, "/templates"},
-		{http.MethodGet, "/templates/defaults"},
-		{http.MethodGet, "/templates/{templateID}"},
-		{http.MethodGet, "/templates/{templateID}/tags/groups"},
-		{http.MethodGet, "/templates/{templateID}/tags/count"},
-		{http.MethodGet, "/templates/{templateID}/tags/exists"},
-		{http.MethodGet, "/templates/{templateID}/tags/{tag}/assignments"},
-	}
-
-	for _, route := range apiKeyRoutes {
-		t.Run(route.method+" "+route.path, func(t *testing.T) {
-			t.Parallel()
-
-			operation := operationForRoute(t, swagger, route.method, route.path)
-			require.True(t, securityIncludesScheme(operation.Security, "ApiKeyAuth"), "route must allow X-API-Key auth")
-		})
-	}
-}
-
 func TestSandboxRecordDoesNotExposeApiKeyAuth(t *testing.T) {
 	t.Parallel()
 
