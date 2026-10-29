@@ -112,6 +112,9 @@ func (o *Orchestrator) CheckpointSandbox(ctx context.Context, teamID uuid.UUID, 
 			case codes.ResourceExhausted:
 				logger.L().Warn(ctx, "Checkpoint refused by the node", logger.WithSandboxID(sandboxID), zap.String("node_message", st.Message()))
 				finish(nil)
+				if isEnvdUnresponsive(err) {
+					return PauseRefusedEnvdUnresponsiveError{}
+				}
 
 				return PauseQueueExhaustedError{}
 			case codes.Canceled, codes.DeadlineExceeded:

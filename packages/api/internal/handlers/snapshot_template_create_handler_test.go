@@ -144,6 +144,19 @@ func TestSnapshotTemplate_CheckpointInProgressIs503(t *testing.T) {
 	assert.Contains(t, recorder.Body.String(), "another snapshot of it is in progress, please retry")
 }
 
+// A snapshot refused because the sandbox's guest agent did not answer the
+// node's health probe is a 503 naming the guest agent, never the busy-node
+// text it also matches.
+func TestSnapshotTemplate_EnvdUnresponsiveIs503(t *testing.T) {
+	t.Parallel()
+
+	backend := &snapshotBackendStub{createErr: orchestrator.PauseRefusedEnvdUnresponsiveError{}}
+	recorder := postSnapshot(t, backend, false, `{}`, nil)
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code, recorder.Body.String())
+	assert.Contains(t, recorder.Body.String(), "guest agent is not responding, please retry")
+}
+
 // A named snapshot refused for a checkpoint in flight still clears the cached
 // alias miss: the template and alias were persisted before the node was asked,
 // so the retry the 503 invites must find them instead of creating a duplicate.

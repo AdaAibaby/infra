@@ -230,6 +230,14 @@ func (a *APIStore) PostSandboxesSandboxIDSnapshots(c *gin.Context, sandboxID api
 			return
 		}
 
+		// The node left the VM running, so a retry can succeed once the
+		// guest agent answers again.
+		if errors.Is(err, orchestrator.PauseRefusedEnvdUnresponsiveError{}) {
+			a.sendAPIStoreError(c, http.StatusServiceUnavailable, fmt.Sprintf("Sandbox '%s' cannot be snapshotted right now because the sandbox guest agent is not responding, please retry", sandboxID))
+
+			return
+		}
+
 		if errors.Is(err, orchestrator.PauseQueueExhaustedError{}) {
 			a.sendAPIStoreError(c, http.StatusServiceUnavailable, fmt.Sprintf("Sandbox '%s' cannot be snapshotted right now because its node is busy, please retry", sandboxID))
 

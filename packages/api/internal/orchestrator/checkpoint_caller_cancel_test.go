@@ -146,6 +146,37 @@ func TestCheckpoint_InProgressRefusalRestores(t *testing.T) {
 	}
 }
 
+// A checkpoint the node refuses because the guest agent did not answer its
+// health probe comes back as its own retryable refusal, apart from the
+// in-progress one, with the sandbox restored to Running and its VM untouched,
+// for the fork and the snapshot-template caller alike.
+func TestCheckpoint_EnvdUnresponsiveRefusalRestores(t *testing.T) {
+	t.Parallel()
+
+	for name, c := range checkpointCallers {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+
+			refusal, err := status.New(codes.ResourceExhausted, "sandbox 'x' guest agent is not responding, please retry").WithDetails(
+				&orchestrator.UserError{Code: orchestrator.UserErrorCode_ENVD_UNRESPONSIVE, HttpStatus: 503},
+			)
+			require.NoError(t, err)
+			f, client := checkpointFixture(t, func(context.Context) error { return refusal.Err() })
+
+			err = c.call(t.Context(), f.o, f.sbx.TeamID, f.sbx.SandboxID)
+			require.ErrorIs(t, err, PauseRefusedEnvdUnresponsiveError{})
+			require.ErrorIs(t, err, PauseQueueExhaustedError{})
+			require.NotErrorIs(t, err, PauseRefusedCheckpointInProgressError{})
+
+			assert.Equal(t, int32(1), client.checkpoints.Load())
+			assert.Zero(t, client.deletes.Load(), "the sandbox stays on its node")
+			stored, err := f.o.sandboxStore.Get(t.Context(), f.sbx.TeamID, f.sbx.SandboxID)
+			require.NoError(t, err)
+			assert.Equal(t, sandbox.StateRunning, stored.State)
+		})
+	}
+}
+
 // A checkpoint's work can outlive the request, so a draining replica refuses
 // one before touching the sandbox, the same as a pause.
 func TestCheckpoint_DrainingRefusesBeforeTheTransition(t *testing.T) {

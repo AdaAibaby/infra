@@ -138,6 +138,9 @@ func (o *Orchestrator) CreateSnapshotTemplate(ctx context.Context, teamID uuid.U
 				return SnapshotTemplateResult{}, fmt.Errorf("checkpoint rejected: %w", err)
 			case codes.ResourceExhausted:
 				finish(nil)
+				if isEnvdUnresponsive(err) {
+					return SnapshotTemplateResult{}, PauseRefusedEnvdUnresponsiveError{}
+				}
 
 				return SnapshotTemplateResult{}, PauseQueueExhaustedError{}
 			case codes.Canceled, codes.DeadlineExceeded:

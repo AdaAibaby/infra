@@ -156,6 +156,12 @@ func (a *APIStore) PostSandboxesSandboxIDFork(c *gin.Context, sandboxID api.Sand
 		a.sendAPIStoreError(c, http.StatusServiceUnavailable, fmt.Sprintf("Sandbox '%s' cannot be forked right now because it is being snapshotted, please retry", sandboxID))
 
 		return
+	// The node left the VM running, so a retry can succeed once the guest
+	// agent answers again.
+	case errors.Is(err, orchestrator.PauseRefusedEnvdUnresponsiveError{}):
+		a.sendAPIStoreError(c, http.StatusServiceUnavailable, fmt.Sprintf("Sandbox '%s' cannot be forked right now because the sandbox guest agent is not responding, please retry", sandboxID))
+
+		return
 	case errors.Is(err, orchestrator.PauseQueueExhaustedError{}):
 		a.sendAPIStoreError(c, http.StatusServiceUnavailable, fmt.Sprintf("Sandbox '%s' cannot be forked right now because its node is busy, please retry", sandboxID))
 

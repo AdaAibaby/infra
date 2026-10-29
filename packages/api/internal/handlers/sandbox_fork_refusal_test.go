@@ -76,6 +76,17 @@ func TestFork_CheckpointInProgressMapsTo503(t *testing.T) {
 	assert.Contains(t, forkErrorMessage(t, recorder), "being snapshotted, please retry")
 }
 
+// A fork refused because the sandbox's guest agent did not answer the node's
+// health probe is a 503 naming the guest agent; the sandbox is still running.
+func TestFork_EnvdUnresponsiveMapsTo503(t *testing.T) {
+	t.Parallel()
+
+	recorder := postFork(t, orchestrator.PauseRefusedEnvdUnresponsiveError{})
+
+	require.Equal(t, http.StatusServiceUnavailable, recorder.Code, recorder.Body.String())
+	assert.Contains(t, forkErrorMessage(t, recorder), "guest agent is not responding, please retry")
+}
+
 // A busy-node refusal keeps its own 503 text.
 func TestFork_RetryableRefusalMapsTo503(t *testing.T) {
 	t.Parallel()
