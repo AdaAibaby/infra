@@ -646,10 +646,13 @@ var (
 	// disables the probe: an HTTP request cannot complete inside a zero
 	// deadline, so unlike PauseAdmissionGraceMs zero is not an instant probe.
 	// A positive value probes envd's /health with that timeout, capped at the
-	// sandbox HTTP client's 10s limit, and refuses the pause retryably with an
-	// ENVD_UNRESPONSIVE detail when it does not answer. A memory snapshot
-	// restores envd mid-execution, so one taken of a hung agent replays hung
-	// on every resume and nothing ever marks it bad.
+	// sandbox HTTP client's 10s limit, and refuses the pause, checkpoint or
+	// fork retryably with an ENVD_UNRESPONSIVE detail when it does not answer,
+	// filesystem-only captures included: a memory snapshot of a hung agent
+	// replays hung on every resume, and a filesystem-only capture needs the
+	// agent to freeze the rootfs. A rollout brake: once production confirms
+	// the refusal rate matches the dead-guest rate, the timeout becomes a
+	// constant and the flag is retired.
 	PauseEnvdHealthTimeoutMs = NewIntFlag("pause-envd-health-timeout-milliseconds", -1)
 	// PauseAdmissionDiskHeadroomMiB makes a node refuse a pause, retryably and
 	// before anything destructive, when the filesystem holding its build
@@ -861,7 +864,9 @@ var (
 	// current episode, before retrying the memory pause once without the
 	// probe. Sign convention as AutoPauseOverstayBudgetMs: negative never,
 	// 0 at the first refusal, positive the grace. Inert until
-	// PauseEnvdHealthTimeoutMs is on.
+	// PauseEnvdHealthTimeoutMs is on. A rollout brake like that flag: once
+	// production shows how long a guest takes to recover, the grace becomes
+	// a constant and the flag is retired with it.
 	AutoPauseEnvdGraceMs = NewIntFlag("auto-pause-envd-grace-milliseconds", 120000)
 
 	// MaxConcurrentSnapshotUpserts limits concurrent UpsertSnapshot calls (pause + snapshot template paths).

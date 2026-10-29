@@ -14,9 +14,9 @@ import (
 )
 
 // AwaitEnvdAdmission is the envd half of the pause pre-flight: it asks the
-// guest agent for /health before a memory snapshot is taken, because a memory
-// snapshot restores envd mid-execution and one taken of a hung agent replays
-// hung on every later resume, with nothing to mark it bad.
+// guest agent for /health before a snapshot. A memory snapshot of a hung
+// agent replays hung on every resume; a filesystem-only capture needs that
+// agent to freeze the rootfs and loses the sandbox when it cannot.
 //
 // A timeout of zero or less disables the probe (a zero deadline would expire
 // before the request is sent and refuse every pause); a disabled probe decides

@@ -113,29 +113,31 @@ func TestCheckpoint_EnvdHealthyAdmits(t *testing.T) {
 	assert.Equal(t, "checkpoint", attrs["rpc"])
 }
 
-// A filesystem-only checkpoint boots a fresh envd on resume, so it is never
-// probed: with envd unreachable it passes the probe untouched and is refused
-// by its own flag instead, recording no decision.
-func TestCheckpoint_FilesystemOnlySkipsEnvdProbe(t *testing.T) {
+// A filesystem-only checkpoint is probed like a memory one: its capture asks
+// the guest to freeze the rootfs, which a hung agent never does. With envd
+// unreachable it is refused retryably before its own flag is consulted and
+// before any route runs, the sandbox stays live, and the decision is counted
+// under rpc=checkpoint.
+func TestCheckpoint_FilesystemOnlyIsProbed(t *testing.T) {
 	t.Parallel()
 
 	s, reader := envdProbeCheckpointServer(t, new(envdProbeMs))
+	s.featureFlags = envdProbeFlagClientWith(t, new(envdProbeMs), true)
 	sbx := envdProbeSandbox(t, "sbx-envd-ckpt-fs-only", 73)
-	answer := &envdAnswer{unreachable: true, begun: make(chan struct{})}
-	registerEnvd(t, sbx, answer)
+	registerEnvd(t, sbx, &envdAnswer{unreachable: true})
 	s.sandboxFactory.Sandboxes.MarkRunning(t.Context(), sbx)
 
 	_, ckptErr := s.Checkpoint(t.Context(), &orchestrator.SandboxCheckpointRequest{SandboxId: "sbx-envd-ckpt-fs-only", FilesystemOnly: true})
+	requireEnvdUnresponsive(t, ckptErr)
 
-	require.Error(t, ckptErr)
-	assert.Equal(t, codes.FailedPrecondition, status.Code(ckptErr), "fs-only must pass the probe and be refused by its own flag")
-	assert.Nil(t, envdUnresponsiveDetail(t, ckptErr), "a filesystem-only checkpoint is never the envd refusal")
-	select {
-	case <-answer.begun:
-		t.Fatal("the guest must not be probed for a filesystem-only checkpoint")
-	default:
-	}
-	assert.Empty(t, admissionCounterPoints(t, reader), "a skipped probe records no decision")
+	_, live := s.sandboxFactory.Sandboxes.Get("sbx-envd-ckpt-fs-only")
+	assert.True(t, live, "a refused checkpoint must leave the sandbox live")
+	assert.Nil(t, s.detachedCheckpointFor("sbx-envd-ckpt-fs-only"), "a refused checkpoint holds no claim")
+	points := admissionCounterPoints(t, reader)
+	require.Len(t, points, 1)
+	attrs := attrsAsMap(t, points[0].Attributes)
+	assert.Equal(t, string(sandbox.SnapshotAdmissionEnvdUnhealthy), attrs["outcome"])
+	assert.Equal(t, "checkpoint", attrs["rpc"])
 }
 
 // Flag absent, negative or zero means no probe: with envd unreachable the
@@ -225,4 +227,31 @@ func TestCheckpoint_EnvdProbeRunsAfterTheStartGate(t *testing.T) {
 
 	_, live := s.sandboxFactory.Sandboxes.Get("sbx-envd-ckpt-gate")
 	assert.True(t, live, "the sandbox is untouched")
+}
+
+// With filesystem-only checkpoints disabled the refusal is the flag's,
+// permanent and deterministic, and comes before the probe: a hung guest does
+// not turn it into a retryable guest-agent refusal, the guest is not asked and
+// no decision is recorded.
+func TestCheckpoint_FilesystemOnlyDisabledIsRefusedBeforeTheProbe(t *testing.T) {
+	t.Parallel()
+
+	s, reader := envdProbeCheckpointServer(t, new(envdProbeMs))
+	sbx := envdProbeSandbox(t, "sbx-envd-ckpt-fs-only-off", 81)
+	answer := &envdAnswer{unreachable: true, begun: make(chan struct{})}
+	registerEnvd(t, sbx, answer)
+	s.sandboxFactory.Sandboxes.MarkRunning(t.Context(), sbx)
+
+	_, ckptErr := s.Checkpoint(t.Context(), &orchestrator.SandboxCheckpointRequest{SandboxId: "sbx-envd-ckpt-fs-only-off", FilesystemOnly: true})
+	require.Error(t, ckptErr)
+	assert.Equal(t, codes.FailedPrecondition, status.Code(ckptErr), "the flag's own refusal, not the guest's")
+	assert.Nil(t, envdUnresponsiveDetail(t, ckptErr))
+	select {
+	case <-answer.begun:
+		t.Fatal("the guest must not be probed for a checkpoint the flag refuses")
+	default:
+	}
+	assert.Empty(t, admissionCounterPoints(t, reader), "no decision is recorded")
+	_, live := s.sandboxFactory.Sandboxes.Get("sbx-envd-ckpt-fs-only-off")
+	assert.True(t, live)
 }

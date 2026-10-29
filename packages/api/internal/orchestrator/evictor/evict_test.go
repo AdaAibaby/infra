@@ -306,15 +306,16 @@ func TestEvictSandbox_DegradeDecision(t *testing.T) {
 	// the stamped retry window hours into the past, and noExecution scans a
 	// record that names no execution to pin the removal to.
 	type sweep struct {
-		budgetMs       *int
-		graceMs        *int
-		refusedFor     time.Duration
-		envdRefusedFor time.Duration
-		stale          bool
-		noExecution    bool
-		memoryErr      error
-		fsOnlyErr      error
-		bypassErr      error
+		budgetMs        *int
+		graceMs         *int
+		refusedFor      time.Duration
+		envdRefusedFor  time.Duration
+		stale           bool
+		noExecution     bool
+		memoryErr       error
+		fsOnlyErr       error
+		bypassErr       error
+		fsOnlyAutoPause bool
 	}
 	run := func(t *testing.T, sw sweep) ([]request, map[string]int64) {
 		t.Helper()
@@ -364,6 +365,7 @@ func TestEvictSandbox_DegradeDecision(t *testing.T) {
 		if sw.noExecution {
 			sbx.ExecutionID = ""
 		}
+		sbx.AutoPauseFilesystemOnly = sw.fsOnlyAutoPause
 		if sw.refusedFor > 0 {
 			sbx.RefusedSince = now.Add(-sw.refusedFor)
 			sbx.RefusedUntil = sbx.RefusedSince.Add(10 * time.Second)
@@ -532,6 +534,24 @@ func TestEvictSandbox_DegradeDecision(t *testing.T) {
 
 		assert.Equal(t, []request{memory, bypassed}, requests)
 		assert.Equal(t, map[string]int64{"envd_grace": 1}, degraded)
+	})
+
+	t.Run("filesystem-only auto-pause: an envd refusal inside the grace is retried later", func(t *testing.T) {
+		t.Parallel()
+
+		requests, degraded := run(t, sweep{graceMs: ms(60000), envdRefusedFor: 5 * time.Second, fsOnlyAutoPause: true, fsOnlyErr: hung})
+
+		assert.Equal(t, []request{fsOnly}, requests, "the only request this sweep was the probed filesystem-only pause")
+		assert.Empty(t, degraded)
+	})
+
+	t.Run("filesystem-only auto-pause: an envd refusal past the grace is never bypassed, the sandbox stays running", func(t *testing.T) {
+		t.Parallel()
+
+		requests, degraded := run(t, sweep{graceMs: ms(1000), envdRefusedFor: 5 * time.Second, fsOnlyAutoPause: true, fsOnlyErr: hung})
+
+		assert.Equal(t, []request{fsOnly}, requests, "a filesystem-only capture of a hung guest cannot quiesce the rootfs; no unprobed retry, and never a memory capture the customer did not ask for")
+		assert.Equal(t, map[string]int64{"envd_grace_fs_only": 1}, degraded)
 	})
 
 	t.Run("a stale envd episode is a fresh one for the grace", func(t *testing.T) {

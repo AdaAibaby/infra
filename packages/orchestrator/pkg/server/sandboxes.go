@@ -1257,15 +1257,14 @@ func (s *Server) Pause(ctx context.Context, in *orchestrator.SandboxPauseRequest
 	// its upload has ended, or until this call fails before that.
 	persistable := latchedErr == nil && sbx.EnsurePausable() == nil
 
-	// Flag-gated envd pre-flight, memory snapshots only and only after the
-	// latched checks: a memory snapshot restores envd mid-execution, so one
-	// taken of a hung agent never resumes. Retryable, never the kill path.
-	// It runs before the disk reservation so a probe that waits holds no
-	// headroom against the node's other pauses.
-	// A caller that asks to skip the probe (the eviction sweep, once the
-	// guest has refused for its grace period) is recorded as a bypass and
-	// not probed; without the flag the request field is ignored.
-	if healthMs := s.featureFlags.IntFlag(ctx, featureflags.PauseEnvdHealthTimeoutMs); persistable && healthMs > 0 && !in.GetFilesystemOnly() {
+	// Flag-gated envd pre-flight, every snapshot, after the latched checks: a
+	// memory snapshot of a hung agent never resumes, and a filesystem-only
+	// capture needs the agent to freeze the rootfs, which fails past
+	// MarkStopping. Retryable, never the kill path; before the disk
+	// reservation so a waiting probe holds no headroom. A caller that asks to
+	// skip the probe is recorded as a bypass; without the flag the field is
+	// ignored.
+	if healthMs := s.featureFlags.IntFlag(ctx, featureflags.PauseEnvdHealthTimeoutMs); persistable && healthMs > 0 {
 		if in.GetSkipEnvdHealthProbe() {
 			s.recordPauseAdmission(ctx, sbx.Runtime.TeamID, "pause", sandbox.SnapshotAdmissionEnvdBypassed, 0)
 			sbxlogger.E(sbx).Info(ctx, "Pausing without the envd health probe at the caller's request")
@@ -1546,6 +1545,13 @@ func (s *Server) Checkpoint(ctx context.Context, in *orchestrator.SandboxCheckpo
 
 	fsOnly := in.GetFilesystemOnly()
 
+	// A filesystem-only checkpoint behind its flag is refused first, before
+	// any admission wait or probe: the answer is permanent and deterministic,
+	// and a probe miss must not turn it into a retryable guest-agent refusal.
+	if fsOnly && !s.featureFlags.BoolFlag(ctx, featureflags.FilesystemOnlyCheckpointFlag) {
+		return nil, filesystemOnlyDisabledStatus(in.GetSandboxId()).Err()
+	}
+
 	// The same flag-gated admission pre-flight as Pause; before waitForAcquire
 	// so a grace wait never holds a start slot. A filesystem-only checkpoint
 	// has no memory parent to wait for, only the latched checks apply.
@@ -1575,9 +1581,10 @@ func (s *Server) Checkpoint(ctx context.Context, in *orchestrator.SandboxCheckpo
 	defer releaseSlot()
 
 	// The same envd pre-flight as Pause: a fork or a template of a hung guest
-	// is born dead. After the start gate, so the answer is current when the
-	// snapshot begins; before the route decision so a refusal claims nothing.
-	if healthMs := s.featureFlags.IntFlag(ctx, featureflags.PauseEnvdHealthTimeoutMs); healthMs > 0 && !fsOnly {
+	// is born dead, and a filesystem-only one needs the guest to freeze its
+	// rootfs. After the start gate, so the answer is current when the snapshot
+	// begins; before the route decision so a refusal claims nothing.
+	if healthMs := s.featureFlags.IntFlag(ctx, featureflags.PauseEnvdHealthTimeoutMs); healthMs > 0 {
 		if refuseErr := s.admitEnvd(ctx, sbx, "checkpoint", time.Duration(healthMs)*time.Millisecond, errSandboxOperationInProgress(in.GetSandboxId())); refuseErr != nil {
 			return nil, refuseErr
 		}
@@ -1615,17 +1622,14 @@ func (s *Server) Checkpoint(ctx context.Context, in *orchestrator.SandboxCheckpo
 	// behind filesystem-only-checkpoint alone. It has no resume-fresh
 	// fallback (resuming a fresh sandbox from a memoryless build would
 	// cold-boot it, turning "snapshot my running sandbox" into a reboot), so
-	// with its flag off it is refused before anything is touched, and the API
-	// restores the sandbox to Running.
+	// with its flag off it was refused at the top, before anything is
+	// touched, and the API restores the sandbox to Running.
 	//
 	// Decided here, after admission, so a refused RPC records no route; one
 	// decision feeds the span, the gate and the counter.
 	var route string
 	var balloonMode userfaultfd.BalloonMode
 	if fsOnly {
-		if !s.featureFlags.BoolFlag(ctx, featureflags.FilesystemOnlyCheckpointFlag) {
-			return nil, filesystemOnlyDisabledStatus(in.GetSandboxId()).Err()
-		}
 		route, balloonMode = routeInPlace, sbx.BalloonModeValue()
 	} else {
 		route, balloonMode = s.checkpointRoute(ctx, sbx)

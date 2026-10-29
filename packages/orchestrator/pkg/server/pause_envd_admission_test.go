@@ -77,9 +77,20 @@ func registerEnvd(t *testing.T, sbx *sandbox.Sandbox, answer *envdAnswer) {
 func envdProbeFlagClient(t *testing.T, envdMs *int) *featureflags.Client {
 	t.Helper()
 
+	return envdProbeFlagClientWith(t, envdMs, false)
+}
+
+// envdProbeFlagClientWith is envdProbeFlagClient with filesystem-only
+// checkpoints enabled or not.
+func envdProbeFlagClientWith(t *testing.T, envdMs *int, fsOnlyCheckpoint bool) *featureflags.Client {
+	t.Helper()
+
 	td := ldtestdata.DataSource()
 	if envdMs != nil {
 		td.Update(td.Flag(featureflags.PauseEnvdHealthTimeoutMs.Key()).ValueForAll(ldvalue.Int(*envdMs)))
+	}
+	if fsOnlyCheckpoint {
+		td.Update(td.Flag(featureflags.FilesystemOnlyCheckpointFlag.Key()).ValueForAll(ldvalue.Bool(true)))
 	}
 
 	ff, err := featureflags.NewClientWithDatasource(td)
@@ -180,9 +191,11 @@ func TestPause_EnvdHealthyAdmits(t *testing.T) {
 	assert.Equal(t, string(sandbox.SnapshotAdmissionEnvdHealthy), attrsAsMap(t, points[0].Attributes)["outcome"])
 }
 
-// A filesystem-only snapshot boots a fresh envd on resume, so it is never
-// probed: with envd unreachable the pause proceeds and records no decision.
-func TestPause_FilesystemOnlySkipsEnvdProbe(t *testing.T) {
+// A filesystem-only pause is probed like a memory one: its capture asks the
+// guest to freeze the rootfs, which a hung agent never does, and that failure
+// comes after MarkStopping and loses the sandbox. With envd unreachable the
+// pause is refused before anything destructive and the sandbox stays live.
+func TestPause_FilesystemOnlyIsProbed(t *testing.T) {
 	t.Parallel()
 
 	s, reader := admissionMetricsServer(t, -1)
@@ -191,12 +204,39 @@ func TestPause_FilesystemOnlySkipsEnvdProbe(t *testing.T) {
 	registerEnvd(t, sbx, &envdAnswer{unreachable: true})
 	s.sandboxFactory.Sandboxes.MarkRunning(t.Context(), sbx)
 
+	_, pauseErr := s.Pause(t.Context(), &orchestrator.SandboxPauseRequest{SandboxId: "sbx-envd-pause-fs-only", FilesystemOnly: true})
+	requireEnvdUnresponsive(t, pauseErr)
+
+	_, live := s.sandboxFactory.Sandboxes.Get("sbx-envd-pause-fs-only")
+	assert.True(t, live, "a refused filesystem-only pause must leave the sandbox live")
+	assert.True(t, s.sandboxFactory.Sandboxes.MarkStopping(t.Context(), "sbx-envd-pause-fs-only", "lifecycle-1"),
+		"a refused pause must leave the sandbox unmarked")
+	points := admissionCounterPoints(t, reader)
+	require.Len(t, points, 1)
+	attrs := attrsAsMap(t, points[0].Attributes)
+	assert.Equal(t, string(sandbox.SnapshotAdmissionEnvdUnhealthy), attrs["outcome"])
+	assert.Equal(t, "pause", attrs["rpc"])
+}
+
+// A filesystem-only pause of a guest that answers proceeds past the probe
+// into today's order, counted as envd_healthy.
+func TestPause_FilesystemOnlyEnvdHealthyAdmits(t *testing.T) {
+	t.Parallel()
+
+	s, reader := admissionMetricsServer(t, -1)
+	s.featureFlags = envdProbeFlagClient(t, new(envdProbeMs))
+	sbx := envdProbeSandbox(t, "sbx-envd-pause-fs-only-ok", 34)
+	registerEnvd(t, sbx, &envdAnswer{status: http.StatusNoContent})
+	s.sandboxFactory.Sandboxes.MarkRunning(t.Context(), sbx)
+
 	go func() {
-		_, _ = s.Pause(context.WithoutCancel(t.Context()), &orchestrator.SandboxPauseRequest{SandboxId: "sbx-envd-pause-fs-only", FilesystemOnly: true})
+		_, _ = s.Pause(context.WithoutCancel(t.Context()), &orchestrator.SandboxPauseRequest{SandboxId: "sbx-envd-pause-fs-only-ok", FilesystemOnly: true})
 	}()
 
-	awaitPauseCrossedMarkStopping(t, s, sbx, "a filesystem-only pause must not be refused by the envd probe")
-	assert.Empty(t, admissionCounterPoints(t, reader), "a skipped probe records no decision")
+	awaitPauseCrossedMarkStopping(t, s, sbx, "a healthy guest's filesystem-only pause must proceed")
+	points := admissionCounterPoints(t, reader)
+	require.Len(t, points, 1)
+	assert.Equal(t, string(sandbox.SnapshotAdmissionEnvdHealthy), attrsAsMap(t, points[0].Attributes)["outcome"])
 }
 
 // Flag absent, negative or zero means no probe: with envd unreachable the

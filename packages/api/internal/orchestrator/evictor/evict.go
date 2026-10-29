@@ -199,17 +199,33 @@ func (e *Evictor) evictSandbox(ctx context.Context, sbx sandbox.Sandbox) {
 	// A checkpoint in flight says nothing about the node's memory and ends on
 	// its own, so the next sweep retries it as is. A guest agent that does
 	// not answer is never degraded to filesystem-only, which needs the agent
-	// too; past the grace the memory pause is retried once without the probe.
+	// to quiesce the rootfs; past the grace the memory pause is retried once
+	// without the probe. A filesystem-only sweep has no such retry: the
+	// sandbox stays running and the withheld bypass is counted.
 	bypassCause := ""
-	if action == sandbox.StateActionPause && !opts.FilesystemOnly && errors.Is(err, sandbox.PauseQueueExhaustedError{}) &&
+	if action == sandbox.StateActionPause && errors.Is(err, sandbox.PauseQueueExhaustedError{}) &&
 		!errors.Is(err, sandbox.PauseRefusedCheckpointInProgressError{}) {
-		if errors.Is(err, sandbox.PauseRefusedEnvdUnresponsiveError{}) {
-			bypassCause = e.envdBypassCause(ctx, sbx, time.Now())
-		} else {
+		switch {
+		case errors.Is(err, sandbox.PauseRefusedEnvdUnresponsiveError{}):
+			bypassCause = e.envdBypassCause(ctx, sbx, opts.FilesystemOnly, time.Now())
+		case !opts.FilesystemOnly:
 			degradeCause = e.degradeCause(ctx, sbx, time.Now())
 		}
 	}
 	switch bypassCause {
+	case degradeCauseEnvdGraceFsOnly:
+		// A filesystem-only capture of a hung guest would persist
+		// unacknowledged writes, so the sandbox stays running.
+		e.degradedCounter.Add(ctx, 1, metric.WithAttributes(
+			attribute.String("cause", bypassCause),
+			telemetry.WithTeamID(sbx.TeamID.String()),
+		))
+		logger.L().Warn(ctx, "Auto-pause envd bypass withheld: a filesystem-only capture needs the guest agent to quiesce the rootfs, the sandbox stays running",
+			logger.WithSandboxID(sbx.SandboxID),
+			logger.WithTeamID(sbx.TeamID.String()),
+			zap.String("cause", bypassCause),
+			zap.Duration("past_expiry", time.Since(sbx.EndTime)),
+		)
 	case degradeCauseEnvdGraceWithheld:
 		// The retry is pinned to an execution by ExpectExecutionID; without
 		// one it could land on a resumed incarnation, so the sandbox stays.
@@ -296,6 +312,7 @@ const (
 	degradeCauseOverstay          = "overstay_budget"
 	degradeCauseEnvdGrace         = "envd_grace"
 	degradeCauseEnvdGraceWithheld = "envd_grace_withheld"
+	degradeCauseEnvdGraceFsOnly   = "envd_grace_fs_only"
 )
 
 // pauseSkipReason classifies a pause error that left the sandbox running for
@@ -345,11 +362,11 @@ func (e *Evictor) degradeCause(ctx context.Context, sbx sandbox.Sandbox, now tim
 	}
 }
 
-// envdBypassCause names the bypass this sweep takes for an envd-refused memory
+// envdBypassCause names the bypass this sweep takes for an envd-refused
 // auto-pause, or "" to hold: a negative grace never bypasses, zero at the first
 // refusal, positive once the guest agent's own episode has lasted that long.
-// A bypass the record cannot pin to an execution is withheld.
-func (e *Evictor) envdBypassCause(ctx context.Context, sbx sandbox.Sandbox, now time.Time) string {
+// A filesystem-only sweep and a record that names no execution are withheld.
+func (e *Evictor) envdBypassCause(ctx context.Context, sbx sandbox.Sandbox, fsOnly bool, now time.Time) string {
 	graceMs := e.featureFlags.IntFlag(ctx, featureflags.AutoPauseEnvdGraceMs,
 		featureflags.TeamContext(sbx.TeamID.String()), featureflags.ClusterContext(sbx.ClusterID))
 	switch {
@@ -357,6 +374,8 @@ func (e *Evictor) envdBypassCause(ctx context.Context, sbx sandbox.Sandbox, now 
 		return ""
 	case now.Sub(sbx.EnvdRefusalEpisodeStart(now)) < time.Duration(graceMs)*time.Millisecond:
 		return ""
+	case fsOnly:
+		return degradeCauseEnvdGraceFsOnly
 	case sbx.ExecutionID == "":
 		return degradeCauseEnvdGraceWithheld
 	default:
