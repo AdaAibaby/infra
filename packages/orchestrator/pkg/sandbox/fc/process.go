@@ -436,10 +436,64 @@ func (p *Process) Create(
 	}
 	telemetry.ReportEvent(ctx, "set fc metrics")
 
+	err = p.configureGuestDevices(ctx, firecrackerVcpuCount, memoryMB, hugePages, freePageReporting, freePageHinting, options, txRateLimit, driveRateLimit)
+	if err != nil {
+		return err
+	}
+
+	// Write MMDS metadata before boot when an access token is provided (the
+	// cold-boot/reboot user path) so the guest envd can authenticate /init the
+	// same way it does after a memory resume. The MMDS transport is already
+	// configured by setNetworkInterface above. Template-build cold boots leave
+	// AccessToken nil and skip this, preserving their existing behavior.
+	if options.AccessToken != nil {
+		md := sbxMetadata.LoggerMetadata()
+		meta := &MmdsMetadata{
+			SandboxID:            md.SandboxID,
+			TemplateID:           md.TemplateID,
+			LogsCollectorAddress: fmt.Sprintf("http://%s/logs", p.config.NetworkConfig.OrchestratorInSandboxIPAddress),
+			AccessTokenHash:      keys.HashAccessToken(*options.AccessToken),
+		}
+		if err := p.client.setMmds(ctx, meta); err != nil {
+			fcStopErr := p.Stop(ctx)
+
+			return errors.Join(fmt.Errorf("error setting mmds: %w", err), fcStopErr)
+		}
+		telemetry.ReportEvent(ctx, "set fc mmds metadata")
+	}
+
+	err = p.client.startVM(ctx)
+	if err != nil {
+		fcStopErr := p.Stop(ctx)
+
+		return errors.Join(fmt.Errorf("error starting fc: %w", err), fcStopErr)
+	}
+
+	telemetry.ReportEvent(ctx, "started fc")
+	p.moveLimitToVcpuThreads(ctx, cgroupHandle, cpuQuota, firecrackerVcpuCount)
+
+	return nil
+}
+
+// configureGuestDevices sends Firecracker the boot source, the disk, the
+// network interface with its MMDS binding, the machine, the CPU template, the
+// entropy device and the balloon. Every error already carries the Stop of the
+// process.
+func (p *Process) configureGuestDevices(
+	ctx context.Context,
+	firecrackerVcpuCount int64,
+	memoryMB int64,
+	hugePages bool,
+	freePageReporting bool,
+	freePageHinting bool,
+	options ProcessOptions,
+	txRateLimit RateLimiterConfig,
+	driveRateLimit RateLimiterConfig,
+) error {
 	// IPv4 configuration - format: [local_ip]::[gateway_ip]:[netmask]:hostname:iface:dhcp_option:[dns]
 	ipv4 := fmt.Sprintf("%s::%s:%s:instance:%s:off:%s", p.slot.NamespaceIP(), p.slot.TapIPString(), p.slot.TapMaskString(), p.slot.VpeerName(), p.slot.TapName())
 	kernelArgs := buildKernelArgs(ipv4, options).String()
-	err = p.client.setBootSource(ctx, kernelArgs, p.kernelPath)
+	err := p.client.setBootSource(ctx, kernelArgs, p.kernelPath)
 	if err != nil {
 		fcStopErr := p.Stop(ctx)
 
@@ -520,37 +574,6 @@ func (p *Process) Create(
 			attribute.Bool("balloon.free_page_hinting", freePageHinting),
 		)
 	}
-
-	// Write MMDS metadata before boot when an access token is provided (the
-	// cold-boot/reboot user path) so the guest envd can authenticate /init the
-	// same way it does after a memory resume. The MMDS transport is already
-	// configured by setNetworkInterface above. Template-build cold boots leave
-	// AccessToken nil and skip this, preserving their existing behavior.
-	if options.AccessToken != nil {
-		md := sbxMetadata.LoggerMetadata()
-		meta := &MmdsMetadata{
-			SandboxID:            md.SandboxID,
-			TemplateID:           md.TemplateID,
-			LogsCollectorAddress: fmt.Sprintf("http://%s/logs", p.config.NetworkConfig.OrchestratorInSandboxIPAddress),
-			AccessTokenHash:      keys.HashAccessToken(*options.AccessToken),
-		}
-		if err := p.client.setMmds(ctx, meta); err != nil {
-			fcStopErr := p.Stop(ctx)
-
-			return errors.Join(fmt.Errorf("error setting mmds: %w", err), fcStopErr)
-		}
-		telemetry.ReportEvent(ctx, "set fc mmds metadata")
-	}
-
-	err = p.client.startVM(ctx)
-	if err != nil {
-		fcStopErr := p.Stop(ctx)
-
-		return errors.Join(fmt.Errorf("error starting fc: %w", err), fcStopErr)
-	}
-
-	telemetry.ReportEvent(ctx, "started fc")
-	p.moveLimitToVcpuThreads(ctx, cgroupHandle, cpuQuota, firecrackerVcpuCount)
 
 	return nil
 }

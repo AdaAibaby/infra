@@ -50,6 +50,7 @@ import (
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox"
 	blockmetrics "github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/block/metrics"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/cgroup"
+	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/guest"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/nbd"
 	"github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network"
 	networkv2 "github.com/e2b-dev/infra/packages/orchestrator/pkg/sandbox/network/v2"
@@ -285,6 +286,9 @@ type Options struct {
 	Version       string
 	CommitSHA     string
 	EgressFactory EgressFactory
+	// GuestProfiles are the guest profiles beside the default one; a build
+	// whose guest OS none of them claims is refused.
+	GuestProfiles []guest.Profile
 }
 
 type closer struct {
@@ -334,6 +338,14 @@ func Run(opts Options) bool {
 
 	if opts.EgressFactory == nil {
 		log.Fatalf("EgressFactory must be set in Options")
+	}
+
+	guests, err := guest.NewRegistry(opts.GuestProfiles...)
+	if err != nil {
+		log.Fatalf("failed to register guest profiles: %v", err)
+	}
+	if err = guest.Install(guests); err != nil {
+		log.Fatalf("failed to install guest profiles: %v", err)
 	}
 
 	success := run(config, opts)
