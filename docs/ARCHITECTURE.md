@@ -358,15 +358,16 @@ and stored artifacts are not reclaimed.
 its API keys stop authenticating, then kills its running sandboxes and cancels its builds through
 the same orchestrator and template-manager calls as `POST /admin/teams/{teamID}/sandboxes/kill`
 and `.../builds/cancel`. The ban commits first: a kill or cancel step that fails is reported in
-the 200 response and does not undo it. The work is detached from the request, so a caller that
-disconnects does not stop it. Each team's kill and cancel run side by side, and all of a request's
-kills and cancellations share a 25-second budget; a step the budget cuts short is reported as
-failed with what it counted so far. A build delete already
-under way keeps its own 30 seconds, so a request ends within about 55 seconds. A failed cache
-eviction answers 500, so the caller's retry repeats the ban and its containment; banning a banned
-team contains it again. `DELETE .../ban` clears the flag and evicts the cache.
+the 200 response and does not undo it. The handler detaches the request from the caller and gives
+it one 25-second budget at the same moment, so a caller that disconnects does not stop it and
+nothing it runs (deletion checks, ban writes, cache evictions, kills, cancellations) blocks past
+the budget. A ban write or eviction that runs out of it fails like any other (500, or `failed` in
+the bulk route). Each team's kill and cancel run side by side; a step the budget cuts short is
+reported as failed with what it counted so far. A build delete already under way keeps its own 30
+seconds, so a request ends within about 55 seconds. A failed cache eviction answers 500, so the
+caller's retry repeats the ban and its containment; banning a banned team contains it again. `DELETE .../ban` clears the flag and evicts the cache.
 `POST /unstable/admin/teams/bans` takes up to 100 teams. It stores every ban first, five teams at
-a time, then contains the banned teams, five at a time under the one budget, and sorts each team
+a time, then contains the banned teams, five at a time, all under the one budget, and sorts each team
 into banned, not found or failed; one team's failure does not stop the others. A deleted project
 answers 404 to the single-team routes and counts as not found in the bulk route. The logic lives
 in `internal/team`.

@@ -30,9 +30,10 @@ type teamBanMocks struct {
 	builds    *teammocks.MockBuildCanceller
 }
 
-// testContainmentBudget is short so a containment step that waits out the
-// budget keeps the test fast.
-const testContainmentBudget = 50 * time.Millisecond
+// testBanRequestBudget is short so a test that waits out the budget stays fast,
+// and long enough that the deletion check and ban write it also covers finish
+// inside it under a loaded race-enabled run.
+const testBanRequestBudget = time.Second
 
 func newTeamBanStore(t *testing.T, db *testutils.Database) (*APIStore, teamBanMocks) {
 	t.Helper()
@@ -45,7 +46,7 @@ func newTeamBanStore(t *testing.T, db *testutils.Database) (*APIStore, teamBanMo
 
 	return &APIStore{
 		sqlcDB:      db.SqlcClient,
-		teamService: team.NewService(db.SqlcClient, mocks.cache, mocks.sandboxes, mocks.builds, testContainmentBudget),
+		teamService: team.NewService(db.SqlcClient, mocks.cache, mocks.sandboxes, mocks.builds, testBanRequestBudget),
 	}, mocks
 }
 
@@ -280,6 +281,59 @@ func TestBanTeamsStoresTheBansOfACallerThatHungUp(t *testing.T) {
 	banned, err := countBanned(t.Context(), db, teamIDs)
 	require.NoError(t, err)
 	require.Equal(t, len(teamIDs), banned)
+}
+
+func TestBanTeamFailsAWriteThatOutlastsTheBudget(t *testing.T) {
+	t.Parallel()
+
+	db := testutils.SetupDatabase(t)
+	store, _ := newTeamBanStore(t, db)
+	teamID := testutils.CreateTestTeam(t, db)
+	holdTeamRowLock(t, db, teamID)
+
+	response := callManagement(t, store, http.MethodPut, "/unstable/admin/teams/"+teamID.String()+"/ban", "")
+
+	require.Equal(t, http.StatusInternalServerError, response.Code, response.Body.String())
+	require.JSONEq(t, `{"code":500,"message":"Failed to ban team"}`, response.Body.String())
+}
+
+func TestBanTeamsFailsATeamWhoseWriteOutlastsTheBudgetAndBansTheRest(t *testing.T) {
+	t.Parallel()
+
+	db := testutils.SetupDatabase(t)
+	store, mocks := newTeamBanStore(t, db)
+	stuck := testutils.CreateTestTeam(t, db)
+	banned := testutils.CreateTestTeam(t, db)
+	holdTeamRowLock(t, db, stuck)
+	mocks.cache.EXPECT().InvalidateTeamCache(mock.Anything, banned).Return(nil)
+	mocks.sandboxes.EXPECT().KillTeamSandboxes(mock.Anything, banned, mock.Anything).RunAndReturn(killUntilTheBudgetRunsOut)
+	mocks.builds.EXPECT().CancelTeamBuilds(mock.Anything, banned, mock.Anything).RunAndReturn(cancelTwoBuildsWithinTheBudget)
+
+	response := callManagement(t, store, http.MethodPost, "/unstable/admin/teams/bans",
+		fmt.Sprintf(`{"teamIDs":[%q,%q]}`, stuck, banned))
+
+	require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+	require.JSONEq(t, fmt.Sprintf(`{
+		"banned": [{"teamID":%q,"sandboxesKilled":1,"sandboxesFailedToKill":1,"sandboxKillError":"Failed to kill the team's sandboxes",
+			"buildsCancelled":0,"buildsFailedToCancel":0,"buildCancelError":"Failed to cancel the team's builds"}],
+		"notFound": [],
+		"failed": [{"teamID":%q,"error":"Failed to ban team"}]
+	}`, banned, stuck), response.Body.String(), "the stuck write spent the budget, so the banned team's containment is reported as cut short")
+	require.True(t, teamIsBanned(t, db, banned))
+}
+
+// holdTeamRowLock keeps the team's row locked until the test ends, so a ban
+// write to it blocks until its context ends.
+func holdTeamRowLock(t *testing.T, db *testutils.Database, teamID uuid.UUID) {
+	t.Helper()
+
+	tx, err := db.SqlcClient.Pool().Begin(t.Context())
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = tx.Rollback(context.WithoutCancel(t.Context()))
+	})
+	_, err = tx.Exec(t.Context(), "SELECT 1 FROM public.teams WHERE id = $1 FOR UPDATE", teamID)
+	require.NoError(t, err)
 }
 
 // killUntilTheBudgetRunsOut kills one sandbox and fails one, then waits out

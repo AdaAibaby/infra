@@ -38,16 +38,23 @@ type buildCanceller interface {
 }
 
 type Service struct {
-	db                *sqlcdb.Client
-	cache             teamCache
-	sandboxes         sandboxKiller
-	builds            buildCanceller
-	containmentBudget time.Duration
+	db        *sqlcdb.Client
+	cache     teamCache
+	sandboxes sandboxKiller
+	builds    buildCanceller
+	budget    time.Duration
 }
 
-// NewService bounds each request's containment by containmentBudget.
-func NewService(db *sqlcdb.Client, cache teamCache, sandboxes sandboxKiller, builds buildCanceller, containmentBudget time.Duration) *Service {
-	return &Service{db: db, cache: cache, sandboxes: sandboxes, builds: builds, containmentBudget: containmentBudget}
+// NewService gives each ban request budget to finish in; see Detach.
+func NewService(db *sqlcdb.Client, cache teamCache, sandboxes sandboxKiller, builds buildCanceller, budget time.Duration) *Service {
+	return &Service{db: db, cache: cache, sandboxes: sandboxes, builds: builds, budget: budget}
+}
+
+// Detach returns the context a ban request runs on from here on. It outlives
+// the caller, so a disconnect cannot leave a request half applied, and it ends
+// at the budget, so no write, eviction, kill or cancel blocks past it.
+func (s *Service) Detach(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), s.budget)
 }
 
 // Containment is what a ban did to the team's running workloads. A step that
@@ -69,16 +76,11 @@ type BanOutcome struct {
 
 // Ban marks the team banned, then kills its sandboxes and cancels its builds.
 // The ban stands whatever containment does, and banning a banned team contains
-// it again. Neither half stops when the caller goes away.
+// it again. ctx comes from Detach.
 func (s *Service) Ban(ctx context.Context, teamID uuid.UUID) (Containment, error) {
-	ctx = context.WithoutCancel(ctx)
-
 	if err := s.setBanned(ctx, teamID, true); err != nil {
 		return Containment{}, err
 	}
-
-	ctx, cancel := context.WithTimeout(ctx, s.containmentBudget)
-	defer cancel()
 
 	return s.contain(ctx, teamID), nil
 }
@@ -88,11 +90,10 @@ func (s *Service) Unban(ctx context.Context, teamID uuid.UUID) error {
 }
 
 // BanTeams stores every team's ban before containing any of them, so a slow
-// containment cannot keep a later team unbanned, and contains the banned teams
-// under one shared budget. One team's failure does not stop the others; the
-// outcomes follow the order of teamIDs.
+// containment cannot keep a later team unbanned. One team's failure does not
+// stop the others; the outcomes follow the order of teamIDs. ctx comes from
+// Detach, so the bans and the containment share its budget.
 func (s *Service) BanTeams(ctx context.Context, teamIDs []uuid.UUID) []BanOutcome {
-	ctx = context.WithoutCancel(ctx)
 	outcomes := make([]BanOutcome, len(teamIDs))
 
 	bans := errgroup.Group{}
@@ -105,9 +106,6 @@ func (s *Service) BanTeams(ctx context.Context, teamIDs []uuid.UUID) []BanOutcom
 		})
 	}
 	_ = bans.Wait()
-
-	ctx, cancel := context.WithTimeout(ctx, s.containmentBudget)
-	defer cancel()
 
 	containments := errgroup.Group{}
 	containments.SetLimit(banTeamsConcurrency)

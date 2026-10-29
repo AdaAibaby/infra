@@ -19,15 +19,18 @@ import (
 
 const banTeamFailedMessage = "Failed to ban team"
 
-// banContainmentBudget bounds a ban request's kills and cancellations. A build
-// delete already under way keeps its own 30 seconds, so the request ends by about
-// 55 seconds: inside the 60 seconds callers wait and the server's write timeout.
-const banContainmentBudget = 25 * time.Second
+// banRequestBudget bounds a ban request from the moment it is detached from
+// the caller: deletion checks, ban writes, cache evictions, kills and
+// cancellations. A build delete already under way keeps its own 30 seconds, so
+// the request ends by about 55 seconds: inside the 60 seconds callers wait and
+// the server's write timeout.
+const banRequestBudget = 25 * time.Second
 
 func (a *APIStore) AdminBanTeam(c *gin.Context, teamID uuid.UUID) {
-	ctx := c.Request.Context()
+	ctx, cancel := a.teamService.Detach(c.Request.Context())
+	defer cancel()
 
-	if a.refuseDeletedTeam(c, teamID) {
+	if a.refuseDeletedTeam(ctx, c, teamID) {
 		return
 	}
 
@@ -50,7 +53,7 @@ func (a *APIStore) AdminBanTeam(c *gin.Context, teamID uuid.UUID) {
 func (a *APIStore) AdminUnbanTeam(c *gin.Context, teamID uuid.UUID) {
 	ctx := c.Request.Context()
 
-	if a.refuseDeletedTeam(c, teamID) {
+	if a.refuseDeletedTeam(ctx, c, teamID) {
 		return
 	}
 
@@ -73,7 +76,8 @@ func (a *APIStore) AdminUnbanTeam(c *gin.Context, teamID uuid.UUID) {
 func (a *APIStore) AdminBanTeams(c *gin.Context) {
 	// A caller that hangs up must not leave the later teams unchecked and
 	// unbanned while the earlier ones are banned.
-	ctx := context.WithoutCancel(c.Request.Context())
+	ctx, cancel := a.teamService.Detach(c.Request.Context())
+	defer cancel()
 
 	body, err := ginutils.ParseBody[api.AdminTeamsBanRequest](ctx, c)
 	if err != nil {
@@ -118,9 +122,7 @@ func (a *APIStore) AdminBanTeams(c *gin.Context) {
 
 // refuseDeletedTeam answers 404 for a deleted team, which keeps its row but is
 // gone to every caller.
-func (a *APIStore) refuseDeletedTeam(c *gin.Context, teamID uuid.UUID) bool {
-	ctx := c.Request.Context()
-
+func (a *APIStore) refuseDeletedTeam(ctx context.Context, c *gin.Context, teamID uuid.UUID) bool {
 	deleted, err := a.IsProjectDeleted(ctx, teamID)
 	if err != nil {
 		logger.L().Error(ctx, "Failed to check team deletion", logger.WithTeamID(teamID.String()), zap.Error(err))
