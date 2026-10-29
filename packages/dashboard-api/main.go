@@ -227,7 +227,7 @@ func run() int {
 		return 1
 	}
 
-	apiStore := handlers.NewAPIStore(config, db, clickhouseClient, authService, identityService, tel.MeterProvider)
+	apiStore := handlers.NewAPIStore(config, db, clickhouseClient, authService, identityService)
 
 	swagger, err := api.GetSwagger()
 	if err != nil {

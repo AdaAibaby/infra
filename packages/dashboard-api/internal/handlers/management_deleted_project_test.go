@@ -34,11 +34,8 @@ func TestWritesToADeletedProjectAnswerNotFoundAndChangeNothing(t *testing.T) {
 		path   string
 		body   string
 	}{
-		"block delivery":     {http.MethodPut, "/v1/management/projects/%s/block", `{"revision":1,"blocked":false}`},
 		"cluster assignment": {http.MethodPut, "/v1/management/projects/%s/cluster/" + clusterID.String(), ""},
 		"cluster detachment": {http.MethodDelete, "/v1/management/projects/%s/cluster/" + clusterID.String(), ""},
-		"admin ban":          {http.MethodPut, "/admin/teams/%s/ban", ""},
-		"admin unban":        {http.MethodDelete, "/admin/teams/%s/ban", ""},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
@@ -62,11 +59,15 @@ func TestALiveProjectPassesTheDeletedProjectCheck(t *testing.T) {
 	t.Parallel()
 
 	db := testutils.SetupDatabase(t)
+	clusterID, err := db.SqlcClient.Dashboard.CreateCluster(t.Context(), dashboardqueries.CreateClusterParams{
+		Name: "live-project-cluster", Endpoint: "https://cluster.example.test", Token: "test-token",
+	})
+	require.NoError(t, err)
 	router, _ := newDeletedProjectRouter(t, db)
 	projectID := testutils.CreateTestTeam(t, db)
 
-	response := serveProjectRequest(t, router, http.MethodPut, "/v1/management/projects/"+projectID.String()+"/block",
-		`{"revision":1,"blocked":false}`)
+	response := serveProjectRequest(t, router, http.MethodPut,
+		"/v1/management/projects/"+projectID.String()+"/cluster/"+clusterID.String(), "")
 
 	require.Equal(t, http.StatusNoContent, response.Code, response.Body.String())
 }
@@ -76,7 +77,8 @@ func TestALiveProjectPassesTheDeletedProjectCheck(t *testing.T) {
 func newDeletedProjectRouter(t *testing.T, db *testutils.Database) (*gin.Engine, *recordingCacheAuthService) {
 	t.Helper()
 
-	store, auth := newBlockStore(db)
+	auth := &recordingCacheAuthService{}
+	store := &APIStore{db: db.SqlcClient, authService: auth}
 	router := gin.New()
 	router.Use(dashboardmiddleware.RefuseDeletedProject(db.SqlcClient.Dashboard))
 	api.RegisterHandlers(router, store)

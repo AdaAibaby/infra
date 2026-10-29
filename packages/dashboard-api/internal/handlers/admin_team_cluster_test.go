@@ -547,16 +547,3 @@ func callGetClusterAssignment(
 
 	return recorder
 }
-
-type configurableCacheAuthService struct {
-	noopAuthService
-
-	invalidated   []uuid.UUID
-	invalidateErr error
-}
-
-func (s *configurableCacheAuthService) InvalidateTeamCache(_ context.Context, teamID uuid.UUID) error {
-	s.invalidated = append(s.invalidated, teamID)
-
-	return s.invalidateErr
-}

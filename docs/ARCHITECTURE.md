@@ -305,10 +305,12 @@ retries.
   a delivery at or below the recorded revision is dropped and still answers 204. The ledger and the
   values advance in one transaction, so a revision is never recorded without the values it
   admitted.
-- `PUT .../block` applies a revision-fenced block state, the same write as dashboard-api's
-  `PUT /v1/management/projects/{projectID}/block` (see Dashboard API below): the
-  `projection.project_blocks` revision and `teams.is_blocked` / `blocked_reason` commit together,
-  and every accepted delivery, a dropped one included, evicts the team's auth cache.
+- `PUT .../block` applies a revision-fenced block state: the `projection.project_blocks` revision
+  and `teams.is_blocked` / `blocked_reason` commit together, and an older or duplicate revision
+  leaves stored state unchanged. Every accepted delivery, a dropped one included, evicts the team's
+  auth cache; a failed eviction answers an error so the retry finishes it after commit. The API
+  reads this state when admitting billable work. Apart from project deletion, which blocks the
+  team for good, this is the only route that writes it.
 - `DELETE /unstable/management/projects/{projectID}` soft-deletes the project, described below.
 
 The revision fences are the target's for the same reason: the caller can only fence what it
@@ -321,8 +323,8 @@ ledger row stores it beside the revision. Each delivery the ledger accepts recor
 since then in `dashboard-api.management.apply_lag` with `projection` `project_limits` or
 `project_blocks`; one without `decided_at`
 counts in `dashboard-api.management.origin_unknown` instead, never as zero lag. Dropped, refused
-and failed deliveries record nothing. The names keep the dashboard-api prefix because dashboard-api
-records its block deliveries under the same two metrics, so one alert and one dashboard read both.
+and failed deliveries record nothing. The names keep the dashboard-api prefix from when
+dashboard-api served these writes, so the alert and dashboard reading them carry on unchanged.
 
 Project deletion soft-deletes any project, including a member's default project; whether a project
 may be deleted is the caller's decision. `envs`, `snapshots` and `volumes` reference `teams` with
@@ -610,7 +612,7 @@ answers 408.
 
 A separate REST service (port 3010, spec `spec/openapi-dashboard.yml`) consumed by the web
 dashboard and the workspace control plane, not the SDK: the killed-sandbox record, admin routes
-(clusters, team ban and cluster assignment, user-profile resolution) and the `/v1/management`
+(clusters, team cluster assignment, user-profile resolution) and the `/v1/management`
 operations. Template reads are served by the API, not here. Its admin routes accept either a
 shared admin token or a short-lived service JWT verified against the configured admin JWKS. The
 sandbox record route accepts dashboard user auth only. Its workspace-agnostic `/v1/management` operations are defined in the
@@ -627,26 +629,11 @@ An issuer may omit `audiences` only with no `audienceMatchPolicy`; this delibera
 audience matching while issuer, signature, and temporal-claim verification remain required.
 
 The `/v1/management` operations are the cluster's half of a contract the workspace residency owns:
-project block state and the cluster lifecycle below. Project upsert, membership, limits and
-deletion are served by the API under `/unstable/management/projects/{projectID}` (see API above).
+the cluster lifecycle below. Project upsert, membership, limits, block state and deletion are
+served by the API under `/unstable/management/projects/{projectID}`, and team bans under
+`/unstable/admin/teams` (see API above).
 
-`PUT /v1/management/projects/{projectID}/block` applies a revision-fenced block
-state. The `projection.project_blocks` revision and `public.teams.is_blocked` /
-`blocked_reason` commit together. Older or duplicate revisions leave stored state
-unchanged. Every accepted delivery invalidates the team auth cache; eviction
-failures return an error so retries can finish invalidation after commit. The API
-uses this state when admitting billable work. It and the API's copy at
-`/unstable/management/projects/{projectID}/block` are the only routes that write the
-team's block state.
-
-Block deliveries may carry `decided_at`, when the caller decided that
-revision. The ledger row stores it beside the revision. Each delivery the ledger
-accepts records the seconds since then in `dashboard-api.management.apply_lag`, by
-`projection` (`project_blocks`); one without `decided_at` counts
-in `dashboard-api.management.origin_unknown` instead, never as zero lag. Dropped,
-refused and failed deliveries record nothing.
-
-The management surface also owns a replay-safe cluster lifecycle. A caller registers a stable
+The management surface owns a replay-safe cluster lifecycle. A caller registers a stable
 cluster UUID, assigns it only to the named project, detaches that exact assignment before provider
 cleanup, and deletes the cluster only after no project references it. Replaying the same
 registration or assignment succeeds. Registering the cluster again with the same name and auth
@@ -677,8 +664,7 @@ uncoded or unknown reasons as generic errors.
 
 A project deletion keeps the team row, so dashboard-api middleware, running after
 authentication, answers 404 to every write under `/v1/management/` or `/admin/` that names a
-deleted project by `projectID` or `teamID` (block deliveries, cluster assignment and
-detachment, admin ban).
+deleted project by `projectID` or `teamID` (cluster assignment and detachment).
 
 ## Data stores
 

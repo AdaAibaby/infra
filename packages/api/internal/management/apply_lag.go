@@ -11,9 +11,8 @@ import (
 )
 
 const (
-	// The names keep the dashboard-api prefix because the dashboard API emits
-	// them too, and the alert and dashboard reading them sum across both
-	// services.
+	// The names keep the dashboard-api prefix from when the dashboard API served
+	// these writes, so the alert and dashboard reading them carry on unchanged.
 	applyLagMetric      = "dashboard-api.management.apply_lag"
 	originUnknownMetric = "dashboard-api.management.origin_unknown"
 	projectionAttr      = "projection"

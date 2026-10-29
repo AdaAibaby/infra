@@ -8,23 +8,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/stretchr/testify/require"
 
 	"github.com/e2b-dev/infra/packages/dashboard-api/internal/api"
 )
-
-func TestProjectBlockContractAcceptsCombinedHoldReasons(t *testing.T) {
-	t.Parallel()
-
-	swagger, err := api.GetSwagger()
-	require.NoError(t, err)
-	schema := swagger.Components.Schemas["ManagementProjectBlockRequest"].Value
-	require.NoError(t, schema.VisitJSON(map[string]any{
-		"revision": float64(1),
-		"blocked":  true,
-		"reason":   strings.Repeat("hold_reason, ", 64),
-	}))
-}
 
 func TestManagementClusterRegistrationContainsOnlyClusterDescriptorFields(t *testing.T) {
 	t.Parallel()
@@ -68,7 +54,6 @@ func TestEveryManagementRouteReachesItsHandler(t *testing.T) {
 		path      string
 		body      string
 	}{
-		{"applyProjectBlock", http.MethodPut, project + "/block", `{"revision":1,"blocked":false}`},
 		{"registerCluster", http.MethodPut, cluster, `{"name":"a","endpoint":"a:443","endpoint_tls":true,"token":"token"}`},
 		{"deleteCluster", http.MethodDelete, cluster, ""},
 		{"requestClusterDeletion", http.MethodPut, cluster + "/deletion", ""},
@@ -110,10 +95,6 @@ type routeRecorder struct {
 func (r *routeRecorder) report(c *gin.Context, operation string) {
 	r.reached <- operation
 	c.Status(http.StatusNoContent)
-}
-
-func (r *routeRecorder) ManagementApplyProjectBlock(c *gin.Context, _ api.ProjectID) {
-	r.report(c, "applyProjectBlock")
 }
 
 func (r *routeRecorder) ManagementRegisterCluster(c *gin.Context, _ api.ClusterID) {

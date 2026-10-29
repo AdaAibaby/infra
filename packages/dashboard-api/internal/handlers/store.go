@@ -7,7 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"go.opentelemetry.io/otel/metric"
 
 	sharedauth "github.com/e2b-dev/infra/packages/auth/pkg/auth"
 	"github.com/e2b-dev/infra/packages/auth/pkg/types"
@@ -15,7 +14,6 @@ import (
 	"github.com/e2b-dev/infra/packages/dashboard-api/internal/api"
 	"github.com/e2b-dev/infra/packages/dashboard-api/internal/cfg"
 	"github.com/e2b-dev/infra/packages/dashboard-api/internal/identity"
-	"github.com/e2b-dev/infra/packages/dashboard-api/internal/management"
 	sqlcdb "github.com/e2b-dev/infra/packages/db/client"
 	"github.com/e2b-dev/infra/packages/shared/pkg/apierrors"
 )
@@ -23,12 +21,11 @@ import (
 var _ api.ServerInterface = (*APIStore)(nil)
 
 type APIStore struct {
-	config            cfg.Config
-	db                *sqlcdb.Client
-	clickhouse        clickhouse.Clickhouse
-	authService       sharedauth.Service
-	identityService   identity.Service
-	managementService *management.Service
+	config          cfg.Config
+	db              *sqlcdb.Client
+	clickhouse      clickhouse.Clickhouse
+	authService     sharedauth.Service
+	identityService identity.Service
 }
 
 func NewAPIStore(
@@ -37,15 +34,13 @@ func NewAPIStore(
 	ch clickhouse.Clickhouse,
 	authService sharedauth.Service,
 	identityService identity.Service,
-	meterProvider metric.MeterProvider,
 ) *APIStore {
 	return &APIStore{
-		config:            config,
-		db:                db,
-		clickhouse:        ch,
-		authService:       authService,
-		identityService:   identityService,
-		managementService: management.NewService(db, authService, meterProvider),
+		config:          config,
+		db:              db,
+		clickhouse:      ch,
+		authService:     authService,
+		identityService: identityService,
 	}
 }
 
