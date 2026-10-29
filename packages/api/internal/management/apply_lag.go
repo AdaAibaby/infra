@@ -22,7 +22,10 @@ const (
 
 type projectionKind string
 
-const projectionProjectLimits projectionKind = "project_limits"
+const (
+	projectionProjectLimits projectionKind = "project_limits"
+	projectionProjectBlocks projectionKind = "project_blocks"
+)
 
 type applyLag struct {
 	lag     metric.Float64Histogram

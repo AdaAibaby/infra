@@ -305,16 +305,21 @@ retries.
   a delivery at or below the recorded revision is dropped and still answers 204. The ledger and the
   values advance in one transaction, so a revision is never recorded without the values it
   admitted.
+- `PUT .../block` applies a revision-fenced block state, the same write as dashboard-api's
+  `PUT /v1/management/projects/{projectID}/block` (see Dashboard API below): the
+  `projection.project_blocks` revision and `teams.is_blocked` / `blocked_reason` commit together,
+  and every accepted delivery, a dropped one included, evicts the team's auth cache.
 - `DELETE /unstable/management/projects/{projectID}` soft-deletes the project, described below.
 
-Both revision fences are the target's for the same reason: the caller can only fence what it
+The revision fences are the target's for the same reason: the caller can only fence what it
 sends, so two deliveries in flight arrive in whichever order the network gives them, and the older
-one has to be refused where it lands. The project, membership and limits writes live in
+one has to be refused where it lands. The project, membership, limits and block writes live in
 `internal/management` with their post-commit cache evictions rather than in the handlers.
 
-A limits delivery may carry `decided_at`, when the caller decided that revision; the ledger row
-stores it beside the revision. Each delivery the ledger accepts records the seconds since then in
-`dashboard-api.management.apply_lag` with `projection` `project_limits`; one without `decided_at`
+A limits or block delivery may carry `decided_at`, when the caller decided that revision; the
+ledger row stores it beside the revision. Each delivery the ledger accepts records the seconds
+since then in `dashboard-api.management.apply_lag` with `projection` `project_limits` or
+`project_blocks`; one without `decided_at`
 counts in `dashboard-api.management.origin_unknown` instead, never as zero lag. Dropped, refused
 and failed deliveries record nothing. The names keep the dashboard-api prefix because dashboard-api
 records its block deliveries under the same two metrics, so one alert and one dashboard read both.
@@ -341,11 +346,30 @@ deletes memberships, keys and envs created since (a sandbox that paused before t
 it leaves a snapshot); and enqueues the teardown again, which is a no-op while one is still open.
 
 Afterwards the API's deleted-project middleware, running after authentication, answers 404 to every
-non-GET route under `/unstable/management/` that names `{projectID}`: the upsert, member, limits
-and settings writes. The DELETE is exempt so a retry still reaches it. dashboard-api guards its own
+non-GET route under `/unstable/management/` that names `{projectID}`: the upsert, member, limits,
+block and settings writes. The DELETE is exempt so a retry still reaches it. dashboard-api guards its own
 management and admin writes the same way. Shared auth refuses a membership or API key still left
 for the project with 403, and the API leaves the project out of a user's team list. Volumes, builds
 and stored artifacts are not reclaimed.
+
+#### Team bans (`/unstable/admin/teams`)
+
+`PUT /unstable/admin/teams/{teamID}/ban` sets `teams.is_banned`, evicts the team's auth cache so
+its API keys stop authenticating, then kills its running sandboxes and cancels its builds through
+the same orchestrator and template-manager calls as `POST /admin/teams/{teamID}/sandboxes/kill`
+and `.../builds/cancel`. The ban commits first: a kill or cancel step that fails is reported in
+the 200 response and does not undo it. The work is detached from the request, so a caller that
+disconnects does not stop it. Each team's kill and cancel run side by side, and all of a request's
+kills and cancellations share a 25-second budget; a step the budget cuts short is reported as
+failed with what it counted so far. A build delete already
+under way keeps its own 30 seconds, so a request ends within about 55 seconds. A failed cache
+eviction answers 500, so the caller's retry repeats the ban and its containment; banning a banned
+team contains it again. `DELETE .../ban` clears the flag and evicts the cache.
+`POST /unstable/admin/teams/bans` takes up to 100 teams. It stores every ban first, five teams at
+a time, then contains the banned teams, five at a time under the one budget, and sorts each team
+into banned, not found or failed; one team's failure does not stop the others. A deleted project
+answers 404 to the single-team routes and counts as not found in the bulk route. The logic lives
+in `internal/team`.
 
 ### Orchestrator (`packages/orchestrator`)
 
@@ -610,7 +634,8 @@ state. The `projection.project_blocks` revision and `public.teams.is_blocked` /
 `blocked_reason` commit together. Older or duplicate revisions leave stored state
 unchanged. Every accepted delivery invalidates the team auth cache; eviction
 failures return an error so retries can finish invalidation after commit. The API
-uses this state when admitting billable work. It is the only route that writes the
+uses this state when admitting billable work. It and the API's copy at
+`/unstable/management/projects/{projectID}/block` are the only routes that write the
 team's block state.
 
 Block deliveries may carry `decided_at`, when the caller decided that

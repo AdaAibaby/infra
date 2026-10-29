@@ -589,6 +589,36 @@ type AdminTeam struct {
 	Slug                    string              `json:"slug"`
 }
 
+// AdminTeamBanFailure defines model for AdminTeamBanFailure.
+type AdminTeamBanFailure struct {
+	Error  string             `json:"error"`
+	TeamID openapi_types.UUID `json:"teamID"`
+}
+
+// AdminTeamBanResult The outcome of banning one team. The ban is stored before the team's
+// sandboxes are killed and its builds cancelled, so it holds even when
+// either step fails.
+type AdminTeamBanResult struct {
+	// BuildCancelError Set when the cancel step failed or ran out of time; the counts cover what it did until then.
+	BuildCancelError *string `json:"buildCancelError,omitempty"`
+
+	// BuildsCancelled Number of the team's builds cancelled
+	BuildsCancelled int `json:"buildsCancelled"`
+
+	// BuildsFailedToCancel Number of the team's builds that failed to cancel
+	BuildsFailedToCancel int `json:"buildsFailedToCancel"`
+
+	// SandboxKillError Set when the kill step failed or ran out of time; the counts cover what it did until then.
+	SandboxKillError *string `json:"sandboxKillError,omitempty"`
+
+	// SandboxesFailedToKill Number of the team's sandboxes that failed to kill
+	SandboxesFailedToKill int `json:"sandboxesFailedToKill"`
+
+	// SandboxesKilled Number of the team's sandboxes killed
+	SandboxesKilled int                `json:"sandboxesKilled"`
+	TeamID          openapi_types.UUID `json:"teamID"`
+}
+
 // AdminTeamList defines model for AdminTeamList.
 type AdminTeamList struct {
 	Items []AdminTeamListItem `json:"items"`
@@ -660,6 +690,23 @@ type AdminTeamRunningSandboxCounts map[string]int64
 type AdminTeamSchedulingLabels struct {
 	// Labels The team's full set of labels. A request's labels replace the current ones.
 	Labels []string `json:"labels"`
+}
+
+// AdminTeamsBanRequest defines model for AdminTeamsBanRequest.
+type AdminTeamsBanRequest struct {
+	TeamIDs []openapi_types.UUID `json:"teamIDs"`
+}
+
+// AdminTeamsBanResult defines model for AdminTeamsBanResult.
+type AdminTeamsBanResult struct {
+	// Banned Teams whose ban is stored, with the outcome of killing their sandboxes and cancelling their builds
+	Banned []AdminTeamBanResult `json:"banned"`
+
+	// Failed Teams whose ban could not be stored or put into force; retrying repeats every step
+	Failed []AdminTeamBanFailure `json:"failed"`
+
+	// NotFound Requested teams that do not exist
+	NotFound []openapi_types.UUID `json:"notFound"`
 }
 
 // AdminTemplateAlias defines model for AdminTemplateAlias.
@@ -1105,6 +1152,21 @@ type ManagementProject struct {
 
 	// Slug Changing it renames the project, and its template names follow: each name held under an earlier slug is also given under the new one, and the old names keep working. A name the new slug already holds is left as it is. A slug already held on this control plane is a 409, on a rename as much as on a create.
 	Slug string `json:"slug"`
+}
+
+// ManagementProjectBlockRequest Desired project block state. A newer revision replaces the state, including any intervening manual block or unblock.
+type ManagementProjectBlockRequest struct {
+	// Blocked Whether the project is refused billable work.
+	Blocked bool `json:"blocked"`
+
+	// DecidedAt When the caller decided this revision, in RFC 3339. Stored with the revision and used to measure how long the decision took to apply here. Omit it when the caller does not know; the delivery is then counted as origin unknown rather than as zero lag.
+	DecidedAt *ManagementDecidedAt `json:"decided_at,omitempty"`
+
+	// Reason Reason included in blocked-request errors. Cleared when blocked is false.
+	Reason *string `json:"reason,omitempty"`
+
+	// Revision Monotonic per-project revision. Older or duplicate revisions succeed without changing stored state.
+	Revision int64 `json:"revision"`
 }
 
 // ManagementProjectLimits A project's effective limits, already resolved by the caller. Every field is absolute: this side stores what it is given and performs no arithmetic of its own.
@@ -2026,6 +2088,9 @@ type TeamLimits struct {
 
 	// MaxRamMb Maximum memory per sandbox, in MiB
 	MaxRamMb int64 `json:"maxRamMb"`
+
+	// MaxSecrets Maximum number of secrets the team may store
+	MaxSecrets int64 `json:"maxSecrets"`
 
 	// MaxVcpu Maximum vCPUs per sandbox
 	MaxVcpu int64 `json:"maxVcpu"`
@@ -3196,6 +3261,9 @@ type PostTemplatesTagsJSONRequestBody = AssignTemplateTagsRequest
 // Deprecated: this type has been marked as deprecated upstream, but no `x-deprecated-reason` was set
 type PatchTemplatesTemplateIDJSONRequestBody = TemplateUpdateRequest
 
+// AdminBanTeamsJSONRequestBody defines body for AdminBanTeams for application/json ContentType.
+type AdminBanTeamsJSONRequestBody = AdminTeamsBanRequest
+
 // PostUnstableAdminTeamsQueryJSONRequestBody defines body for PostUnstableAdminTeamsQuery for application/json ContentType.
 type PostUnstableAdminTeamsQueryJSONRequestBody = AdminTeamListRequest
 
@@ -3213,6 +3281,9 @@ type PatchUnstableAdminTemplatesDefaultsTemplateIDJSONRequestBody = AdminDefault
 
 // ManagementUpsertProjectJSONRequestBody defines body for ManagementUpsertProject for application/json ContentType.
 type ManagementUpsertProjectJSONRequestBody = ManagementProjectUpsertRequest
+
+// ManagementApplyProjectBlockJSONRequestBody defines body for ManagementApplyProjectBlock for application/json ContentType.
+type ManagementApplyProjectBlockJSONRequestBody = ManagementProjectBlockRequest
 
 // ManagementUpsertProjectLimitsJSONRequestBody defines body for ManagementUpsertProjectLimits for application/json ContentType.
 type ManagementUpsertProjectLimitsJSONRequestBody = ManagementProjectLimits
@@ -4428,6 +4499,36 @@ type ClientInterface interface {
 	// Corresponds with GET /templates/{templateID}/tags/{tag}/assignments (the `GetTemplatesTemplateIDTagsTagAssignments` operationId).
 	GetTemplatesTemplateIDTagsTagAssignments(ctx context.Context, templateID TemplateID, tag Tag, params *GetTemplatesTemplateIDTagsTagAssignmentsParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// AdminBanTeamsWithBody Ban teams
+	//
+	// Bans up to 100 teams at once, as
+	// `PUT /unstable/admin/teams/{teamID}/ban` does, except that every
+	// team's ban is stored before any team's sandboxes are killed or builds
+	// cancelled, and the kills and cancellations of all teams share one time
+	// budget. One team's failure does not stop the others; the response sorts
+	// every requested team into banned, not found or failed. The work
+	// continues if the caller disconnects.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with POST /unstable/admin/teams/bans (the `AdminBanTeams` operationId).
+	AdminBanTeamsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminBanTeams Ban teams
+	//
+	// Bans up to 100 teams at once, as
+	// `PUT /unstable/admin/teams/{teamID}/ban` does, except that every
+	// team's ban is stored before any team's sandboxes are killed or builds
+	// cancelled, and the kills and cancellations of all teams share one time
+	// budget. One team's failure does not stop the others; the response sorts
+	// every requested team into banned, not found or failed. The work
+	// continues if the caller disconnects.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with POST /unstable/admin/teams/bans (the `AdminBanTeams` operationId).
+	AdminBanTeams(ctx context.Context, body AdminBanTeamsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostUnstableAdminTeamsQueryWithBody List teams as admin
 	//
 	// Lists teams matching the filters in the request body, with each team's
@@ -4458,6 +4559,26 @@ type ClientInterface interface {
 	//
 	// Corresponds with GET /unstable/admin/teams/{teamID} (the `GetUnstableAdminTeamsTeamID` operationId).
 	GetUnstableAdminTeamsTeamID(ctx context.Context, teamID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminUnbanTeam Unban a team
+	//
+	// Clears the team's ban. Idempotent.
+	//
+	// Corresponds with DELETE /unstable/admin/teams/{teamID}/ban (the `AdminUnbanTeam` operationId).
+	AdminUnbanTeam(ctx context.Context, teamID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// AdminBanTeam Ban a team
+	//
+	// Marks the team as banned so its API keys stop authenticating, then
+	// kills its sandboxes and cancels its builds. The ban is stored first:
+	// a failure to kill or cancel is reported in the result and does not
+	// undo it. Killing and cancelling stop after a fixed time budget, and a
+	// step cut short is reported as failed. Banning an already banned team
+	// repeats the kill and cancel. The work continues if the caller
+	// disconnects.
+	//
+	// Corresponds with PUT /unstable/admin/teams/{teamID}/ban (the `AdminBanTeam` operationId).
+	AdminBanTeam(ctx context.Context, teamID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PutUnstableAdminTeamsTeamIDSchedulingLabelsWithBody Replace a team's sandbox scheduling labels
 	//
@@ -4602,6 +4723,24 @@ type ClientInterface interface {
 	//
 	// Corresponds with PUT /unstable/management/projects/{projectID} (the `ManagementUpsertProject` operationId).
 	ManagementUpsertProject(ctx context.Context, projectID openapi_types.UUID, body ManagementUpsertProjectJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ManagementApplyProjectBlockWithBody Apply a project's block state.
+	//
+	// Records whether the project is refused billable work, which the auth path reads before it lets a sandbox start. An older or duplicate revision is accepted without changing target state. Answers 404 when the project is missing or deleted.
+	//
+	// Takes any type of body and a specified content type.
+	//
+	// Corresponds with PUT /unstable/management/projects/{projectID}/block (the `ManagementApplyProjectBlock` operationId).
+	ManagementApplyProjectBlockWithBody(ctx context.Context, projectID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// ManagementApplyProjectBlock Apply a project's block state.
+	//
+	// Records whether the project is refused billable work, which the auth path reads before it lets a sandbox start. An older or duplicate revision is accepted without changing target state. Answers 404 when the project is missing or deleted.
+	//
+	// Takes a body of the `application/json` content type.
+	//
+	// Corresponds with PUT /unstable/management/projects/{projectID}/block (the `ManagementApplyProjectBlock` operationId).
+	ManagementApplyProjectBlock(ctx context.Context, projectID openapi_types.UUID, body ManagementApplyProjectBlockJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// ManagementUpsertProjectLimitsWithBody Reconcile effective limits for a project.
 	//
@@ -6421,6 +6560,56 @@ func (c *Client) GetTemplatesTemplateIDTagsTagAssignments(ctx context.Context, t
 	return c.Client.Do(req)
 }
 
+// AdminBanTeamsWithBody Ban teams
+//
+// Bans up to 100 teams at once, as
+// `PUT /unstable/admin/teams/{teamID}/ban` does, except that every
+// team's ban is stored before any team's sandboxes are killed or builds
+// cancelled, and the kills and cancellations of all teams share one time
+// budget. One team's failure does not stop the others; the response sorts
+// every requested team into banned, not found or failed. The work
+// continues if the caller disconnects.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with POST /unstable/admin/teams/bans (the `AdminBanTeams` operationId).
+func (c *Client) AdminBanTeamsWithBody(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminBanTeamsRequestWithBody(c.Server, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminBanTeams Ban teams
+//
+// Bans up to 100 teams at once, as
+// `PUT /unstable/admin/teams/{teamID}/ban` does, except that every
+// team's ban is stored before any team's sandboxes are killed or builds
+// cancelled, and the kills and cancellations of all teams share one time
+// budget. One team's failure does not stop the others; the response sorts
+// every requested team into banned, not found or failed. The work
+// continues if the caller disconnects.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with POST /unstable/admin/teams/bans (the `AdminBanTeams` operationId).
+func (c *Client) AdminBanTeams(ctx context.Context, body AdminBanTeamsJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminBanTeamsRequest(c.Server, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 // PostUnstableAdminTeamsQueryWithBody List teams as admin
 //
 // Lists teams matching the filters in the request body, with each team's
@@ -6472,6 +6661,46 @@ func (c *Client) PostUnstableAdminTeamsQuery(ctx context.Context, body PostUnsta
 // Corresponds with GET /unstable/admin/teams/{teamID} (the `GetUnstableAdminTeamsTeamID` operationId).
 func (c *Client) GetUnstableAdminTeamsTeamID(ctx context.Context, teamID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewGetUnstableAdminTeamsTeamIDRequest(c.Server, teamID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminUnbanTeam Unban a team
+//
+// Clears the team's ban. Idempotent.
+//
+// Corresponds with DELETE /unstable/admin/teams/{teamID}/ban (the `AdminUnbanTeam` operationId).
+func (c *Client) AdminUnbanTeam(ctx context.Context, teamID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminUnbanTeamRequest(c.Server, teamID)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// AdminBanTeam Ban a team
+//
+// Marks the team as banned so its API keys stop authenticating, then
+// kills its sandboxes and cancels its builds. The ban is stored first:
+// a failure to kill or cancel is reported in the result and does not
+// undo it. Killing and cancelling stop after a fixed time budget, and a
+// step cut short is reported as failed. Banning an already banned team
+// repeats the kill and cancel. The work continues if the caller
+// disconnects.
+//
+// Corresponds with PUT /unstable/admin/teams/{teamID}/ban (the `AdminBanTeam` operationId).
+func (c *Client) AdminBanTeam(ctx context.Context, teamID openapi_types.UUID, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewAdminBanTeamRequest(c.Server, teamID)
 	if err != nil {
 		return nil, err
 	}
@@ -6796,6 +7025,44 @@ func (c *Client) ManagementUpsertProjectWithBody(ctx context.Context, projectID 
 // Corresponds with PUT /unstable/management/projects/{projectID} (the `ManagementUpsertProject` operationId).
 func (c *Client) ManagementUpsertProject(ctx context.Context, projectID openapi_types.UUID, body ManagementUpsertProjectJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewManagementUpsertProjectRequest(c.Server, projectID, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ManagementApplyProjectBlockWithBody Apply a project's block state.
+//
+// Records whether the project is refused billable work, which the auth path reads before it lets a sandbox start. An older or duplicate revision is accepted without changing target state. Answers 404 when the project is missing or deleted.
+//
+// Takes any type of body and a specified content type.
+//
+// Corresponds with PUT /unstable/management/projects/{projectID}/block (the `ManagementApplyProjectBlock` operationId).
+func (c *Client) ManagementApplyProjectBlockWithBody(ctx context.Context, projectID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewManagementApplyProjectBlockRequestWithBody(c.Server, projectID, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+// ManagementApplyProjectBlock Apply a project's block state.
+//
+// Records whether the project is refused billable work, which the auth path reads before it lets a sandbox start. An older or duplicate revision is accepted without changing target state. Answers 404 when the project is missing or deleted.
+//
+// Takes a body of the `application/json` content type.
+//
+// Corresponds with PUT /unstable/management/projects/{projectID}/block (the `ManagementApplyProjectBlock` operationId).
+func (c *Client) ManagementApplyProjectBlock(ctx context.Context, projectID openapi_types.UUID, body ManagementApplyProjectBlockJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewManagementApplyProjectBlockRequest(c.Server, projectID, body)
 	if err != nil {
 		return nil, err
 	}
@@ -10863,6 +11130,46 @@ func NewGetTemplatesTemplateIDTagsTagAssignmentsRequest(server string, templateI
 	return req, nil
 }
 
+// NewAdminBanTeamsRequest calls the generic AdminBanTeams builder with application/json body
+func NewAdminBanTeamsRequest(server string, body AdminBanTeamsJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewAdminBanTeamsRequestWithBody(server, "application/json", bodyReader)
+}
+
+// NewAdminBanTeamsRequestWithBody constructs an http.Request for the AdminBanTeams method, with any body, and a specified content type
+func NewAdminBanTeamsRequestWithBody(server string, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/teams/bans")
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPost, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
 // NewPostUnstableAdminTeamsQueryRequest calls the generic PostUnstableAdminTeamsQuery builder with application/json body
 func NewPostUnstableAdminTeamsQueryRequest(server string, body PostUnstableAdminTeamsQueryJSONRequestBody) (*http.Request, error) {
 	var bodyReader io.Reader
@@ -10930,6 +11237,74 @@ func NewGetUnstableAdminTeamsTeamIDRequest(server string, teamID openapi_types.U
 	}
 
 	req, err := http.NewRequest(http.MethodGet, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminUnbanTeamRequest constructs an http.Request for the AdminUnbanTeam method
+func NewAdminUnbanTeamRequest(server string, teamID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "teamID", teamID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/teams/%s/ban", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodDelete, queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewAdminBanTeamRequest constructs an http.Request for the AdminBanTeam method
+func NewAdminBanTeamRequest(server string, teamID openapi_types.UUID) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "teamID", teamID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/admin/teams/%s/ban", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), nil)
 	if err != nil {
 		return nil, err
 	}
@@ -11543,6 +11918,53 @@ func NewManagementUpsertProjectRequestWithBody(server string, projectID openapi_
 	}
 
 	operationPath := fmt.Sprintf("/unstable/management/projects/%s", pathParam0)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest(http.MethodPut, queryURL.String(), body)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Add("Content-Type", contentType)
+
+	return req, nil
+}
+
+// NewManagementApplyProjectBlockRequest calls the generic ManagementApplyProjectBlock builder with application/json body
+func NewManagementApplyProjectBlockRequest(server string, projectID openapi_types.UUID, body ManagementApplyProjectBlockJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewManagementApplyProjectBlockRequestWithBody(server, projectID, "application/json", bodyReader)
+}
+
+// NewManagementApplyProjectBlockRequestWithBody constructs an http.Request for the ManagementApplyProjectBlock method, with any body, and a specified content type
+func NewManagementApplyProjectBlockRequestWithBody(server string, projectID openapi_types.UUID, contentType string, body io.Reader) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "projectID", projectID, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: "uuid"})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/unstable/management/projects/%s/block", pathParam0)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -13422,6 +13844,36 @@ type ClientWithResponsesInterface interface {
 	// Corresponds with GET /templates/{templateID}/tags/{tag}/assignments (the `GetTemplatesTemplateIDTagsTagAssignments` operationId).
 	GetTemplatesTemplateIDTagsTagAssignmentsWithResponse(ctx context.Context, templateID TemplateID, tag Tag, params *GetTemplatesTemplateIDTagsTagAssignmentsParams, reqEditors ...RequestEditorFn) (*GetTemplatesTemplateIDTagsTagAssignmentsResponse, error)
 
+	// AdminBanTeamsWithBodyWithResponse Ban teams
+	//
+	// Bans up to 100 teams at once, as
+	// `PUT /unstable/admin/teams/{teamID}/ban` does, except that every
+	// team's ban is stored before any team's sandboxes are killed or builds
+	// cancelled, and the kills and cancellations of all teams share one time
+	// budget. One team's failure does not stop the others; the response sorts
+	// every requested team into banned, not found or failed. The work
+	// continues if the caller disconnects.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /unstable/admin/teams/bans (the `AdminBanTeams` operationId).
+	AdminBanTeamsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminBanTeamsResponse, error)
+
+	// AdminBanTeamsWithResponse Ban teams
+	//
+	// Bans up to 100 teams at once, as
+	// `PUT /unstable/admin/teams/{teamID}/ban` does, except that every
+	// team's ban is stored before any team's sandboxes are killed or builds
+	// cancelled, and the kills and cancellations of all teams share one time
+	// budget. One team's failure does not stop the others; the response sorts
+	// every requested team into banned, not found or failed. The work
+	// continues if the caller disconnects.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with POST /unstable/admin/teams/bans (the `AdminBanTeams` operationId).
+	AdminBanTeamsWithResponse(ctx context.Context, body AdminBanTeamsJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminBanTeamsResponse, error)
+
 	// PostUnstableAdminTeamsQueryWithBodyWithResponse List teams as admin
 	//
 	// Lists teams matching the filters in the request body, with each team's
@@ -13454,6 +13906,30 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with GET /unstable/admin/teams/{teamID} (the `GetUnstableAdminTeamsTeamID` operationId).
 	GetUnstableAdminTeamsTeamIDWithResponse(ctx context.Context, teamID openapi_types.UUID, reqEditors ...RequestEditorFn) (*GetUnstableAdminTeamsTeamIDResponse, error)
+
+	// AdminUnbanTeamWithResponse Unban a team
+	//
+	// Clears the team's ban. Idempotent.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with DELETE /unstable/admin/teams/{teamID}/ban (the `AdminUnbanTeam` operationId).
+	AdminUnbanTeamWithResponse(ctx context.Context, teamID openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminUnbanTeamResponse, error)
+
+	// AdminBanTeamWithResponse Ban a team
+	//
+	// Marks the team as banned so its API keys stop authenticating, then
+	// kills its sandboxes and cancels its builds. The ban is stored first:
+	// a failure to kill or cancel is reported in the result and does not
+	// undo it. Killing and cancelling stop after a fixed time budget, and a
+	// step cut short is reported as failed. Banning an already banned team
+	// repeats the kill and cancel. The work continues if the caller
+	// disconnects.
+	//
+	// Returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /unstable/admin/teams/{teamID}/ban (the `AdminBanTeam` operationId).
+	AdminBanTeamWithResponse(ctx context.Context, teamID openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminBanTeamResponse, error)
 
 	// PutUnstableAdminTeamsTeamIDSchedulingLabelsWithBodyWithResponse Replace a team's sandbox scheduling labels
 	//
@@ -13614,6 +14090,24 @@ type ClientWithResponsesInterface interface {
 	//
 	// Corresponds with PUT /unstable/management/projects/{projectID} (the `ManagementUpsertProject` operationId).
 	ManagementUpsertProjectWithResponse(ctx context.Context, projectID openapi_types.UUID, body ManagementUpsertProjectJSONRequestBody, reqEditors ...RequestEditorFn) (*ManagementUpsertProjectResponse, error)
+
+	// ManagementApplyProjectBlockWithBodyWithResponse Apply a project's block state.
+	//
+	// Records whether the project is refused billable work, which the auth path reads before it lets a sandbox start. An older or duplicate revision is accepted without changing target state. Answers 404 when the project is missing or deleted.
+	//
+	// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /unstable/management/projects/{projectID}/block (the `ManagementApplyProjectBlock` operationId).
+	ManagementApplyProjectBlockWithBodyWithResponse(ctx context.Context, projectID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ManagementApplyProjectBlockResponse, error)
+
+	// ManagementApplyProjectBlockWithResponse Apply a project's block state.
+	//
+	// Records whether the project is refused billable work, which the auth path reads before it lets a sandbox start. An older or duplicate revision is accepted without changing target state. Answers 404 when the project is missing or deleted.
+	//
+	// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+	//
+	// Corresponds with PUT /unstable/management/projects/{projectID}/block (the `ManagementApplyProjectBlock` operationId).
+	ManagementApplyProjectBlockWithResponse(ctx context.Context, projectID openapi_types.UUID, body ManagementApplyProjectBlockJSONRequestBody, reqEditors ...RequestEditorFn) (*ManagementApplyProjectBlockResponse, error)
 
 	// ManagementUpsertProjectLimitsWithBodyWithResponse Reconcile effective limits for a project.
 	//
@@ -17136,6 +17630,8 @@ type PostSandboxesSandboxIDSnapshotsResponse struct {
 	JSON429 *N429
 	// JSON500 the response for an HTTP 500 `application/json` response
 	JSON500 *N500
+	// JSON503 the response for an HTTP 503 `application/json` response
+	JSON503 *N503
 	// Headers429 the parsed response headers for an HTTP 429 response
 	Headers429 *PostSandboxesSandboxIDSnapshotsResponse429Headers
 }
@@ -17168,6 +17664,11 @@ func (r PostSandboxesSandboxIDSnapshotsResponse) GetJSON429() *N429 {
 // GetJSON500 returns the response for an HTTP 500 `application/json` response
 func (r PostSandboxesSandboxIDSnapshotsResponse) GetJSON500() *N500 {
 	return r.JSON500
+}
+
+// GetJSON503 returns the response for an HTTP 503 `application/json` response
+func (r PostSandboxesSandboxIDSnapshotsResponse) GetJSON503() *N503 {
+	return r.JSON503
 }
 
 // GetBody returns the raw response body bytes
@@ -19330,6 +19831,82 @@ func (r GetTemplatesTemplateIDTagsTagAssignmentsResponse) ContentType() string {
 	return ""
 }
 
+// AdminBanTeamsResponse429Headers the declared response headers of an HTTP 429 response for AdminBanTeams
+type AdminBanTeamsResponse429Headers struct {
+	RetryAfter *int
+}
+
+type AdminBanTeamsResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdminTeamsBanResult
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *AdminBanTeamsResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminBanTeamsResponse) GetJSON200() *AdminTeamsBanResult {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r AdminBanTeamsResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r AdminBanTeamsResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r AdminBanTeamsResponse) GetJSON429() *N429 {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r AdminBanTeamsResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminBanTeamsResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminBanTeamsResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminBanTeamsResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminBanTeamsResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
 // PostUnstableAdminTeamsQueryResponse429Headers the declared response headers of an HTTP 429 response for PostUnstableAdminTeamsQuery
 type PostUnstableAdminTeamsQueryResponse429Headers struct {
 	RetryAfter *int
@@ -19483,6 +20060,165 @@ func (r GetUnstableAdminTeamsTeamIDResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r GetUnstableAdminTeamsTeamIDResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// AdminUnbanTeamResponse429Headers the declared response headers of an HTTP 429 response for AdminUnbanTeam
+type AdminUnbanTeamResponse429Headers struct {
+	RetryAfter *int
+}
+
+type AdminUnbanTeamResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *AdminUnbanTeamResponse429Headers
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r AdminUnbanTeamResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r AdminUnbanTeamResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r AdminUnbanTeamResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r AdminUnbanTeamResponse) GetJSON429() *N429 {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r AdminUnbanTeamResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminUnbanTeamResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminUnbanTeamResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminUnbanTeamResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminUnbanTeamResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+// AdminBanTeamResponse429Headers the declared response headers of an HTTP 429 response for AdminBanTeam
+type AdminBanTeamResponse429Headers struct {
+	RetryAfter *int
+}
+
+type AdminBanTeamResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON200 the response for an HTTP 200 `application/json` response
+	JSON200 *AdminTeamBanResult
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON429 the response for an HTTP 429 `application/json` response
+	JSON429 *N429
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+	// Headers429 the parsed response headers for an HTTP 429 response
+	Headers429 *AdminBanTeamResponse429Headers
+}
+
+// GetJSON200 returns the response for an HTTP 200 `application/json` response
+func (r AdminBanTeamResponse) GetJSON200() *AdminTeamBanResult {
+	return r.JSON200
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r AdminBanTeamResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r AdminBanTeamResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r AdminBanTeamResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON429 returns the response for an HTTP 429 `application/json` response
+func (r AdminBanTeamResponse) GetJSON429() *N429 {
+	return r.JSON429
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r AdminBanTeamResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r AdminBanTeamResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r AdminBanTeamResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r AdminBanTeamResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r AdminBanTeamResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -20450,6 +21186,68 @@ func (r ManagementUpsertProjectResponse) StatusCode() int {
 
 // ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
 func (r ManagementUpsertProjectResponse) ContentType() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Header.Get("Content-Type")
+	}
+	return ""
+}
+
+type ManagementApplyProjectBlockResponse struct {
+	Body         []byte
+	HTTPResponse *http.Response
+	// JSON400 the response for an HTTP 400 `application/json` response
+	JSON400 *N400
+	// JSON401 the response for an HTTP 401 `application/json` response
+	JSON401 *N401
+	// JSON404 the response for an HTTP 404 `application/json` response
+	JSON404 *N404
+	// JSON500 the response for an HTTP 500 `application/json` response
+	JSON500 *N500
+}
+
+// GetJSON400 returns the response for an HTTP 400 `application/json` response
+func (r ManagementApplyProjectBlockResponse) GetJSON400() *N400 {
+	return r.JSON400
+}
+
+// GetJSON401 returns the response for an HTTP 401 `application/json` response
+func (r ManagementApplyProjectBlockResponse) GetJSON401() *N401 {
+	return r.JSON401
+}
+
+// GetJSON404 returns the response for an HTTP 404 `application/json` response
+func (r ManagementApplyProjectBlockResponse) GetJSON404() *N404 {
+	return r.JSON404
+}
+
+// GetJSON500 returns the response for an HTTP 500 `application/json` response
+func (r ManagementApplyProjectBlockResponse) GetJSON500() *N500 {
+	return r.JSON500
+}
+
+// GetBody returns the raw response body bytes
+func (r ManagementApplyProjectBlockResponse) GetBody() []byte {
+	return r.Body
+}
+
+// Status returns HTTPResponse.Status
+func (r ManagementApplyProjectBlockResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r ManagementApplyProjectBlockResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+// ContentType is a convenience method to retrieve the Content-Type value from the HTTP response headers
+func (r ManagementApplyProjectBlockResponse) ContentType() string {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.Header.Get("Content-Type")
 	}
@@ -23309,6 +24107,48 @@ func (c *ClientWithResponses) GetTemplatesTemplateIDTagsTagAssignmentsWithRespon
 	return ParseGetTemplatesTemplateIDTagsTagAssignmentsResponse(rsp)
 }
 
+// AdminBanTeamsWithBodyWithResponse Ban teams
+//
+// Bans up to 100 teams at once, as
+// `PUT /unstable/admin/teams/{teamID}/ban` does, except that every
+// team's ban is stored before any team's sandboxes are killed or builds
+// cancelled, and the kills and cancellations of all teams share one time
+// budget. One team's failure does not stop the others; the response sorts
+// every requested team into banned, not found or failed. The work
+// continues if the caller disconnects.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /unstable/admin/teams/bans (the `AdminBanTeams` operationId).
+func (c *ClientWithResponses) AdminBanTeamsWithBodyWithResponse(ctx context.Context, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*AdminBanTeamsResponse, error) {
+	rsp, err := c.AdminBanTeamsWithBody(ctx, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminBanTeamsResponse(rsp)
+}
+
+// AdminBanTeamsWithResponse Ban teams
+//
+// Bans up to 100 teams at once, as
+// `PUT /unstable/admin/teams/{teamID}/ban` does, except that every
+// team's ban is stored before any team's sandboxes are killed or builds
+// cancelled, and the kills and cancellations of all teams share one time
+// budget. One team's failure does not stop the others; the response sorts
+// every requested team into banned, not found or failed. The work
+// continues if the caller disconnects.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with POST /unstable/admin/teams/bans (the `AdminBanTeams` operationId).
+func (c *ClientWithResponses) AdminBanTeamsWithResponse(ctx context.Context, body AdminBanTeamsJSONRequestBody, reqEditors ...RequestEditorFn) (*AdminBanTeamsResponse, error) {
+	rsp, err := c.AdminBanTeams(ctx, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminBanTeamsResponse(rsp)
+}
+
 // PostUnstableAdminTeamsQueryWithBodyWithResponse List teams as admin
 //
 // Lists teams matching the filters in the request body, with each team's
@@ -23358,6 +24198,42 @@ func (c *ClientWithResponses) GetUnstableAdminTeamsTeamIDWithResponse(ctx contex
 		return nil, err
 	}
 	return ParseGetUnstableAdminTeamsTeamIDResponse(rsp)
+}
+
+// AdminUnbanTeamWithResponse Unban a team
+//
+// Clears the team's ban. Idempotent.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with DELETE /unstable/admin/teams/{teamID}/ban (the `AdminUnbanTeam` operationId).
+func (c *ClientWithResponses) AdminUnbanTeamWithResponse(ctx context.Context, teamID openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminUnbanTeamResponse, error) {
+	rsp, err := c.AdminUnbanTeam(ctx, teamID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminUnbanTeamResponse(rsp)
+}
+
+// AdminBanTeamWithResponse Ban a team
+//
+// Marks the team as banned so its API keys stop authenticating, then
+// kills its sandboxes and cancels its builds. The ban is stored first:
+// a failure to kill or cancel is reported in the result and does not
+// undo it. Killing and cancelling stop after a fixed time budget, and a
+// step cut short is reported as failed. Banning an already banned team
+// repeats the kill and cancel. The work continues if the caller
+// disconnects.
+//
+// Returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /unstable/admin/teams/{teamID}/ban (the `AdminBanTeam` operationId).
+func (c *ClientWithResponses) AdminBanTeamWithResponse(ctx context.Context, teamID openapi_types.UUID, reqEditors ...RequestEditorFn) (*AdminBanTeamResponse, error) {
+	rsp, err := c.AdminBanTeam(ctx, teamID, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseAdminBanTeamResponse(rsp)
 }
 
 // PutUnstableAdminTeamsTeamIDSchedulingLabelsWithBodyWithResponse Replace a team's sandbox scheduling labels
@@ -23626,6 +24502,36 @@ func (c *ClientWithResponses) ManagementUpsertProjectWithResponse(ctx context.Co
 		return nil, err
 	}
 	return ParseManagementUpsertProjectResponse(rsp)
+}
+
+// ManagementApplyProjectBlockWithBodyWithResponse Apply a project's block state.
+//
+// Records whether the project is refused billable work, which the auth path reads before it lets a sandbox start. An older or duplicate revision is accepted without changing target state. Answers 404 when the project is missing or deleted.
+//
+// Takes any type of body and a specified content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /unstable/management/projects/{projectID}/block (the `ManagementApplyProjectBlock` operationId).
+func (c *ClientWithResponses) ManagementApplyProjectBlockWithBodyWithResponse(ctx context.Context, projectID openapi_types.UUID, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*ManagementApplyProjectBlockResponse, error) {
+	rsp, err := c.ManagementApplyProjectBlockWithBody(ctx, projectID, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseManagementApplyProjectBlockResponse(rsp)
+}
+
+// ManagementApplyProjectBlockWithResponse Apply a project's block state.
+//
+// Records whether the project is refused billable work, which the auth path reads before it lets a sandbox start. An older or duplicate revision is accepted without changing target state. Answers 404 when the project is missing or deleted.
+//
+// Takes a body of the `application/json` content type, and returns a wrapper object for the known response body format(s).
+//
+// Corresponds with PUT /unstable/management/projects/{projectID}/block (the `ManagementApplyProjectBlock` operationId).
+func (c *ClientWithResponses) ManagementApplyProjectBlockWithResponse(ctx context.Context, projectID openapi_types.UUID, body ManagementApplyProjectBlockJSONRequestBody, reqEditors ...RequestEditorFn) (*ManagementApplyProjectBlockResponse, error) {
+	rsp, err := c.ManagementApplyProjectBlock(ctx, projectID, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseManagementApplyProjectBlockResponse(rsp)
 }
 
 // ManagementUpsertProjectLimitsWithBodyWithResponse Reconcile effective limits for a project.
@@ -26935,6 +27841,13 @@ func ParsePostSandboxesSandboxIDSnapshotsResponse(rsp *http.Response) (*PostSand
 		}
 		response.JSON500 = &dest
 
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 503:
+		var dest N503
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON503 = &dest
+
 	}
 
 	switch {
@@ -28883,6 +29796,73 @@ func ParseGetTemplatesTemplateIDTagsTagAssignmentsResponse(rsp *http.Response) (
 	return response, nil
 }
 
+// ParseAdminBanTeamsResponse parses an HTTP response from a AdminBanTeamsWithResponse call
+func ParseAdminBanTeamsResponse(rsp *http.Response) (*AdminBanTeamsResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminBanTeamsResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdminTeamsBanResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers AdminBanTeamsResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
 // ParsePostUnstableAdminTeamsQueryResponse parses an HTTP response from a PostUnstableAdminTeamsQueryWithResponse call
 func ParsePostUnstableAdminTeamsQueryResponse(rsp *http.Response) (*PostUnstableAdminTeamsQueryResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -29011,6 +29991,150 @@ func ParseGetUnstableAdminTeamsTeamIDResponse(rsp *http.Response) (*GetUnstableA
 	switch {
 	case rsp.StatusCode == 429:
 		var headers GetUnstableAdminTeamsTeamIDResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseAdminUnbanTeamResponse parses an HTTP response from a AdminUnbanTeamWithResponse call
+func ParseAdminUnbanTeamResponse(rsp *http.Response) (*AdminUnbanTeamResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminUnbanTeamResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers AdminUnbanTeamResponse429Headers
+		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
+			var value int
+			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
+				return nil, err
+			}
+			headers.RetryAfter = &value
+		}
+		response.Headers429 = &headers
+	}
+
+	return response, nil
+}
+
+// ParseAdminBanTeamResponse parses an HTTP response from a AdminBanTeamWithResponse call
+func ParseAdminBanTeamResponse(rsp *http.Response) (*AdminBanTeamResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &AdminBanTeamResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AdminTeamBanResult
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 429:
+		var dest N429
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON429 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	switch {
+	case rsp.StatusCode == 429:
+		var headers AdminBanTeamResponse429Headers
 		if values := rsp.Header.Values("Retry-After"); len(values) > 0 {
 			var value int
 			if err := runtime.BindStyledParameterWithOptions("simple", "Retry-After", values[0], &value, runtime.BindStyledParameterOptions{ParamLocation: runtime.ParamLocationHeader, Explode: false, Required: false, Type: "integer", Format: ""}); err != nil {
@@ -29819,6 +30943,56 @@ func ParseManagementUpsertProjectResponse(rsp *http.Response) (*ManagementUpsert
 			return nil, err
 		}
 		response.JSON409 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
+		var dest N500
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON500 = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseManagementApplyProjectBlockResponse parses an HTTP response from a ManagementApplyProjectBlockWithResponse call
+func ParseManagementApplyProjectBlockResponse(rsp *http.Response) (*ManagementApplyProjectBlockResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &ManagementApplyProjectBlockResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case rsp.StatusCode == 204:
+		break // No content-type
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 400:
+		var dest N400
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON400 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 401:
+		var dest N401
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON401 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 404:
+		var dest N404
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON404 = &dest
 
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 500:
 		var dest N500

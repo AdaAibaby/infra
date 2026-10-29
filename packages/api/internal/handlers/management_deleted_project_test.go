@@ -28,6 +28,7 @@ func TestWritesToADeletedProjectAnswerNotFoundAndChangeNothing(t *testing.T) {
 		"project upsert":  {http.MethodPut, "/unstable/management/projects/%s", `{"name":"restored","slug":"restored","email":"restored@example.test"}`},
 		"member delivery": {http.MethodPut, "/unstable/management/projects/%s/members/" + uuid.NewString(), `{"revision":1,"present":true,"identities":[{"issuer":"https://issuer.test","subject":"member"}]}`},
 		"limits delivery": {http.MethodPut, "/unstable/management/projects/%s/limits", validLimitsBody},
+		"block delivery":  {http.MethodPut, "/unstable/management/projects/%s/block", `{"revision":1,"blocked":false}`},
 	} {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()

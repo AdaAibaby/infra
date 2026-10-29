@@ -49,3 +49,19 @@ func (a *APIStore) sendProjectLimitsError(c *gin.Context, err error, attrs ...at
 		a.sendAPIStoreError(c, http.StatusInternalServerError, "Error updating project limits")
 	}
 }
+
+func (a *APIStore) sendProjectBlockError(c *gin.Context, err error, attrs ...attribute.KeyValue) {
+	ctx := c.Request.Context()
+
+	switch {
+	case errors.Is(err, management.ErrProjectNotFound):
+		telemetry.ReportErrorByCode(ctx, http.StatusNotFound, "apply project block failed", err, attrs...)
+		a.sendAPIStoreError(c, http.StatusNotFound, "Project not found")
+	case errors.Is(err, management.ErrInvalidProjectBlock):
+		telemetry.ReportErrorByCode(ctx, http.StatusBadRequest, "apply project block failed", err, attrs...)
+		a.sendAPIStoreError(c, http.StatusBadRequest, "Invalid project block state")
+	default:
+		telemetry.ReportCriticalError(ctx, "apply project block failed", err, attrs...)
+		a.sendAPIStoreError(c, http.StatusInternalServerError, "Error applying project block")
+	}
+}

@@ -32,6 +32,7 @@ import (
 	"github.com/e2b-dev/infra/packages/api/internal/outbox"
 	"github.com/e2b-dev/infra/packages/api/internal/pauselimit"
 	"github.com/e2b-dev/infra/packages/api/internal/sandbox"
+	"github.com/e2b-dev/infra/packages/api/internal/team"
 	template_manager "github.com/e2b-dev/infra/packages/api/internal/template-manager"
 	"github.com/e2b-dev/infra/packages/api/internal/utils"
 	sharedauth "github.com/e2b-dev/infra/packages/auth/pkg/auth"
@@ -233,6 +234,7 @@ type APIStore struct {
 	snapshotCache             *snapshotcache.SnapshotCache
 	authService               sharedauth.Service
 	managementService         *management.Service
+	teamService               *team.Service
 	riverClient               *river.Client[pgx.Tx] // set by NewOutbox
 	templateSpawnCounter      *utils.TemplateSpawnCounter
 	clickhouseStore           clickhouse.Clickhouse
@@ -455,6 +457,7 @@ func NewAPIStore(ctx context.Context, tel *telemetry.Client, redisClient redis.U
 		snapshotCache:         snapshotCache,
 		authService:           authService,
 		managementService:     management.NewService(authDB, sqlcDB, authService, tel.MeterProvider),
+		teamService:           team.NewService(sqlcDB, authService, orch, templateManager, banContainmentBudget),
 		templateSpawnCounter:  templateSpawnCounter,
 		clickhouseStore:       clickhouseStore,
 		sandboxLogsReader:     sandboxLogsReader,
