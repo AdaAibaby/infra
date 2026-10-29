@@ -31,7 +31,7 @@ type (
 	PauseRefusedEnvdUnresponsiveError     = sandbox.PauseRefusedEnvdUnresponsiveError
 )
 
-func (o *Orchestrator) pauseSandbox(ctx context.Context, node *nodemanager.Node, sbx sandbox.Sandbox, filesystemOnly bool) error {
+func (o *Orchestrator) pauseSandbox(ctx context.Context, node *nodemanager.Node, sbx sandbox.Sandbox, filesystemOnly, skipEnvdHealthProbe bool) error {
 	ctx, span := tracer.Start(ctx, "pause-sandbox")
 	defer span.End()
 
@@ -60,7 +60,7 @@ func (o *Orchestrator) pauseSandbox(ctx context.Context, node *nodemanager.Node,
 		zap.String("source_build_id", sbx.BuildID.String()),
 	)
 
-	err = snapshotInstance(ctx, node, sbx, result.TemplateID, result.BuildID.String(), filesystemOnly)
+	err = snapshotInstance(ctx, node, sbx, result.TemplateID, result.BuildID.String(), filesystemOnly, skipEnvdHealthProbe)
 	if err != nil {
 		// The build is already committed, and nothing reaps one left non-terminal.
 		o.failSnapshotBuild(ctx, result.BuildID, err)
@@ -87,17 +87,18 @@ func (o *Orchestrator) pauseSandbox(ctx context.Context, node *nodemanager.Node,
 	return nil
 }
 
-func snapshotInstance(ctx context.Context, node *nodemanager.Node, sbx sandbox.Sandbox, templateID, buildID string, filesystemOnly bool) error {
+func snapshotInstance(ctx context.Context, node *nodemanager.Node, sbx sandbox.Sandbox, templateID, buildID string, filesystemOnly, skipEnvdHealthProbe bool) error {
 	childCtx, childSpan := tracer.Start(ctx, "snapshot-instance")
 	defer childSpan.End()
 
 	client, childCtx := node.GetSandboxClient(childCtx, sbx.TeamID.String())
 	_, err := client.Sandbox.Pause(
 		childCtx, &orchestrator.SandboxPauseRequest{
-			SandboxId:      sbx.SandboxID,
-			TemplateId:     templateID,
-			BuildId:        buildID,
-			FilesystemOnly: filesystemOnly,
+			SandboxId:           sbx.SandboxID,
+			TemplateId:          templateID,
+			BuildId:             buildID,
+			FilesystemOnly:      filesystemOnly,
+			SkipEnvdHealthProbe: skipEnvdHealthProbe,
 		},
 	)
 

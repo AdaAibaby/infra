@@ -41,6 +41,9 @@ type RestoreOpts struct {
 	// checkpoint refusal is forgotten on purpose, since the checkpoint's own
 	// duration says nothing about the node.
 	HoldOnly bool
+	// EnvdRefusal stamps the guest agent's own episode (EnvdRefusedSince,
+	// EnvdRefusedUntil); any other restore leaves both as they are.
+	EnvdRefusal bool
 }
 
 // StateTransitions is the removal state machine: start a transition, undo one

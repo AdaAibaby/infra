@@ -45,10 +45,13 @@ const (
 	// gate was dropped: every counted eviction takes the fs-only path.
 	ApiEvictorFsOnlyAutoPause CounterType = "api.evictor.fs_only_auto_pause"
 	// ApiEvictorAutoPauseDegraded counts timeout auto-pauses the evictor
-	// downgraded to a filesystem-only snapshot after the node refused the
-	// memory one, by cause: admission_refused (no retry budget, degraded at
-	// the first refusal) or overstay_budget (the retry budget since the first
-	// refusal ran out); a subset of ApiEvictorFsOnlyAutoPause.
+	// answered with a degrade after the node refused the memory one, by
+	// cause: admission_refused (no retry budget, filesystem-only at the first
+	// refusal), overstay_budget (the retry budget since the first refusal ran
+	// out, filesystem-only), envd_grace (the guest agent refused for the whole
+	// grace, memory pause retried without the probe) or envd_grace_withheld
+	// (that retry withheld: the record names no execution to pin it to). The
+	// filesystem-only causes are a subset of ApiEvictorFsOnlyAutoPause.
 	ApiEvictorAutoPauseDegraded CounterType = "api.evictor.auto_pause_degraded"
 	SandboxCreateMeterName      CounterType = "api.env.instance.started"
 
@@ -800,7 +803,7 @@ var counterDesc = map[CounterType]string{
 	SandboxCreateMeterName:                       "Number of currently waiting requests to create a new sandbox",
 	ApiOrchestratorCreatedSandboxes:              "Number of successfully created sandboxes",
 	ApiEvictorFsOnlyAutoPause:                    "Timeout auto-pauses with a filesystem-only policy.",
-	ApiEvictorAutoPauseDegraded:                  "Timeout auto-pauses degraded to filesystem-only after a node refusal, by cause (admission_refused | overstay_budget).",
+	ApiEvictorAutoPauseDegraded:                  "Timeout auto-pauses the evictor answered with a degrade after a node refusal, by cause: filesystem-only for a busy node (admission_refused | overstay_budget), the memory pause retried without the envd probe (envd_grace), or that retry withheld for want of an execution id (envd_grace_withheld).",
 	ApiOrchestratorResumeOriginNodeRemap:         "Number of resume snapshots repointed to the fallback node a previous resume timed out on",
 	ApiOrchestratorPauseRefusalRestore:           "Outcomes of restoring a sandbox whose pause the node refused retryably, by outcome and caller.",
 	ApiSandboxListReads:                          "Sandbox list requests by team and by how the team's store read was served: disabled | read | shared | hit.",

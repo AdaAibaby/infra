@@ -1224,29 +1224,46 @@ func (s *Server) Pause(ctx context.Context, in *orchestrator.SandboxPauseRequest
 	// taken of a hung agent never resumes. Retryable, never the kill path.
 	// It runs before the disk reservation so a probe that waits holds no
 	// headroom against the node's other pauses.
+	// A caller that asks to skip the probe (the eviction sweep, once the
+	// guest has refused for its grace period) is recorded as a bypass and
+	// not probed; without the flag the request field is ignored.
 	if healthMs := s.featureFlags.IntFlag(ctx, featureflags.PauseEnvdHealthTimeoutMs); persistable && healthMs > 0 && !in.GetFilesystemOnly() {
-		outcome, waited, admitErr := sbx.AwaitEnvdAdmission(ctx, time.Duration(healthMs)*time.Millisecond)
-		s.recordPauseAdmission(ctx, sbx.Runtime.TeamID, "pause", outcome, waited)
-		switch {
-		case errors.Is(admitErr, sandbox.ErrSnapshotAdmissionEnvdUnhealthy):
-			// The entry can be gone by now: a checkpoint that claimed the
-			// sandbox while the probe waited (and froze the guest) is the
-			// retryable answer the top of this RPC gives; a VM that exited is
-			// not hung, and the retryable refusal would keep a dead record.
-			if _, live := s.sandboxFactory.Sandboxes.Get(in.GetSandboxId()); !live {
-				if s.heldByCheckpoint(in.GetSandboxId()) {
+		if in.GetSkipEnvdHealthProbe() {
+			s.recordPauseAdmission(ctx, sbx.Runtime.TeamID, "pause", sandbox.SnapshotAdmissionEnvdBypassed, 0)
+			sbxlogger.E(sbx).Info(ctx, "Pausing without the envd health probe at the caller's request")
+		} else {
+			outcome, waited, admitErr := sbx.AwaitEnvdAdmission(ctx, time.Duration(healthMs)*time.Millisecond)
+			s.recordPauseAdmission(ctx, sbx.Runtime.TeamID, "pause", outcome, waited)
+			switch {
+			case errors.Is(admitErr, sandbox.ErrSnapshotAdmissionEnvdUnhealthy):
+				// A miss is not always a hung guest. An in-place checkpoint keeps
+				// the entry listed with the guest frozen, so its marker is read
+				// first. Cleanup keeps the entry until its end, so the exit is
+				// read with the map; only this execution's exit counts, a
+				// successor under the same ID is live.
+				if sbx.CheckpointInFlight() {
 					return nil, checkpointInProgressStatus(codes.ResourceExhausted, "sandbox '%s' is being checkpointed, please retry", in.GetSandboxId()).Err()
 				}
+				if cur, live := s.sandboxFactory.Sandboxes.Get(in.GetSandboxId()); !live || (cur == sbx && sbx.Exited()) {
+					if s.detachedCheckpointFor(in.GetSandboxId()) != nil {
+						return nil, checkpointInProgressStatus(codes.ResourceExhausted, "sandbox '%s' is being checkpointed, please retry", in.GetSandboxId()).Err()
+					}
+					// The claim can end between the two reads, leaving a live
+					// successor and no claim; a second read tells it from a gone one.
+					if cur, live := s.sandboxFactory.Sandboxes.Get(in.GetSandboxId()); live && (cur != sbx || !sbx.Exited()) {
+						return nil, checkpointInProgressStatus(codes.ResourceExhausted, "sandbox '%s' is being checkpointed, please retry", in.GetSandboxId()).Err()
+					}
 
-				return nil, status.Error(codes.NotFound, "sandbox not found")
+					return nil, status.Error(codes.NotFound, "sandbox not found")
+				}
+				sbxlogger.E(sbx).Warn(ctx, "Refusing pause: envd is not answering health checks", zap.Duration("probe", waited))
+
+				return nil, envdUnresponsiveStatus(in.GetSandboxId()).Err()
+			case admitErr != nil:
+				// The caller's context ended mid-probe; nothing was decided and
+				// the sandbox is untouched.
+				return nil, status.FromContextError(admitErr).Err()
 			}
-			sbxlogger.E(sbx).Warn(ctx, "Refusing pause: envd is not answering health checks", zap.Duration("probe", waited))
-
-			return nil, envdUnresponsiveStatus(in.GetSandboxId()).Err()
-		case admitErr != nil:
-			// The caller's context ended mid-probe; nothing was decided and
-			// the sandbox is untouched.
-			return nil, status.FromContextError(admitErr).Err()
 		}
 	}
 

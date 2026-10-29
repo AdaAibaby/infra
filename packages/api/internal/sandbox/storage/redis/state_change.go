@@ -256,6 +256,10 @@ func (s *Storage) RestoreRunning(ctx context.Context, transition sandboxtypes.St
 				episodeStart = restored.RefusalEpisodeStart(now)
 			}
 			restored.RefusedSince = episodeStart
+			if opts.EnvdRefusal {
+				restored.EnvdRefusedSince = restored.EnvdRefusalEpisodeStart(now)
+				restored.EnvdRefusedUntil = now.Add(opts.RetryAfter)
+			}
 			restored.RefusedUntil = now.Add(opts.RetryAfter)
 		}
 	})

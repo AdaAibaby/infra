@@ -221,6 +221,10 @@ message SandboxPauseRequest {
   // a snapshot cold-boots (reboots) from the rootfs. Default false = full memory
   // snapshot, so existing callers are unaffected.
   bool filesystem_only = 4;
+
+  // When true, the memory snapshot is taken without the envd health probe.
+  // Set by the API's eviction sweep once the probe has refused for the grace period.
+  bool skip_envd_health_probe = 5;
 }
 
 message SchedulingMetadata {

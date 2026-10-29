@@ -35,6 +35,19 @@ func (c *pauseFailingSandboxClient) Pause(_ context.Context, _ *orchestrator.San
 	return nil, c.err
 }
 
+// pauseCapturingSandboxClient accepts every Pause and keeps the last request.
+type pauseCapturingSandboxClient struct {
+	orchestrator.SandboxServiceClient
+
+	last *orchestrator.SandboxPauseRequest
+}
+
+func (c *pauseCapturingSandboxClient) Pause(_ context.Context, in *orchestrator.SandboxPauseRequest, _ ...grpc.CallOption) (*orchestrator.SandboxPauseResponse, error) {
+	c.last = in
+
+	return &orchestrator.SandboxPauseResponse{}, nil
+}
+
 // newPauseFixture returns an orchestrator on a test database, a node whose Pause
 // always fails with pauseErr, and the sandbox to pause.
 func newPauseFixture(t *testing.T, pauseErr error) (*Orchestrator, *testutils.Database, *nodemanager.Node, sandbox.Sandbox) {
@@ -107,7 +120,7 @@ func TestPauseSandbox_FailsBuildWhenPauseRPCFails(t *testing.T) {
 
 	o, db, node, sbx := newPauseFixture(t, errors.New("node exploded"))
 
-	err := o.pauseSandbox(t.Context(), node, sbx, false)
+	err := o.pauseSandbox(t.Context(), node, sbx, false, false)
 	require.Error(t, err)
 
 	buildStatus, hasFinishedAt := snapshotBuildStatus(t, db, sbx.SandboxID)
@@ -126,7 +139,7 @@ func TestPauseSandbox_FailsBuildWhenCheckpointInProgress(t *testing.T) {
 	require.NoError(t, err)
 	o, db, node, sbx := newPauseFixture(t, refusal.Err())
 
-	err = o.pauseSandbox(t.Context(), node, sbx, false)
+	err = o.pauseSandbox(t.Context(), node, sbx, false, false)
 	require.ErrorIs(t, err, PauseRefusedCheckpointInProgressError{})
 	require.ErrorIs(t, err, PauseQueueExhaustedError{}, "a checkpoint in flight is one of the retryable refusals")
 
@@ -147,7 +160,7 @@ func TestPauseSandbox_FailsBuildWhenEnvdUnresponsive(t *testing.T) {
 	require.NoError(t, err)
 	o, db, node, sbx := newPauseFixture(t, refusal.Err())
 
-	err = o.pauseSandbox(t.Context(), node, sbx, false)
+	err = o.pauseSandbox(t.Context(), node, sbx, false, false)
 	require.ErrorIs(t, err, PauseRefusedEnvdUnresponsiveError{})
 	require.ErrorIs(t, err, PauseQueueExhaustedError{}, "an unresponsive guest agent is one of the retryable refusals")
 	require.NotErrorIs(t, err, PauseRefusedCheckpointInProgressError{})
@@ -163,10 +176,30 @@ func TestPauseSandbox_FailsBuildWhenPauseQueueExhausted(t *testing.T) {
 
 	o, db, node, sbx := newPauseFixture(t, status.Error(codes.ResourceExhausted, "queue full"))
 
-	err := o.pauseSandbox(t.Context(), node, sbx, false)
+	err := o.pauseSandbox(t.Context(), node, sbx, false, false)
 	require.ErrorIs(t, err, PauseQueueExhaustedError{})
 
 	buildStatus, hasFinishedAt := snapshotBuildStatus(t, db, sbx.SandboxID)
 	assert.Equal(t, string(types.BuildStatusFailed), buildStatus)
 	assert.True(t, hasFinishedAt, "a terminal build must record finished_at")
+}
+
+// The evictor's probe bypass travels on the pause request as the snapshot
+// kind does; a plain pause leaves it unset.
+func TestPauseSandbox_SkipEnvdHealthProbeReachesTheNode(t *testing.T) {
+	t.Parallel()
+
+	o, _, node, sbx := newPauseFixture(t, nil)
+	client := &pauseCapturingSandboxClient{}
+	node.SetSandboxClient(client)
+	o.snapshotCache = noopSnapshotCache{}
+
+	require.NoError(t, o.pauseSandbox(t.Context(), node, sbx, false, true))
+	require.NotNil(t, client.last)
+	assert.True(t, client.last.GetSkipEnvdHealthProbe(), "the bypass must reach the node")
+	assert.False(t, client.last.GetFilesystemOnly(), "the bypass is a memory pause")
+	assert.Equal(t, sbx.SandboxID, client.last.GetSandboxId())
+
+	require.NoError(t, o.pauseSandbox(t.Context(), node, sbx, false, false))
+	assert.False(t, client.last.GetSkipEnvdHealthProbe(), "a probed pause sends nothing")
 }

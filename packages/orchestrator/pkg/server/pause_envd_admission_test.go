@@ -4,6 +4,7 @@ package server
 
 import (
 	"context"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -307,4 +308,161 @@ func TestPause_EnvdProbeMissWhileACheckpointClaimsTheSandboxIsRetryable(t *testi
 
 	steps.releaseResume()
 	awaitCheckpoint(t, done)
+}
+
+// A probe miss on an execution that already exited is not a hung guest: the
+// live-map entry is kept until cleanup ends, so the exit itself is read, and
+// the answer is NotFound, never the retryable refusal that would restore a
+// record for a VM that is gone.
+func TestPause_EnvdProbeMissAfterTheVMExitedIsNotFound(t *testing.T) {
+	t.Parallel()
+
+	s, reader := admissionMetricsServer(t, -1)
+	s.featureFlags = envdProbeFlagClient(t, new(envdProbeMs))
+	sbx := envdProbeSandbox(t, "sbx-envd-exited", 78)
+	registerEnvd(t, sbx, &envdAnswer{unreachable: true})
+	s.sandboxFactory.Sandboxes.MarkRunning(t.Context(), sbx)
+	sbx.MarkExitedForTest(errors.New("firecracker died during the probe"))
+
+	_, pauseErr := s.Pause(t.Context(), &orchestrator.SandboxPauseRequest{SandboxId: "sbx-envd-exited"})
+	require.Error(t, pauseErr)
+	st, ok := status.FromError(pauseErr)
+	require.True(t, ok)
+	assert.Equal(t, codes.NotFound, st.Code(), "a VM that exited is answered as gone: %s", pauseErr)
+	assert.Nil(t, envdUnresponsiveDetail(t, pauseErr), "no retryable refusal for a dead VM")
+
+	points := admissionCounterPoints(t, reader)
+	require.Len(t, points, 1, "the probe decision is still counted")
+	assert.Equal(t, string(sandbox.SnapshotAdmissionEnvdUnhealthy), attrsAsMap(t, points[0].Attributes)["outcome"])
+}
+
+// A pause that asks to skip the probe is not probed: with envd unreachable it
+// proceeds past MarkStopping, the stub is never asked, and the decision is
+// counted as envd_bypassed, apart from the probed outcomes and with no wait
+// sample since nothing was waited for.
+func TestPause_SkipEnvdHealthProbeBypassesTheProbe(t *testing.T) {
+	t.Parallel()
+
+	s, reader := admissionMetricsServer(t, -1)
+	s.featureFlags = envdProbeFlagClient(t, new(envdProbeMs))
+	sbx := envdProbeSandbox(t, "sbx-envd-pause-bypass", 38)
+	answer := &envdAnswer{unreachable: true, begun: make(chan struct{})}
+	registerEnvd(t, sbx, answer)
+	s.sandboxFactory.Sandboxes.MarkRunning(t.Context(), sbx)
+
+	go func() {
+		_, _ = s.Pause(context.WithoutCancel(t.Context()), &orchestrator.SandboxPauseRequest{SandboxId: "sbx-envd-pause-bypass", SkipEnvdHealthProbe: true})
+	}()
+
+	awaitPauseCrossedMarkStopping(t, s, sbx, "a pause with the probe skipped must proceed to MarkStopping")
+	select {
+	case <-answer.begun:
+		t.Fatal("the guest must not be probed when the caller skips the probe")
+	default:
+	}
+	points := admissionCounterPoints(t, reader)
+	require.Len(t, points, 1)
+	attrs := attrsAsMap(t, points[0].Attributes)
+	assert.Equal(t, string(sandbox.SnapshotAdmissionEnvdBypassed), attrs["outcome"])
+	assert.Equal(t, "pause", attrs["rpc"])
+	assert.Empty(t, admissionWaitPoints(t, reader), "a bypass waits for nothing")
+}
+
+// With the probe flag off the request field is ignored: nothing is probed
+// and nothing is recorded, as for any other memory pause.
+func TestPause_SkipEnvdHealthProbeIgnoredWhenFlagOff(t *testing.T) {
+	t.Parallel()
+
+	s, reader := admissionMetricsServer(t, -1)
+	s.featureFlags = envdProbeFlagClient(t, nil)
+	sbx := envdProbeSandbox(t, "sbx-envd-pause-bypass-off", 39)
+	answer := &envdAnswer{unreachable: true, begun: make(chan struct{})}
+	registerEnvd(t, sbx, answer)
+	s.sandboxFactory.Sandboxes.MarkRunning(t.Context(), sbx)
+
+	go func() {
+		_, _ = s.Pause(context.WithoutCancel(t.Context()), &orchestrator.SandboxPauseRequest{SandboxId: "sbx-envd-pause-bypass-off", SkipEnvdHealthProbe: true})
+	}()
+
+	awaitPauseCrossedMarkStopping(t, s, sbx, "flag off must reach MarkStopping without probing")
+	select {
+	case <-answer.begun:
+		t.Fatal("no probe runs with the flag off")
+	default:
+	}
+	assert.Empty(t, admissionCounterPoints(t, reader), "flag off: the field is ignored and nothing is recorded")
+}
+
+// Only the probed execution's exit counts. When a checkpoint resumes the
+// sandbox fresh while the probe waits, the probed sandbox has exited but a
+// successor with the same ID is live: the answer is the retryable refusal,
+// never NotFound, since NotFound would make the API drop the record of a
+// sandbox that is running.
+func TestPause_EnvdProbeMissAfterASuccessorTookTheIDIsRetryable(t *testing.T) {
+	t.Parallel()
+
+	s, _ := admissionMetricsServer(t, -1)
+	s.featureFlags = envdProbeFlagClient(t, new(2000))
+	sbx := envdProbeSandbox(t, "sbx-envd-successor", 79)
+	answer := &envdAnswer{status: http.StatusNoContent, delay: time.Hour, begun: make(chan struct{})}
+	registerEnvd(t, sbx, answer)
+	require.NoError(t, s.sandboxFactory.Sandboxes.MarkRunning(t.Context(), sbx))
+
+	pauseErr := make(chan error, 1)
+	go func() {
+		_, err := s.Pause(t.Context(), &orchestrator.SandboxPauseRequest{SandboxId: "sbx-envd-successor"})
+		pauseErr <- err
+	}()
+	select {
+	case <-answer.begun:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the probe never reached the guest")
+	}
+
+	// The probed execution ends and a fresh one takes its ID.
+	require.True(t, s.sandboxFactory.Sandboxes.MarkStopping(t.Context(), "sbx-envd-successor", sbx.LifecycleID))
+	sbx.MarkExitedForTest(errors.New("stopped by the checkpoint"))
+	successor := envdProbeSandbox(t, "sbx-envd-successor", 80)
+	successor.LifecycleID = "lifecycle-2"
+	require.NoError(t, s.sandboxFactory.Sandboxes.MarkRunning(t.Context(), successor))
+
+	var err error
+	select {
+	case err = <-pauseErr:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the pause never answered")
+	}
+	requireEnvdUnresponsive(t, err)
+	cur, live := s.sandboxFactory.Sandboxes.Get("sbx-envd-successor")
+	assert.True(t, live, "the successor stays live")
+	assert.Same(t, successor, cur)
+}
+
+// A probe miss while an in-place checkpoint has the guest frozen is the
+// freeze, not a hung agent: the sandbox stays listed through an in-place
+// checkpoint, so its in-flight marker is what tells the two apart, and the
+// answer is the checkpoint hold the API retries on, never the envd refusal
+// that would open a guest-agent episode.
+func TestPause_EnvdProbeMissDuringAnInPlaceCheckpointAnswersTheHold(t *testing.T) {
+	t.Parallel()
+
+	s, reader := admissionMetricsServer(t, -1)
+	s.featureFlags = envdProbeFlagClient(t, new(envdProbeMs))
+	sbx := envdProbeSandbox(t, "sbx-envd-inplace", 82)
+	registerEnvd(t, sbx, &envdAnswer{unreachable: true})
+	s.sandboxFactory.Sandboxes.MarkRunning(t.Context(), sbx)
+	require.True(t, sbx.BeginCheckpoint(), "the test's in-place checkpoint holds the marker")
+	defer sbx.EndCheckpoint()
+
+	_, pauseErr := s.Pause(t.Context(), &orchestrator.SandboxPauseRequest{SandboxId: "sbx-envd-inplace"})
+	require.Error(t, pauseErr)
+	assert.Equal(t, codes.ResourceExhausted, status.Code(pauseErr))
+	assert.NotNil(t, checkpointInProgressDetail(t, pauseErr), "the hold, not the guest, is the reason the API acts on")
+	assert.Nil(t, envdUnresponsiveDetail(t, pauseErr))
+
+	_, live := s.sandboxFactory.Sandboxes.Get("sbx-envd-inplace")
+	assert.True(t, live, "the sandbox is untouched")
+	points := admissionCounterPoints(t, reader)
+	require.Len(t, points, 1, "the probe decision is still counted")
+	assert.Equal(t, string(sandbox.SnapshotAdmissionEnvdUnhealthy), attrsAsMap(t, points[0].Attributes)["outcome"])
 }

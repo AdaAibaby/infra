@@ -80,6 +80,10 @@ type RemoveOpts struct {
 	// pause. Default false = full memory snapshot.
 	FilesystemOnly bool
 
+	// SkipEnvdHealthProbe asks the node for the memory snapshot without its
+	// envd health probe. Ignored unless Action is a pause.
+	SkipEnvdHealthProbe bool
+
 	// ExpectExecutionID pins the removal to one incarnation of the sandbox.
 	// When set, StartRemoving fails with ErrExecutionMismatch if the stored
 	// record carries a different execution ID.

@@ -9,6 +9,8 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/trace"
 	"go.uber.org/zap"
+
+	"github.com/e2b-dev/infra/packages/shared/pkg/utils"
 )
 
 // AwaitEnvdAdmission is the envd half of the pause pre-flight: it asks the
@@ -39,6 +41,15 @@ func (s *Sandbox) AwaitEnvdAdmission(ctx context.Context, timeout time.Duration)
 // its timeout stay the production ones.
 func (s *Sandbox) SetEnvdServerURLForTest(url string) {
 	s.internalConfig.envdServerURLOverride = url
+}
+
+// MarkExitedForTest ends this sandbox's execution with err, as a Firecracker
+// exit would, without any cleanup: the live-map entry stays where it is.
+func (s *Sandbox) MarkExitedForTest(err error) {
+	if s.exit == nil {
+		s.exit = utils.NewErrorOnce()
+	}
+	_ = s.exit.SetError(err)
 }
 
 // capEnvdProbeTimeout bounds the probe by the HTTP client's own Timeout, which

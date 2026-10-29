@@ -1301,8 +1301,11 @@ type SandboxPauseRequest struct {
 	// a snapshot cold-boots (reboots) from the rootfs. Default false = full memory
 	// snapshot, so existing callers are unaffected.
 	FilesystemOnly bool `protobuf:"varint,4,opt,name=filesystem_only,json=filesystemOnly,proto3" json:"filesystem_only,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// When true, the memory snapshot is taken without the envd health probe.
+	// Set by the API's eviction sweep once the probe has refused for the grace period.
+	SkipEnvdHealthProbe bool `protobuf:"varint,5,opt,name=skip_envd_health_probe,json=skipEnvdHealthProbe,proto3" json:"skip_envd_health_probe,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *SandboxPauseRequest) Reset() {
@@ -1359,6 +1362,13 @@ func (x *SandboxPauseRequest) GetBuildId() string {
 func (x *SandboxPauseRequest) GetFilesystemOnly() bool {
 	if x != nil {
 		return x.FilesystemOnly
+	}
+	return false
+}
+
+func (x *SandboxPauseRequest) GetSkipEnvdHealthProbe() bool {
+	if x != nil {
+		return x.SkipEnvdHealthProbe
 	}
 	return false
 }
@@ -2012,14 +2022,15 @@ const file_orchestrator_proto_rawDesc = "" +
 	"sandbox_id\x18\x01 \x01(\tR\tsandboxId\x12$\n" +
 	"\vkill_reason\x18\x02 \x01(\tH\x00R\n" +
 	"killReason\x88\x01\x01B\x0e\n" +
-	"\f_kill_reason\"\x99\x01\n" +
+	"\f_kill_reason\"\xce\x01\n" +
 	"\x13SandboxPauseRequest\x12\x1d\n" +
 	"\n" +
 	"sandbox_id\x18\x01 \x01(\tR\tsandboxId\x12\x1f\n" +
 	"\vtemplate_id\x18\x02 \x01(\tR\n" +
 	"templateId\x12\x19\n" +
 	"\bbuild_id\x18\x03 \x01(\tR\abuildId\x12'\n" +
-	"\x0ffilesystem_only\x18\x04 \x01(\bR\x0efilesystemOnly\"\xb1\x03\n" +
+	"\x0ffilesystem_only\x18\x04 \x01(\bR\x0efilesystemOnly\x123\n" +
+	"\x16skip_envd_health_probe\x18\x05 \x01(\bR\x13skipEnvdHealthProbe\"\xb1\x03\n" +
 	"\x12SchedulingMetadata\x121\n" +
 	"\x15memfile_base_build_id\x18\x01 \x01(\tR\x12memfileBaseBuildId\x12\x19\n" +
 	"\bbuild_id\x18\x02 \x01(\tR\abuildId\x12*\n" +

@@ -124,3 +124,48 @@ func TestRestoreRunning_HoldOnlyEndsTheEpisode(t *testing.T) {
 		})
 	}
 }
+
+// A guest-agent refusal is restored hold-only, so the node's episode stays
+// empty; the restore stamps the guest agent's own episode instead, which the
+// evictor's bypass grace is measured against. A second envd refusal within
+// the gap keeps the first stamp, and a restore for any other refusal leaves
+// it as it is.
+func TestRestoreRunning_EnvdRefusalStampsItsOwnEpisode(t *testing.T) {
+	t.Parallel()
+
+	storage, _ := setupTestStorage(t)
+	ctx := t.Context()
+
+	sbx := createTestSandbox("restore-envd-episode")
+	require.NoError(t, storage.Add(ctx, sbx))
+
+	restore := func(opts sandboxtypes.RestoreOpts) sandboxtypes.Sandbox {
+		t.Helper()
+
+		transition, _, finish, err := storage.StartRemoving(ctx, sbx.TeamID, sbx.SandboxID, sandboxtypes.RemoveOpts{Action: sandboxtypes.StateActionPause})
+		require.NoError(t, err)
+		restored, err := storage.RestoreRunning(ctx, transition, opts)
+		require.NoError(t, err)
+		finish(ctx, sandboxtypes.ErrTransitionRestored)
+		stored, err := storage.Get(ctx, sbx.TeamID, sbx.SandboxID)
+		require.NoError(t, err)
+		assert.True(t, restored.EnvdRefusedSince.Equal(stored.EnvdRefusedSince), "the returned record is the stored one")
+
+		return stored
+	}
+
+	first := restore(sandboxtypes.RestoreOpts{RetryAfter: 10 * time.Second, HoldOnly: true, EnvdRefusal: true})
+	assert.True(t, first.RefusedSince.IsZero(), "a hold-only restore opens no node episode")
+	assert.WithinDuration(t, time.Now(), first.EnvdRefusedSince, time.Second, "the guest agent's own episode opens at the first envd refusal")
+	assert.WithinDuration(t, time.Now().Add(10*time.Second), first.RefusedUntil, time.Second, "the sweep is held for the retry window")
+	assert.True(t, first.EnvdRefusedUntil.Equal(first.RefusedUntil), "and envd's own window is the same stamp")
+
+	again := restore(sandboxtypes.RestoreOpts{RetryAfter: 10 * time.Second, HoldOnly: true, EnvdRefusal: true})
+	assert.True(t, again.EnvdRefusedSince.Equal(first.EnvdRefusedSince), "a second envd refusal within the gap keeps the first stamp")
+	assert.True(t, again.RefusedSince.IsZero())
+
+	other := restore(sandboxtypes.RestoreOpts{RetryAfter: 10 * time.Second})
+	assert.True(t, other.EnvdRefusedSince.Equal(first.EnvdRefusedSince), "a restore for another refusal leaves the guest agent's episode untouched")
+	assert.True(t, other.EnvdRefusedUntil.Equal(again.EnvdRefusedUntil), "and does not extend envd's window, so only envd refusals keep that episode alive")
+	assert.WithinDuration(t, time.Now(), other.RefusedSince, time.Second, "and opens the node's")
+}

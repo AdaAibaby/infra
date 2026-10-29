@@ -613,6 +613,12 @@ func (s *Sandbox) BeginCheckpoint() bool {
 	return s.checkpointInFlight.CompareAndSwap(false, true)
 }
 
+// CheckpointInFlight reports a checkpoint between BeginCheckpoint and
+// EndCheckpoint; an in-place one keeps the sandbox live with the guest frozen.
+func (s *Sandbox) CheckpointInFlight() bool {
+	return s.checkpointInFlight.Load()
+}
+
 // EndCheckpoint clears the in-flight marker set by BeginCheckpoint.
 func (s *Sandbox) EndCheckpoint() {
 	s.lastCheckpointEndedAt.Store(time.Now().UnixNano())
@@ -2166,6 +2172,21 @@ func startExecutionSpan(ctx context.Context, runtime sandboxtypes.RuntimeMetadat
 
 func (s *Sandbox) Wait(ctx context.Context) error {
 	return s.exit.WaitWithContext(ctx)
+}
+
+// Exited reports whether this execution's exit has fired. It fires as soon
+// as Firecracker is gone, before cleanup reclaims the live-map entry; false
+// for a sandbox that never had an execution.
+func (s *Sandbox) Exited() bool {
+	if s.exit == nil {
+		return false
+	}
+	select {
+	case <-s.exit.Done():
+		return true
+	default:
+		return false
+	}
 }
 
 // FirecrackerExit reports how the Firecracker process ended, and nil until it
@@ -4160,6 +4181,9 @@ const (
 	// SnapshotAdmissionEnvdUnhealthy: envd did not answer /health, so a memory
 	// snapshot taken now would capture an unresponsive agent and never resume.
 	SnapshotAdmissionEnvdUnhealthy SnapshotAdmissionOutcome = "envd_unhealthy"
+	// SnapshotAdmissionEnvdBypassed: the caller asked for the snapshot without
+	// the probe; counted apart from the probed outcomes.
+	SnapshotAdmissionEnvdBypassed SnapshotAdmissionOutcome = "envd_bypassed"
 )
 
 // rootfsCacheSizer is the optional capability of a rootfs provider to report

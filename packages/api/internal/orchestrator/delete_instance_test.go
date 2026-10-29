@@ -528,6 +528,7 @@ func TestRemoveSandbox_EnvdUnresponsiveRestoresWithFlagOff(t *testing.T) {
 	assert.Equal(t, sandbox.StateRunning, stored.State)
 	assert.Zero(t, stub.deleteCount(), "the sandbox stays on its node, running")
 	assert.True(t, stored.RefusedSince.IsZero(), "a guest-agent refusal holds the sweep without opening an overstay episode")
+	assert.WithinDuration(t, time.Now(), stored.EnvdRefusedSince, time.Second, "it opens the guest agent's own episode, which the evictor's grace is measured against")
 	assert.WithinDuration(t, time.Now().Add(refusalRetryAfter), stored.RefusedUntil, time.Second, "the sweep is still held for the retry window")
 	assert.Equal(t, map[string]int64{"restored/request": 1}, f.restoreOutcomes(t))
 

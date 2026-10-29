@@ -856,6 +856,14 @@ var (
 	// regardless but never degrades and does not charge this budget.
 	AutoPauseOverstayBudgetMs = NewIntFlag("auto-pause-overstay-budget-milliseconds", 120000)
 
+	// AutoPauseEnvdGraceMs is how long the evictor honours the guest agent's
+	// refusal of an expired auto-pause, from the first envd refusal of its
+	// current episode, before retrying the memory pause once without the
+	// probe. Sign convention as AutoPauseOverstayBudgetMs: negative never,
+	// 0 at the first refusal, positive the grace. Inert until
+	// PauseEnvdHealthTimeoutMs is on.
+	AutoPauseEnvdGraceMs = NewIntFlag("auto-pause-envd-grace-milliseconds", 120000)
+
 	// MaxConcurrentSnapshotUpserts limits concurrent UpsertSnapshot calls (pause + snapshot template paths).
 	// 0 or negative disables throttling (unlimited concurrency).
 	MaxConcurrentSnapshotUpserts = NewIntFlag("max-concurrent-snapshot-upserts", 0)

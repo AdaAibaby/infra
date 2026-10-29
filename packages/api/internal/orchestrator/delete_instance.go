@@ -198,7 +198,7 @@ func (o *Orchestrator) RemoveSandbox(ctx context.Context, teamID uuid.UUID, sand
 		o.sandboxStore.Remove(context.WithoutCancel(ctx), teamID, sandboxID)
 		go o.analyticsRemove(context.WithoutCancel(ctx), sbx, opts.Action)
 	}()
-	err = o.removeSandboxFromNode(ctx, sbx, opts.Action, opts.Reason, opts.FilesystemOnly)
+	err = o.removeSandboxFromNode(ctx, sbx, opts.Action, opts.Reason, opts.FilesystemOnly, opts.SkipEnvdHealthProbe)
 	if err != nil {
 		if errors.Is(err, PauseQueueExhaustedError{}) {
 			refusal := refusalOf(err)
@@ -301,6 +301,9 @@ func (o *Orchestrator) restoreRefusedPause(ctx context.Context, transition sandb
 		// answer says nothing about the node, so the sweep is held without
 		// charging the overstay budget a busy node is measured against.
 		HoldOnly: errors.Is(refusal, PauseRefusedCheckpointInProgressError{}) || errors.Is(refusal, PauseRefusedEnvdUnresponsiveError{}),
+		// The guest agent's refusals keep their own episode, which the
+		// evictor's bypass grace is measured against.
+		EnvdRefusal: errors.Is(refusal, PauseRefusedEnvdUnresponsiveError{}),
 	})
 	if err != nil {
 		if errors.Is(err, sandbox.ErrExecutionMismatch) || errors.Is(err, sandbox.ErrRestoreConflict) {
@@ -350,6 +353,7 @@ func (o *Orchestrator) removeSandboxFromNode(
 	stateAction sandbox.StateAction,
 	reason sandbox.KillReason,
 	filesystemOnly bool,
+	skipEnvdHealthProbe bool,
 ) error {
 	ctx, span := tracer.Start(ctx, "remove-sandbox-from-node")
 	defer span.End()
@@ -375,7 +379,7 @@ func (o *Orchestrator) removeSandboxFromNode(
 
 	switch stateAction {
 	case sandbox.StateActionPause:
-		err := o.pauseSandbox(ctx, node, sbx, filesystemOnly)
+		err := o.pauseSandbox(ctx, node, sbx, filesystemOnly, skipEnvdHealthProbe)
 		if err != nil {
 			if dberrors.IsForeignKeyViolation(err) {
 				killErr := o.killSandboxOnNode(ctx, node, sbx.ToNodeSandbox(), sandbox.KillReasonBaseTemplateMissing)
